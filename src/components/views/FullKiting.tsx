@@ -1,13 +1,10 @@
-
-import { useSheets } from '@/context/SheetsContext';
+import { useRef, useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/context/AuthContext';
-
 import {
     Dialog,
     DialogContent,
@@ -25,9 +22,10 @@ import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
-import { postToSheet, uploadFile } from '@/lib/fetchers';
 import { Truck } from 'lucide-react';
 import Heading from '../element/Heading';
+import { fetchFullkittingRecords, updateFullkittingRecord, uploadBiltyImage, type FullkittingRecord } from '@/services/fullkittingService';
+import { createPaymentEntry } from '@/services/storeInService';
 
 // Helper function to format date as "YYYY-MM-DD"
 function formatDate(date: Date): string {
@@ -37,93 +35,54 @@ function formatDate(date: Date): string {
     return `${year}-${month}-${day}`;
 }
 
-interface FullkittingData {
-    indentNumber: string;
-    vendorName: string;
-    productName: string;
-    qty: number;
-    billNo: string;
-    transportingInclude: string;
-    transporterName: string;
-    amount: number;
-    firmNameMatch: string;
-    plannedDate: string; // ✅ ADD THIS
-
-}
-
-export default function FullKitting() {
-    const { fullkittingSheet, fullkittingLoading, updateFullkittingSheet } = useSheets();
-    const [tableData, setTableData] = useState<FullkittingData[]>([]);
-    const [selectedItem, setSelectedItem] = useState<FullkittingData | null>(null);
-    const [openDialog, setOpenDialog] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const { masterSheet } = useSheets();
+export default function FullKiting() {
     const { user } = useAuth();
+    const [pendingData, setPendingData] = useState<FullkittingRecord[]>([]);
+    const [historyData, setHistoryData] = useState<FullkittingRecord[]>([]);
+    const [selectedIndent, setSelectedIndent] = useState<FullkittingRecord | null>(null);
+    const [openDialog, setOpenDialog] = useState(false);
+    const [dataLoading, setDataLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const fetchData = async () => {
+        try {
+            setDataLoading(true);
+            const data = await fetchFullkittingRecords();
 
-    // useEffect(() => {
-    //     console.log("Fullkitting Sheet:", fullkittingSheet);
-    //     setTableData(
-    //         fullkittingSheet
-    //             .filter((item) => item.planned && item.planned !== '' && (!item.actual || item.actual === ''))
-    //             .map((item) => ({
-    //                 indentNumber: item.indentNumber || '',
-    //                 vendorName: item.vendorName || '',
-    //                 productName: item.productName || '',
-    //                 qty: item.qty || 0,
-    //                 billNo: item.billNo || '',
-    //                 transportingInclude: item.transportingInclude || '',
-    //                 transporterName: item.transporterName || '',
-    //                 amount: item.amount || 0,
-    //             }))
-    //     );
-    // }, [fullkittingSheet]);
+            // Filter by firm name match
+            const filteredData = data.filter(item =>
+                user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
+            );
+
+            // Pending: has planned but no actual
+            setPendingData(filteredData.filter(i => i.planned && !i.actual));
+
+            // History: has both planned and actual
+            setHistoryData(filteredData.filter(i => i.planned && i.actual));
+        } catch (error) {
+            console.error('Error fetching fullkitting data:', error);
+            toast.error('Failed to fetch data');
+        } finally {
+            setDataLoading(false);
+        }
+    };
 
     useEffect(() => {
-        console.log("Fullkitting Sheet:", fullkittingSheet);
-        
-        // Pehle firm name se filter karo (case-insensitive)
-        const filteredByFirm = fullkittingSheet.filter(item => 
-            user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
-        );
-        
-        setTableData(
-            filteredByFirm
-                .filter((item) => item.planned && item.planned !== '' && (!item.actual || item.actual === ''))
-                .map((item) => ({
-                    indentNumber: item.indentNumber || '',
-                    vendorName: item.vendorName || '',
-                    productName: item.productName || '',
-                    qty: item.qty || 0,
-                    billNo: item.billNo || '',
-                    transportingInclude: item.transportingInclude || '',
-                    transporterName: item.transporterName || '',
-                    amount: item.amount || 0,
-                    firmNameMatch: item.firmNameMatch || '',
-                    plannedDate: item.planned ? formatDate(new Date(item.planned)) : 'Not Set', // ✅ ADD THIS
-          
-    
-                }))
-        );
-    }, [fullkittingSheet, user.firmNameMatch]);
+        fetchData();
+    }, [user.firmNameMatch]);
 
-    // Add after the existing useEffect
-useEffect(() => {
-    console.log("Master Sheet:", masterSheet);
-    console.log("FMS Names:", masterSheet?.fmsNames);
-}, [masterSheet]);
-
-    const columns: ColumnDef<FullkittingData>[] = [
+    const columns: ColumnDef<FullkittingRecord>[] = [
         {
             header: 'Action',
-            cell: ({ row }: { row: Row<FullkittingData> }) => {
+            cell: ({ row }: { row: Row<FullkittingRecord> }) => {
                 const item = row.original;
                 return (
                     <DialogTrigger asChild>
                         <Button
                             variant="outline"
                             onClick={() => {
-                                setSelectedItem(item);
+                                setSelectedIndent(item);
+                                setOpenDialog(true);
                             }}
                         >
                             Update
@@ -133,23 +92,23 @@ useEffect(() => {
             },
         },
         { accessorKey: 'indentNumber', header: 'Indent Number' },
-         { accessorKey: 'firmNameMatch', header: 'Firm Name Match' }, 
+        { accessorKey: 'firmNameMatch', header: 'Firm Name Match' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'qty', header: 'Qty' },
         { accessorKey: 'billNo', header: 'Bill No.' },
-        { 
-        accessorKey: 'plannedDate', // ✅ ADD THIS COLUMN
-        header: 'Planned Date',
-        cell: ({ getValue }) => {
-            const plannedDate = getValue() as string;
-            return (
-                <div className={`${plannedDate === 'Not Set' ? 'text-muted-foreground italic' : ''}`}>
-                    {plannedDate}
-                </div>
-            );
-        }
-    },
+        {
+            accessorKey: 'planned',
+            header: 'Planned Date',
+            cell: ({ getValue }) => {
+                const plannedDate = getValue() as string;
+                return (
+                    <div className={`${!plannedDate ? 'text-muted-foreground italic' : ''}`}>
+                        {plannedDate ? formatDate(new Date(plannedDate)) : 'Not Set'}
+                    </div>
+                );
+            }
+        },
         { accessorKey: 'transportingInclude', header: 'Transporting Include' },
         { accessorKey: 'transporterName', header: 'Transporter Name' },
         { accessorKey: 'amount', header: 'Amount' },
@@ -169,75 +128,68 @@ useEffect(() => {
     });
 
     const form = useForm({
-    resolver: zodResolver(schema),
-    defaultValues: {
-        fmsName: 'Store Fms',  // ✅ Changed from '' to 'Store Fms'
-        status: undefined,
-        vehicleNumber: '',
-        from: '',
-        to: '',
-        materialLoadDetails: '',
-        biltyNumber: '',
-        rateType: undefined,
-        amount: '',
-        biltyImage: undefined,
-    },
-});
-
-   useEffect(() => {
-    if (!openDialog) {
-        form.reset({
-            fmsName: 'Store Fms',  // ✅ Changed from '' to 'Store Fms'
-            status: undefined,
+        resolver: zodResolver(schema),
+        defaultValues: {
+            fmsName: 'Store Fms',
+            status: undefined as unknown as "Yes" | "No",
             vehicleNumber: '',
             from: '',
             to: '',
             materialLoadDetails: '',
             biltyNumber: '',
-            rateType: undefined,
+            rateType: undefined as unknown as "Fixed" | "Per MT",
             amount: '',
             biltyImage: undefined,
-        });
-    }
-}, [openDialog, form]);
+        },
+    });
+
+    useEffect(() => {
+        if (!openDialog) {
+            form.reset({
+                fmsName: 'Store Fms',
+                status: undefined,
+                vehicleNumber: '',
+                from: '',
+                to: '',
+                materialLoadDetails: '',
+                biltyNumber: '',
+                rateType: undefined,
+                amount: '',
+                biltyImage: undefined,
+            });
+        }
+    }, [openDialog, form]); // Removed form from dependencies to avoid loop, but let's keep it if strict mode complains.
+    // Actually form.reset is stable.
 
     async function onSubmit(values: z.infer<typeof schema>) {
+        if (!selectedIndent) return;
+
         try {
             setIsSubmitting(true);
             const currentDateTime = new Date().toISOString();
 
             let biltyImageUrl = '';
-if (values.biltyImage) {
-    biltyImageUrl = await uploadFile({
-        file: values.biltyImage,  // ✅ Pass the file
-        folderId: import.meta.env.VITE_COMPARISON_SHEET_FOLDER
-    });
-}
+            if (values.biltyImage) {
+                biltyImageUrl = await uploadBiltyImage(values.biltyImage, selectedIndent.indentNumber);
+            }
 
-            await postToSheet(
-                fullkittingSheet
-                    .filter((s) => s.indentNumber === selectedItem?.indentNumber)
-                    .map((prev) => ({
-                        rowIndex: prev.rowIndex,
-                        actual: currentDateTime,
-                        fmsName: values.fmsName,
-                        status: values.status,
-                        vehicleNumber: values.vehicleNumber,
-                        from: values.from,
-                        to: values.to,
-                        materialLoadDetails: values.materialLoadDetails || '',
-                        biltyNumber: values.biltyNumber,
-                        rateType: values.rateType,
-                        amount1: values.amount,
-                        biltyImage: biltyImageUrl,
-                    })),
-                'update',
-                'Fullkitting'
-            );
+            await updateFullkittingRecord(selectedIndent.indentNumber, {
+                actual: currentDateTime,
+                status: values.status,
+                vehicleNumber: values.vehicleNumber,
+                from: values.from,
+                to: values.to,
+                materialLoadDetails: values.materialLoadDetails,
+                biltyNumber: values.biltyNumber,
+                rateType: values.rateType,
+                amount1: Number(values.amount),
+                biltyImage: biltyImageUrl,
+            });
 
-            toast.success(`Updated fullkitting for ${selectedItem?.indentNumber}`);
+
+            toast.success(`Updated fullkitting for ${selectedIndent.indentNumber}`);
             setOpenDialog(false);
-            setTimeout(() => updateFullkittingSheet(), 1000);
+            fetchData();
         } catch (error) {
             console.error('Error updating fullkitting:', error);
             toast.error('Failed to update fullkitting');
@@ -258,55 +210,52 @@ if (values.biltyImage) {
                     <Truck size={50} className="text-primary" />
                 </Heading>
 
-                <DataTable
-                    data={tableData}
-                    columns={columns}
-                    searchFields={['indentNumber', 'productName', 'vendorName','firmNameMatch']}
-                    dataLoading={fullkittingLoading}
-                />
+                <div className="p-5">
+                    <DataTable
+                        data={pendingData}
+                        columns={columns}
+                        searchFields={['indentNumber', 'productName', 'vendorName', 'firmNameMatch']}
+                        dataLoading={dataLoading}
+                    />
+                </div>
 
-                {selectedItem && (
+                {selectedIndent && (
                     <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Update Full Kitting</DialogTitle>
                             <DialogDescription>
-                                Update details for Indent Number: {selectedItem.indentNumber}
+                                Update details for Indent Number: {selectedIndent.indentNumber}
                             </DialogDescription>
                         </DialogHeader>
 
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* FMS Name Dropdown */}
-                                    {/* FMS Name Dropdown */}
-{/* FMS Name Dropdown - Hardcoded with "Store Fms" as default */}
-<FormField
-    control={form.control}
-    name="fmsName"
-    render={({ field }) => (
-        <FormItem>
-            <FormLabel>FMS Name</FormLabel>
-            <Select 
-                onValueChange={field.onChange} 
-                value={field.value}
-                defaultValue="Store Fms"
-            >
-                <FormControl>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Store Fms" />
-                    </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                    {/* Hardcoded FMS options */}
-                    <SelectItem value="Store Fms">Store Fms</SelectItem>
-                </SelectContent>
-            </Select>
-            <FormMessage />
-        </FormItem>
-    )}
-/>
+                                    <FormField
+                                        control={form.control}
+                                        name="fmsName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>FMS Name</FormLabel>
+                                                <Select
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                    defaultValue="Store Fms"
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Store Fms" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="Store Fms">Store Fms</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
 
-                                    {/* Status Dropdown */}
                                     <FormField
                                         control={form.control}
                                         name="status"

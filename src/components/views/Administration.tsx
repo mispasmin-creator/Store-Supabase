@@ -1,7 +1,6 @@
 import { Eye, EyeClosed, MoreHorizontal, Pencil, ShieldUser, Trash, UserPlus } from 'lucide-react';
 import Heading from '../element/Heading';
 import { useEffect, useState } from 'react';
-import { fetchSheet, postToSheet } from '@/lib/fetchers';
 import { allPermissionKeys, type UserPermissions } from '@/types/sheets';
 import type { ColumnDef } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
@@ -31,13 +30,14 @@ import { Checkbox } from '../ui/checkbox';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card';
 import { Pill } from '../ui/pill';
+import { fetchUsers, createUser, updateUser, deleteUser, type UserRecord } from '@/services/userService';
 
 interface UsersTableData {
+    id: number;
     username: string;
     name: string;
     password: string;
     permissions: string[];
-    rowIndex: number;
 }
 
 function camelToTitleCase(str: string): string {
@@ -61,28 +61,31 @@ export default () => {
         }
     }, [openDialog]);
 
-    function fetchUser() {
+    async function fetchUser() {
         setDataLoading(true);
-        fetchSheet('USER').then((res) => {
+        try {
+            const users = await fetchUsers();
             setTableData(
-                (res as UserPermissions[]).map((user) => {
-                    const permissionKeys = Object.keys(user).filter(
-                        (key): key is keyof UserPermissions =>
-                            !['username', 'password', 'name', 'rowIndex'].includes(key) &&
-                            user[key as keyof UserPermissions] === true
+                users.map((user) => {
+                    const permissionKeys = allPermissionKeys.filter(
+                        (key) => user[key as keyof UserPermissions] === true
                     );
 
                     return {
+                        id: user.id,
                         username: user.username,
                         name: user.name,
                         password: user.password,
                         permissions: permissionKeys,
-                        rowIndex: user.rowIndex,
                     };
                 })
             );
+        } catch (error) {
+            console.error('Failed to fetch users:', error);
+            toast.error('Failed to load users');
+        } finally {
             setDataLoading(false);
-        });
+        }
     }
 
     useEffect(() => {
@@ -144,27 +147,25 @@ export default () => {
                                     setOpenDialog(true);
                                 }}
                             >
-                                <Pencil /> Edit Permissions
+                                <Pencil className="h-4 w-4 mr-2" /> Edit Permissions
                             </DropdownMenuItem>
                             <DropdownMenuItem
                                 onClick={async () => {
-                                    try {
-                                        if (user.username === 'admin') {
-                                            throw new Error();
+                                    if (confirm(`Are you sure you want to delete ${user.name}?`)) {
+                                        try {
+                                            if (user.username === 'admin') {
+                                                throw new Error();
+                                            }
+                                            await deleteUser(user.id);
+                                            toast.success(`Deleted ${user.name} successfully`);
+                                            fetchUser();
+                                        } catch {
+                                            toast.error('Failed to delete user');
                                         }
-                                        await postToSheet(
-                                            [{ rowIndex: user.rowIndex }],
-                                            'delete',
-                                            'USER'
-                                        );
-                                        toast.success(`Deleted ${user.name} successfully`);
-                                        setTimeout(fetchUser, 1000);
-                                    } catch {
-                                        toast.error('Failed to delete user');
                                     }
                                 }}
                             >
-                                <Trash className="text-destructive" /> Delete User
+                                <Trash className="h-4 w-4 mr-2 text-destructive" /> Delete User
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -174,13 +175,21 @@ export default () => {
     ];
 
     const schema = z.object({
-        name: z.string().nonempty(),
-        username: z.string().nonempty(),
-        password: z.string().nonempty(),
+        name: z.string().min(1, 'Name is required'),
+        username: z.string().min(1, 'Username is required'),
+        password: z.string().min(1, 'Password is required'),
         permissions: z.array(z.string()),
     });
 
-    const form = useForm({ resolver: zodResolver(schema) });
+    const form = useForm<z.infer<typeof schema>>({
+        resolver: zodResolver(schema),
+        defaultValues: {
+            name: '',
+            username: '',
+            password: '',
+            permissions: [],
+        },
+    });
 
     useEffect(() => {
         if (selectedUser) {
@@ -192,56 +201,46 @@ export default () => {
             });
             return;
         }
-        form.reset();
+        form.reset({
+            name: '',
+            username: '',
+            password: '',
+            permissions: [],
+        });
     }, [selectedUser]);
 
     async function onSubmit(value: z.infer<typeof schema>) {
         if (
             tableData.map((d) => d.username).includes(value.username) &&
-            value.username !== selectedUser?.username
+            (!selectedUser || value.username !== selectedUser.username)
         ) {
             toast.error('Username already exists');
             return;
         }
-        if (selectedUser) {
-            try {
-                const row: Partial<UserPermissions> = {
-                    rowIndex: selectedUser.rowIndex,
-                    username: value.username,
-                    name: value.name,
-                    password: value.password,
-                };
 
-                allPermissionKeys.forEach((perm) => {
-                    row[perm] = value.permissions.includes(perm);
-                });
+        const userData: any = {
+            username: value.username,
+            name: value.name,
+            password: value.password,
+        };
 
-                await postToSheet([row], 'update', 'USER');
-                setOpenDialog(false);
-                setTimeout(fetchUser, 1000);
-                toast.success('Updated user settings');
-            } catch {
-                toast.error('Failed to update user settings');
-            }
-            return;
-        }
+        allPermissionKeys.forEach((perm) => {
+            userData[perm] = value.permissions.includes(perm);
+        });
+
         try {
-            const row: Partial<UserPermissions> = {
-                username: value.username,
-                name: value.name,
-                password: value.password,
-            };
-
-            allPermissionKeys.forEach((perm) => {
-                row[perm] = value.permissions.includes(perm);
-            });
-
-            await postToSheet([row], 'insert', 'USER');
+            if (selectedUser) {
+                await updateUser(selectedUser.id, userData);
+                toast.success('Updated user settings');
+            } else {
+                await createUser(userData);
+                toast.success('Created user successfully');
+            }
             setOpenDialog(false);
-            setTimeout(fetchUser, 1000);
-            toast.success('Created user successfully');
-        } catch {
-            toast.error('Failed to update user settings');
+            fetchUser();
+        } catch (error) {
+            console.error('Error saving user:', error);
+            toast.error('Failed to save user settings');
         }
     }
 
@@ -375,15 +374,15 @@ export default () => {
                                                                             field.value || [];
                                                                         checked
                                                                             ? field.onChange([
-                                                                                  ...values,
-                                                                                  perm,
-                                                                              ])
+                                                                                ...values,
+                                                                                perm,
+                                                                            ])
                                                                             : field.onChange(
-                                                                                  values.filter(
-                                                                                      (p) =>
-                                                                                          p !== perm
-                                                                                  )
-                                                                              );
+                                                                                values.filter(
+                                                                                    (p) =>
+                                                                                        p !== perm
+                                                                                )
+                                                                            );
                                                                     }}
                                                                 />
                                                             </FormControl>

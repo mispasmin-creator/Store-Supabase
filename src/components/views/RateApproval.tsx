@@ -10,14 +10,12 @@ import {
     DialogTrigger,
 } from '../ui/dialog';
 import { useEffect, useState } from 'react';
-import { useSheets } from '@/context/SheetsContext';
 import DataTable from '../element/DataTable';
 import { Button } from '../ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { postToSheet } from '@/lib/fetchers';
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
@@ -27,6 +25,7 @@ import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate } from '@/lib/utils';
 import { Input } from '../ui/input';
+import { supabase, supabaseEnabled } from '@/lib/supabase';
 
 interface RateApprovalData {
     indentNo: string;
@@ -51,7 +50,6 @@ interface HistoryData {
 }
 
 export default () => {
-    const { indentLoading, indentSheet, updateIndentSheet } = useSheets();
     const { user } = useAuth();
 
     const [selectedIndent, setSelectedIndent] = useState<RateApprovalData | null>(null);
@@ -59,86 +57,126 @@ export default () => {
     const [tableData, setTableData] = useState<RateApprovalData[]>([]);
     const [historyData, setHistoryData] = useState<HistoryData[]>([]);
     const [openDialog, setOpenDialog] = useState(false);
+    const [dataLoading, setDataLoading] = useState(false);
 
-    
-useEffect(() => {
-    const filteredByFirm = indentSheet.filter(sheet => 
-        user.firmNameMatch.toLowerCase() === "all" || sheet.firmName === user.firmNameMatch
-    );
-    
-    setTableData(
-        filteredByFirm
-            .filter(
-                (sheet) =>
-                    sheet.planned3 !== '' &&
-                    sheet.actual3 === '' &&
-                    sheet.vendorType === 'Three Party'
-            )
-            .map((sheet: any) => ({
-                indentNo: sheet.indentNumber,
-                firmNameMatch: sheet.firmNameMatch || '',
-                indenter: sheet.indenterName,
-                department: sheet.department,
-                product: sheet.productName,
-                comparisonSheet: sheet.comparisonSheet || '',
-                date: formatDate(new Date(sheet.timestamp)),
-                plannedDate: sheet.planned3 ? formatDate(new Date(sheet.planned3)) : 'Not Set', // ✅ ADD THIS
+    // Fetch pending three party approvals from Supabase
+    const fetchPendingApprovals = async () => {
+        if (!supabaseEnabled) return;
+        
+        try {
+            setDataLoading(true);
+            let query = supabase
+                .from('indent')
+                .select('*')
+                .not('planned3', 'is', null)
+                .is('actual3', null)
+                .eq('vendor_type', 'Three Party');
 
-                vendors: [
-                    [
-                        sheet.vendorName1, 
-                        sheet.rate1?.toString() || '0', 
-                        sheet.paymentTerm1,
-                        sheet.selectRateType1 || 'With Tax',
-                        sheet.withTaxOrNot1 || 'Yes',
-                        sheet.taxValue1?.toString() || '0'
+            if (user.firmNameMatch.toLowerCase() !== 'all') {
+                query = query.eq('firm_name', user.firmNameMatch);
+            }
+
+            const { data, error } = await query.order('indent_number', { ascending: false });
+
+            if (error) throw error;
+
+            const rows = (data ?? []) as any[];
+            setTableData(
+                rows.map((r) => ({
+                    indentNo: r.indent_number || '',
+                    firmNameMatch: r.firm_name_match || '',
+                    indenter: r.indenter_name || '',
+                    department: r.department || '',
+                    product: r.product_name || '',
+                    comparisonSheet: r.comparison_sheet || '',
+                    date: formatDate(new Date(r.timestamp)),
+                    plannedDate: r.planned3 ? formatDate(new Date(r.planned3)) : 'Not Set',
+                    vendors: [
+                        [
+                            r.vendor_name1 || '', 
+                            r.rate1?.toString() || '0', 
+                            r.payment_term1 || '',
+                            r.select_rate_type1 || 'With Tax',
+                            r.with_tax_or_not1 || 'Yes',
+                            r.tax_value1?.toString() || '0'
+                        ],
+                        [
+                            r.vendor_name2 || '', 
+                            r.rate2?.toString() || '0', 
+                            r.payment_term2 || '',
+                            r.select_rate_type2 || 'With Tax',
+                            r.with_tax_or_not2 || 'Yes',
+                            r.tax_value2?.toString() || '0'
+                        ],
+                        [
+                            r.vendor_name3 || '', 
+                            r.rate3?.toString() || '0', 
+                            r.payment_term3 || '',
+                            r.select_rate_type3 || 'With Tax',
+                            r.with_tax_or_not3 || 'Yes',
+                            r.tax_value3?.toString() || '0'
+                        ],
                     ],
-                    [
-                        sheet.vendorName2, 
-                        sheet.rate2?.toString() || '0', 
-                        sheet.paymentTerm2,
-                        sheet.selectRateType2 || 'With Tax',
-                        sheet.withTaxOrNot2 || 'Yes',
-                        sheet.taxValue2?.toString() || '0'
-                    ],
-                    [
-                        sheet.vendorName3, 
-                        sheet.rate3?.toString() || '0', 
-                        sheet.paymentTerm3,
-                        sheet.selectRateType3 || 'With Tax',
-                        sheet.withTaxOrNot3 || 'Yes',
-                        sheet.taxValue3?.toString() || '0'
-                    ],
-                ],
-            }))
-    );
-}, [indentSheet, user.firmNameMatch]);
+                }))
+            );
+        } catch (err) {
+            console.error('Error fetching pending approvals:', err);
+            toast.error('Failed to fetch pending approvals');
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPendingApprovals();
+    }, [user.firmNameMatch]);
 
 
-useEffect(() => {
-    const filteredByFirm = indentSheet.filter(sheet => 
-        user.firmNameMatch.toLowerCase() === "all" || sheet.firmName === user.firmNameMatch
-    );
-    
-    setHistoryData(
-        filteredByFirm
-            .filter(
-                (sheet) =>
-                    sheet.planned3 !== '' &&
-                    sheet.actual3 !== '' &&
-                    sheet.vendorType === 'Three Party'
-            )
-            .map((sheet: any) => ({
-                indentNo: sheet.indentNumber,
-                firmNameMatch: sheet.firmNameMatch || '',
-                indenter: sheet.indenterName,
-                department: sheet.department,
-                product: sheet.productName,
-                date: new Date(sheet.timestamp).toDateString(),
-                vendor: [sheet.approvedVendorName, sheet.approvedRate?.toString() || '0'],
-            }))
-    );
-}, [indentSheet, user.firmNameMatch]);
+    // Fetch completed three party approvals from Supabase
+    const fetchCompletedApprovals = async () => {
+        if (!supabaseEnabled) return;
+        
+        try {
+            setDataLoading(true);
+            let query = supabase
+                .from('indent')
+                .select('*')
+                .not('planned3', 'is', null)
+                .not('actual3', 'is', null)
+                .eq('vendor_type', 'Three Party');
+
+            if (user.firmNameMatch.toLowerCase() !== 'all') {
+                query = query.eq('firm_name', user.firmNameMatch);
+            }
+
+            const { data, error } = await query.order('indent_number', { ascending: false });
+
+            if (error) throw error;
+
+            const rows = (data ?? []) as any[];
+            setHistoryData(
+                rows.map((r) => ({
+                    indentNo: r.indent_number || '',
+                    firmNameMatch: r.firm_name_match || '',
+                    indenter: r.indenter_name || '',
+                    department: r.department || '',
+                    product: r.product_name || '',
+                    date: new Date(r.timestamp).toDateString(),
+                    vendor: [r.approved_vendor_name || '', r.approved_rate?.toString() || '0'],
+                }))
+            );
+        } catch (err) {
+            console.error('Error fetching completed approvals:', err);
+            toast.error('Failed to fetch completed approvals');
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPendingApprovals();
+        fetchCompletedApprovals();
+    }, [user.firmNameMatch]);
 
     const columns: ColumnDef<RateApprovalData>[] = [
         ...(user.threePartyApprovalAction
@@ -278,37 +316,38 @@ useEffect(() => {
         },
     });
 
-async function onSubmit(values: z.infer<typeof schema>) {
-    try {
-        const filtered = indentSheet.filter((s) => s.indentNumber === selectedIndent?.indentNo);
-        console.log("🔍 Filtered data:", filtered);
-        console.log("🔍 First item rowIndex:", filtered[0]?.rowIndex);
-        
-        const selectedVendor = selectedIndent?.vendors[values.vendor];
-        
-        const updatedRows = filtered.map((prev: any) => ({
-            rowIndex: prev.rowIndex,
-            actual3: new Date().toISOString(),
-            approvedVendorName: selectedVendor?.[0] || '',
-            approvedRate: selectedVendor?.[1] || '0',
-            approvedPaymentTerm: selectedVendor?.[2] || '',
-            withTaxOrNot4: selectedVendor?.[4] || 'Yes',
-            taxValue4: selectedVendor?.[5] || '0',
-        }));
-        
-        console.log("📤 Sending to backend:", updatedRows);
-        
-        await postToSheet(updatedRows, 'update');
-        
-        toast.success(`Approved vendor for ${selectedIndent?.indentNo}`);
-        setOpenDialog(false);
-        form.reset();
-        setTimeout(() => updateIndentSheet(), 1000);
-    } catch (error) {
-        console.error("❌ Full error:", error);
-        toast.error('Failed to update vendor');
+    async function onSubmit(values: z.infer<typeof schema>) {
+        try {
+            const selectedVendor = selectedIndent?.vendors[values.vendor];
+            
+            const updates = {
+                actual3: new Date().toISOString(),
+                approved_vendor_name: selectedVendor?.[0] || '',
+                approved_rate: selectedVendor?.[1] || '0',
+                approved_payment_term: selectedVendor?.[2] || '',
+                with_tax_or_not4: selectedVendor?.[4] || 'Yes',
+                tax_value4: selectedVendor?.[5] || '0',
+            };
+
+            const { error } = await supabase
+                .from('indent')
+                .update(updates)
+                .eq('indent_number', selectedIndent?.indentNo);
+
+            if (error) throw error;
+            
+            toast.success(`Approved vendor for ${selectedIndent?.indentNo}`);
+            setOpenDialog(false);
+            form.reset();
+            
+            // Refresh both tables
+            fetchPendingApprovals();
+            fetchCompletedApprovals();
+        } catch (error) {
+            console.error('Error approving vendor:', error);
+            toast.error('Failed to update vendor');
+        }
     }
-}
 
     const historyUpdateSchema = z.object({
         rate: z.coerce.number(),
@@ -329,35 +368,21 @@ async function onSubmit(values: z.infer<typeof schema>) {
 
     async function onSubmitHistoryUpdate(values: z.infer<typeof historyUpdateSchema>) {
         try {
-            console.log("✅ Submitted Values:", values);
-            console.log("✅ Selected History:", selectedHistory);
+            const { error } = await supabase
+                .from('indent')
+                .update({ approved_rate: values.rate.toString() })
+                .eq('indent_number', selectedHistory?.indentNo);
 
-            const filtered = indentSheet.filter(
-                (s) => s.indentNumber === selectedHistory?.indentNo
-            );
-            console.log("✅ Filtered Sheet Rows:", filtered);
-
-            const updatedRows = filtered.map((prev: any) => ({
-                rowIndex: prev.rowIndex,
-                approvedRate: values.rate,
-            }));
-            console.log("✅ Updated Rows Before Sending:", updatedRows);
-
-            await postToSheet(updatedRows, 'update');
-            console.log("✅ postToSheet completed");
+            if (error) throw error;
 
             toast.success(`Updated rate of ${selectedHistory?.indentNo}`);
             setOpenDialog(false);
-
             historyUpdateForm.reset({ rate: 0 });
-            console.log("✅ Form reset");
-
-            setTimeout(() => {
-                console.log("🔄 Refreshing indent sheet...");
-                updateIndentSheet();
-            }, 1000);
+            
+            // Refresh history table
+            fetchCompletedApprovals();
         } catch (err) {
-            console.error("❌ Error in onSubmitHistoryUpdate:", err);
+            console.error('Error updating rate:', err);
             toast.error('Failed to update vendor');
         }
     }
@@ -383,7 +408,7 @@ async function onSubmit(values: z.infer<typeof schema>) {
                             data={tableData}
                             columns={columns}
                             searchFields={['product', 'department', 'indenter' ,'firmNameMatch']}
-                            dataLoading={indentLoading}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                     <TabsContent value="history">
@@ -391,7 +416,7 @@ async function onSubmit(values: z.infer<typeof schema>) {
                             data={historyData}
                             columns={historyColumns}
                             searchFields={['product', 'department', 'indenter','firmNameMatch']}
-                            dataLoading={indentLoading}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                 </Tabs>

@@ -103,7 +103,7 @@ export type PaymentHistory = {
     amountToBepaid?: number;
     remarks?: string;
     anyAttachments?: string;
-    
+
     // Alternative field names
     'AP-Payment Number'?: string;
     Status?: string;
@@ -199,7 +199,7 @@ export type PoMasterSheet = {
     deliveryDays: number;
     deliveryType: string;
     firmNameMatch: string;
-     totalPaidAmount?: number;
+    totalPaidAmount?: number;
     outstandingAmount?: number;
     status?: string; // This is the most important field
     deliveryDate?: string;
@@ -222,6 +222,7 @@ export type MasterSheet = {
     paymentTerms: string[];
     departments: string[];
     groupHeads: Record<string, string[]>; // category: items[]
+    products: Record<string, string[]>;
     companyName: string;
     companyAddress: string;
     companyGstin: string;
@@ -247,6 +248,7 @@ export type UserPermissions = {
     username: string;
     password: string;
     name: string;
+    firmNameMatch: string;
 
     administrate: boolean;
     createIndent: boolean;
@@ -263,10 +265,6 @@ export type UserPermissions = {
     storeOutApprovalAction: boolean;
     pendingIndentsView: boolean;
     ordersView: boolean;
-    poMaster: boolean;
-    getPurchase: boolean;
-    storeIssue: boolean;
-    firmNameMatch: string;
     againAuditing: boolean;
     takeEntryByTelly: boolean;
     reauditData: boolean;
@@ -276,16 +274,17 @@ export type UserPermissions = {
     returnMaterialToParty: boolean;
     exchangeMaterials: boolean;
     insteadOfQualityCheckInReceivedItem: boolean;
-    dbForPc : boolean;
-    billNotReceived:boolean;
+    dbForPc: boolean;
+    billNotReceived: boolean;
     storeIn: boolean;
-    issueDataView: boolean;    
-    issueDataAction: boolean; // ✅ ADD THIS - For Issue Data page
-    fullKiting: boolean; // For "Freight Payment" page
-    makePayment: boolean; // For "Make Payment" page  
-    paymentStatus: boolean; //
-    pendingPo: boolean; // ✅ CHANGE: lowercase 'o' - "Pending PO" becomes "pendingPo"
-    inventory:boolean;
+    poHistory: boolean;
+    storeIssue: boolean;
+    issueData: boolean;
+    inventory: boolean;
+    pendingPo: boolean;
+    fullKiting: boolean;
+    paymentStatus: boolean;
+    makePayment: boolean;
 };
 
 export interface PaymentsSheet {
@@ -311,6 +310,7 @@ export interface PaymentsSheet {
     delay: string;
     status1: string;
     paymentForm: string;
+    paymentDone?: boolean;
     rowIndex?: number;
 }
 
@@ -320,7 +320,6 @@ export const allPermissionKeys = [
     "createPo",
     "indentApprovalView",
     "indentApprovalAction",
-    "issueDataAction", // ✅ ADD THIS
     "updateVendorView",
     "updateVendorAction",
     "threePartyApprovalView",
@@ -331,8 +330,6 @@ export const allPermissionKeys = [
     "storeOutApprovalAction",
     "pendingIndentsView",
     "ordersView",
-    "poMaster",
-    "storeIssue",
     "againAuditing",
     "takeEntryByTelly",
     "reauditData",
@@ -345,20 +342,21 @@ export const allPermissionKeys = [
     "dbForPc",
     "billNotReceived",
     "storeIn",
-    "issueDataView",    // ✅ ADD THIS
-    "issueDataAction",
-    "fullKiting",
-    "makePayment", 
-    "paymentStatus",
-    "pendingPo", // ✅ CHANGE: lowercase 'o'
+    "poHistory",
+    "storeIssue",
+    "issueData",
     "inventory",
+    "pendingPo",
+    "fullKiting",
+    "paymentStatus",
+    "makePayment",
 ] as const;
 
 
 
 export type IssueSheet = {
     timestamp: string;
-     rowIndex: number;
+    rowIndex: number;
     issueNo: string;  // Changed from issueNumber to match "Issue No" -> issueNo
     issueTo: string;  // Maps to "Issue to" column
     uom: string;
@@ -372,9 +370,9 @@ export type IssueSheet = {
     actual1?: string;
     timeDelay1?: string;
     status: string;
-    givenQty?: number; 
+    givenQty?: number;
     location?: string;
-       // Changed from givenQuantity to match "Given Qty" -> givenQty
+    // Changed from givenQuantity to match "Given Qty" -> givenQty
 
     // Remove fields that don't exist in the sheet:
     // department, groupHead, specifications, etc.

@@ -1,7 +1,7 @@
 import { Toaster } from '@/components/ui/sonner';
-import { fetchSheet } from '@/lib/fetchers';
 import type { UserPermissions } from '@/types/sheets';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { authenticateUser, getUserByUsername } from '@/services/userService';
 
 interface AuthState {
     loggedIn: boolean;
@@ -24,11 +24,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (stored) {
             try {
                 const { username } = JSON.parse(stored);
-                fetchSheet('USER').then((res) => {
-                    const user = (res as UserPermissions[]).find((user) => user.username === username);
+                getUserByUsername(username).then((user) => {
                     if (user) {
                         setUserPermissions(user);
                         setLoggedIn(true);
+                    } else {
+                        // User not found or error
+                        localStorage.removeItem('auth');
                     }
                     setLoading(false);
                 }).catch((error) => {
@@ -48,9 +50,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     async function login(username: string, password: string) {
         try {
-            const users = (await fetchSheet('USER')) as UserPermissions[];
-            const user = users.find((user) => user.username === username && user.password === password);
-            if (user === undefined) {
+            const user = await authenticateUser(username, password);
+            if (!user) {
                 return false;
             }
 
@@ -74,12 +75,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const defaultUser: UserPermissions = userPermissions || {} as UserPermissions;
 
     return (
-        <AuthContext.Provider value={{ 
-            login, 
-            loggedIn, 
-            logout, 
-            user: defaultUser, 
-            loading 
+        <AuthContext.Provider value={{
+            login,
+            loggedIn,
+            logout,
+            user: defaultUser,
+            loading
         }}>
             {children}
             <Toaster expand richColors theme="light" closeButton />

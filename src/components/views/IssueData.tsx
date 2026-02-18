@@ -1,7 +1,6 @@
 import { type ColumnDef, type Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
-import { useEffect, useState } from 'react';
-import { useSheets } from '@/context/SheetsContext';
+import { useEffect, useState, useMemo } from 'react';
 import { DownloadOutlined } from '@ant-design/icons';
 
 import {
@@ -12,108 +11,64 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
+    Dialog,
 } from '@/components/ui/dialog';
 import { Button } from '../ui/button';
-import { Dialog } from '@radix-ui/react-dialog';
 import { z } from 'zod';
 import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { postToSheet } from '@/lib/fetchers';
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
-import { Tabs, TabsContent } from '../ui/tabs';
-import { ClipboardCheck, PenSquare } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { ClipboardCheck } from 'lucide-react';
+import Heading from '../element/Heading';
+import { Input } from '../ui/input';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import Heading from '../element/Heading';
-import { Pill } from '../ui/pill';
-import { Input } from '../ui/input';
+import {
+    fetchIssueRecords,
+    updateIssueApproval,
+    type IssueRecord
+} from '@/services/issueService';
 
-const statuses = ['Pending', 'Reject', 'New Vendor', 'Regular'];
-
-interface ApproveTableData {
-    issueNo: string;
-    issueTo: string;
-    uom: string;
-    productName: string;
-    quantity: number;
-    department: string;
-    groupHead: string;
-    planned1?: string;
-    location: string; // ✅ ADD THIS
-
-}
-
-interface HistoryData {
-    issueNo: string;
-    issueTo: string;
-    uom: string;
-    productName: string;
-    quantity: number;
-    department: string;
-    status: string;
-    givenQty: number;
-    groupHead: string;
-    planned1?: string;
-    actual1?: string;
-    location: string; // ✅ ADD THIS
-
-}
-
-export default () => {
-    const { issueSheet, issueLoading, updateIssueSheet } = useSheets();
+export default function IssueData() {
     const { user } = useAuth();
-
-    const [selectedIndent, setSelectedIndent] = useState<ApproveTableData | null>(null);
-    const [tableData, setTableData] = useState<ApproveTableData[]>([]);
-    const [historyData, setHistoryData] = useState<HistoryData[]>([]);
+    const [allData, setAllData] = useState<IssueRecord[]>([]);
+    const [dataLoading, setDataLoading] = useState(true);
+    const [selectedIssue, setSelectedIssue] = useState<IssueRecord | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
-    const [editingRow, setEditingRow] = useState<string | null>(null);
-    const [editValues, setEditValues] = useState<Partial<HistoryData>>({});
-    const [loading, setLoading] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+
+    const fetchData = async () => {
+        setDataLoading(true);
+        try {
+            const records = await fetchIssueRecords();
+            // Filter by firm name
+            const filteredByFirm = records.filter(item => {
+                return user.firmNameMatch.toLowerCase() === "all" || item.firm_name_match === user.firmNameMatch;
+            });
+            setAllData(filteredByFirm);
+        } catch (error) {
+            console.error('Failed to fetch issue records:', error);
+            toast.error('Failed to load data');
+        } finally {
+            setDataLoading(false);
+        }
+    };
 
     useEffect(() => {
-        setTableData(
-            issueSheet
-                .filter((sheet) => sheet.planned1 !== '' && sheet.actual1 === '')
-                .map((sheet) => ({
-                    issueNo: sheet.issueNo,
-                    issueTo: sheet.issueTo,
-                    uom: sheet.uom,
-                    productName: sheet.productName,
-                    quantity: sheet.quantity,
-                    department: sheet.department,
-                    groupHead: sheet.groupHead,
-                    planned1: sheet.planned1, // ✅ Added
-                    location: sheet.location || '', // ✅ ADD THIS
+        fetchData();
+    }, [user.firmNameMatch]);
 
-                }))
-        );
-    }, [issueSheet]);
+    const pendingData = useMemo(() => {
+        return allData.filter(i => i.planned1 && !i.actual1);
+    }, [allData]);
 
-    useEffect(() => {
-        setHistoryData(
-            issueSheet
-                .filter((sheet) => sheet.planned1 !== '' && sheet.actual1 !== '')
-                .map((sheet) => ({
-                    issueNo: sheet.issueNo,
-                    issueTo: sheet.issueTo,
-                    uom: sheet.uom,
-                    productName: sheet.productName,
-                    quantity: sheet.quantity,
-                    department: sheet.department,
-                    status: sheet.status || '', // Add this
-                    givenQty: sheet.givenQty || 0, // Add this
-                    groupHead: sheet.groupHead,
-                    planned1: sheet.planned1, // ✅ Added
-                    actual1: sheet.actual1,   // ✅ Added
-                    location: sheet.location || '', // ✅ ADD THIS
-
-                }))
-        );
-    }, [issueSheet]);
+    const historyData = useMemo(() => {
+        return allData.filter(i => i.planned1 && i.actual1);
+    }, [allData]);
 
     const handleDownload = (data: any[]) => {
         if (!data || data.length === 0) {
@@ -121,10 +76,7 @@ export default () => {
             return;
         }
 
-        // Column headers
         const headers = Object.keys(data[0]);
-
-        // CSV rows
         const csvRows = [
             headers.join(','),
             ...data.map((row) =>
@@ -133,138 +85,93 @@ export default () => {
         ];
 
         const csvContent = csvRows.join('\n');
-
-        // Blob create & download trigger
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', `pending-indents-${Date.now()}.csv`); // CSV extension
+        link.setAttribute('download', `issue-data-${Date.now()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
 
-    const onDownloadClick = async () => {
-        setLoading(true);
-        try {
-            await handleDownload(tableData); // agar async function hai
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const formatDateTime = (isoString: string) => {
-        const date = new Date(isoString);
-        const day = date.getDate().toString().padStart(2, "0");
-        const month = (date.getMonth() + 1).toString().padStart(2, "0");
-        const year = date.getFullYear();
-
-        const hours = date.getHours().toString().padStart(2, "0");
-        const minutes = date.getMinutes().toString().padStart(2, "0");
-        const seconds = date.getSeconds().toString().padStart(2, "0");
-
-        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-    };
-
-
-    // Creating table columns
-
-   const columns: ColumnDef<ApproveTableData>[] = [
-    // Only show Action column when user has issueDataAction permission
-    ...(user.issueDataAction  // ✅ Only show Action column if user has action permission
-        ? [
-            {
-                header: 'Action',
-                id: 'action',
-                cell: ({ row }: { row: Row<ApproveTableData> }) => {
-                    const indent = row.original;
-                    return (
-                        <div>
+    const columns: ColumnDef<IssueRecord>[] = [
+        ...(user.issueData
+            ? [
+                {
+                    header: 'Action',
+                    id: 'action',
+                    cell: ({ row }: { row: Row<IssueRecord> }) => {
+                        const indent = row.original;
+                        return (
                             <DialogTrigger asChild>
                                 <Button
                                     variant="outline"
                                     onClick={() => {
-                                        setSelectedIndent(indent);
-                                        setOpenDialog(true); // ✅ Make sure to open dialog
+                                        setSelectedIssue(indent);
+                                        setOpenDialog(true);
                                     }}
                                 >
                                     Approve
                                 </Button>
                             </DialogTrigger>
-                        </div>
-                    );
+                        );
+                    },
                 },
-            },
-        ]
-        : []), // Hide Action column if user doesn't have action permission
-    
-    // Always show these columns if user has view permission
-    { accessorKey: 'issueNo', header: 'Issue No' },
-    { accessorKey: 'issueTo', header: 'Issue to' },
-    { accessorKey: 'groupHead', header: 'Group Head' },
-    { accessorKey: 'uom', header: 'Uom' },
-    { accessorKey: 'productName', header: 'Product Name' },
-    { accessorKey: 'quantity', header: 'Quantity' },
-    { accessorKey: 'department', header: 'Department' },
-    { accessorKey: 'location', header: 'Location' },
-    {
-        accessorKey: 'planned1',
-        header: 'Planned Date',
-        cell: ({ row }) =>
-            row.original.planned1
-                ? formatDateTime(row.original.planned1)
-                : '-',
-    },
-];
-
-
-    const historyColumns: ColumnDef<HistoryData>[] = [
-        { accessorKey: 'issueNo', header: 'Issue No' },
-        { accessorKey: 'issueTo', header: 'Issue to' },
-        { accessorKey: 'groupHead', header: 'Group Head' },
+            ]
+            : []),
+        { accessorKey: 'issue_no', header: 'Issue No' },
+        { accessorKey: 'issue_to', header: 'Issue to' },
+        { accessorKey: 'group_head', header: 'Group Head' },
         { accessorKey: 'uom', header: 'Uom' },
-        { accessorKey: 'productName', header: 'Product Name' },
+        { accessorKey: 'product_name', header: 'Product Name' },
         { accessorKey: 'quantity', header: 'Quantity' },
         { accessorKey: 'department', header: 'Department' },
-        { accessorKey: 'location', header: 'Location' }, 
-        { accessorKey: 'status', header: 'Status' },
-        { accessorKey: 'givenQty', header: 'Given Qty' },
+        { accessorKey: 'location', header: 'Location' },
         {
             accessorKey: 'planned1',
             header: 'Planned Date',
-            cell: ({ row }) =>
-                row.original.planned1
-                    ? formatDateTime(row.original.planned1)
-                    : '-',
+            cell: ({ row }) => row.original.planned1 ? formatDate(new Date(row.original.planned1)) : '-',
+        },
+    ];
+
+    const historyColumns: ColumnDef<IssueRecord>[] = [
+        { accessorKey: 'issue_no', header: 'Issue No' },
+        { accessorKey: 'issue_to', header: 'Issue to' },
+        { accessorKey: 'group_head', header: 'Group Head' },
+        { accessorKey: 'uom', header: 'Uom' },
+        { accessorKey: 'product_name', header: 'Product Name' },
+        { accessorKey: 'quantity', header: 'Quantity' },
+        { accessorKey: 'department', header: 'Department' },
+        { accessorKey: 'location', header: 'Location' },
+        { accessorKey: 'status', header: 'Status' },
+        { accessorKey: 'given_qty', header: 'Given Qty' },
+        {
+            accessorKey: 'planned1',
+            header: 'Planned Date',
+            cell: ({ row }) => row.original.planned1 ? formatDate(new Date(row.original.planned1)) : '-',
         },
         {
             accessorKey: 'actual1',
             header: 'Actual Date',
-            cell: ({ row }) =>
-                row.original.actual1
-                    ? formatDateTime(row.original.actual1)
-                    : '-',
+            cell: ({ row }) => (row.original.actual1 ? formatDate(new Date(row.original.actual1)) : '-'),
         },
-
-
     ];
 
-    // Creating Form
-    const schema = z
-        .object({
-            status: z.string(),
-            givenQty: z.number().optional(),
-        })
-        .superRefine((data, ctx) => {
-            if (data.status === 'Yes' && (!data.givenQty || data.givenQty === 0)) {
-                ctx.addIssue({
-                    path: ['givenQty'],
-                    code: z.ZodIssueCode.custom,
-                    message: 'Given quantity is required when status is Yes',
-                });
-            }
-        });
+    const schema = z.object({
+        status: z.enum(['Yes', 'No'], {
+            required_error: 'Please select a status',
+        }),
+        givenQty: z.number().optional(),
+    }).superRefine((data, ctx) => {
+        if (data.status === 'Yes' && (!data.givenQty || data.givenQty <= 0)) {
+            ctx.addIssue({
+                path: ['givenQty'],
+                code: z.ZodIssueCode.custom,
+                message: 'Given quantity is required when status is Yes',
+            });
+        }
+    });
 
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
@@ -273,25 +180,24 @@ export default () => {
 
     async function onSubmit(values: z.infer<typeof schema>) {
         try {
-            await postToSheet(
-    issueSheet
-        .filter((s) => s.issueNo === selectedIndent?.issueNo)
-        .map((prev) => ({
-            rowIndex: prev.rowIndex,   
-            actual1: new Date().toISOString(),
-            status: values.status,
-            givenQty: values.status === 'Yes' ? values.givenQty : '',
-        })),
-    'update',
-    'ISSUE'
-);
+            if (!selectedIssue) return;
 
-            toast.success(`Updated approval status of ${selectedIndent?.issueNo}`);
+            const currentDateTime = new Date().toISOString();
+
+            await updateIssueApproval(selectedIssue.issue_no, {
+                actual1: currentDateTime,
+                status: values.status,
+                given_qty: values.status === 'Yes' ? values.givenQty : null,
+            });
+
+            toast.success(`Updated approval status of ${selectedIssue.issue_no}`);
             setOpenDialog(false);
             form.reset();
-            setTimeout(() => updateIssueSheet(), 1000);
-        } catch {
-            toast.error('Failed to approve indent');
+            setSelectedIssue(null);
+            fetchData();
+        } catch (err) {
+            console.error('Error updating approval', err);
+            toast.error('Failed to update issue');
         }
     }
 
@@ -307,16 +213,22 @@ export default () => {
                     <Heading heading="Issue Data" subtext="Update Issue Data" tabs>
                         <ClipboardCheck size={50} className="text-primary" />
                     </Heading>
+
+                    <TabsList className="mb-4">
+                        <TabsTrigger value="pending">Pending ({pendingData.length})</TabsTrigger>
+                        <TabsTrigger value="history">History ({historyData.length})</TabsTrigger>
+                    </TabsList>
+
                     <TabsContent value="pending">
                         <DataTable
-                            data={tableData}
+                            data={pendingData}
                             columns={columns}
-                            searchFields={['productName', 'department', 'issueNo', 'issueTo']}
-                            dataLoading={issueLoading}
+                            searchFields={['product_name', 'department', 'issue_no', 'issue_to', 'firm_name_match']}
+                            dataLoading={dataLoading}
                             extraActions={
                                 <Button
-                                    variant="default" // or "outline", "secondary", etc. based on your design
-                                    onClick={onDownloadClick}
+                                    variant="default"
+                                    onClick={() => handleDownload(pendingData)}
                                     style={{
                                         background: 'linear-gradient(90deg, #4CAF50, #2E7D32)',
                                         border: 'none',
@@ -330,7 +242,7 @@ export default () => {
                                     }}
                                 >
                                     <DownloadOutlined />
-                                    {loading ? 'Downloading...' : 'Download'}
+                                    {downloading ? 'Downloading...' : 'Download'}
                                 </Button>
                             }
                         />
@@ -339,13 +251,13 @@ export default () => {
                         <DataTable
                             data={historyData}
                             columns={historyColumns}
-                            searchFields={['productName', 'department', 'issueNo', 'issueTo']}
-                            dataLoading={issueLoading}
+                            searchFields={['product_name', 'department', 'issue_no', 'issue_to', 'firm_name_match']}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                 </Tabs>
 
-                {selectedIndent && (
+                {selectedIssue && (
                     <DialogContent>
                         <Form {...form}>
                             <form
@@ -356,9 +268,7 @@ export default () => {
                                     <DialogTitle>Approve Indent</DialogTitle>
                                     <DialogDescription>
                                         Approve indent{' '}
-                                        <span className="font-medium">
-                                            {selectedIndent.issueNo}
-                                        </span>
+                                        <span className="font-medium">{selectedIssue.issue_no}</span>
                                     </DialogDescription>
                                 </DialogHeader>
 
@@ -380,7 +290,6 @@ export default () => {
                                                     </FormControl>
                                                     <SelectContent>
                                                         <SelectItem value="Yes">Yes</SelectItem>
-
                                                         <SelectItem value="No">No</SelectItem>
                                                     </SelectContent>
                                                 </Select>
@@ -400,9 +309,7 @@ export default () => {
                                                             {...field}
                                                             type="number"
                                                             onChange={(e) =>
-                                                                field.onChange(
-                                                                    Number(e.target.value)
-                                                                )
+                                                                field.onChange(Number(e.target.value))
                                                             }
                                                         />
                                                     </FormControl>
@@ -416,7 +323,10 @@ export default () => {
                                         <Button variant="outline">Close</Button>
                                     </DialogClose>
 
-                                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                                    <Button
+                                        type="submit"
+                                        disabled={form.formState.isSubmitting}
+                                    >
                                         {form.formState.isSubmitting && (
                                             <Loader
                                                 size={20}
@@ -434,4 +344,4 @@ export default () => {
             </Dialog>
         </div>
     );
-};
+}

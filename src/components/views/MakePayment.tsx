@@ -1,5 +1,5 @@
 import { FileText, Building, DollarSign, CheckCircle, AlertCircle, ExternalLink, CheckSquare, XSquare, History } from 'lucide-react';
-import { useSheets } from '@/context/SheetsContext';
+import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { postToSheet } from '@/lib/fetchers';
+import { uploadFile } from '@/lib/fetchers';
 import { toast } from 'sonner';
 import { Checkbox } from '../ui/checkbox';
 
@@ -36,6 +36,7 @@ interface PaymentsRecord {
     status1?: string;
     paymentForm?: string;
     firmNameMatch?: string;
+    paymentDone?: boolean;
 }
 
 interface PaymentHistoryRecord {
@@ -98,7 +99,12 @@ interface UpdatePayload {
 }
 
 export default function MakePayment() {
-    const { paymentsLoading, paymentsSheet, paymentHistoryLoading, paymentHistorySheet, updateAll } = useSheets();
+    const [paymentsLoading, setPaymentsLoading] = useState(false);
+    const [paymentsSheet, setPaymentsSheet] = useState<PaymentsRecord[]>([]);
+    const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
+    const [paymentHistorySheet, setPaymentHistorySheet] = useState<PaymentHistoryRecord[]>([]);
+    const [reloadKey, setReloadKey] = useState(0);
+    const updateAll = () => setReloadKey(k => k + 1);
     const { user } = useAuth();
     const [pendingData, setPendingData] = useState<DisplayPayment[]>([]);
     const [historyData, setHistoryData] = useState<DisplayPaymentHistory[]>([]);
@@ -106,7 +112,7 @@ export default function MakePayment() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [originalData, setOriginalData] = useState<PaymentsRecord[]>([]);
     const [activeTab, setActiveTab] = useState('pending');
-    
+
     const [stats, setStats] = useState({
         total: 0,
         totalAmount: 0,
@@ -115,42 +121,65 @@ export default function MakePayment() {
     });
 
     useEffect(() => {
-        console.log('🔍 MakePayment useEffect triggered');
-        
-        try {
-            const safePaymentsSheet: PaymentsRecord[] = Array.isArray(paymentsSheet) ? paymentsSheet : [];
-            setOriginalData(safePaymentsSheet);
-            
-            console.log('📊 Total payments sheet records:', safePaymentsSheet.length);
-            
-            // ✅ FIXED: Enhanced filter logic with better debugging
-            const pendingItems = safePaymentsSheet
-                .filter((sheet: PaymentsRecord) => {
-                    // Convert to string and trim
-                    const plannedValue = String(sheet?.planned || '').trim();
-                    const actualValue = String(sheet?.actual || '').trim();
-                    
-                    const hasPlanned = plannedValue !== '';
-                    const hasActual = actualValue !== '';
-                    
-                    const shouldShow = hasPlanned && !hasActual;
-                    
-                    // Debug specific records
-                    if (sheet?.poNumber) {
-                        console.log(`🔍 Checking ${sheet.poNumber}:`, {
-                            planned: plannedValue,
-                            actual: actualValue,
-                            hasPlanned,
-                            hasActual,
-                            shouldShow
-                        });
-                    }
-                    
-                    return shouldShow;
-                })
-                .map((sheet: PaymentsRecord, index) => {
-                    // Create display data
-                    return {
+        // fetch payments and payment_history from Supabase
+        const fetchData = async () => {
+            try {
+                setPaymentsLoading(true);
+                setPaymentHistoryLoading(true);
+
+                const { data: paymentsData, error: paymentsError } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .order('timestamp', { ascending: false });
+
+                if (paymentsError) {
+                    console.error('Error fetching payments:', paymentsError);
+                }
+
+                const allPaymentsData = Array.isArray(paymentsData) ? paymentsData : [];
+
+                const mappedPayments: PaymentsRecord[] = allPaymentsData.map((r: any) => ({
+                    rowIndex: r.id,
+                    timestamp: r.timestamp,
+                    uniqueNo: r.unique_no,
+                    partyName: r.party_name,
+                    poNumber: r.po_number,
+                    totalPoAmount: r.total_po_amount,
+                    internalCode: r.internal_code,
+                    product: r.product,
+                    deliveryDate: r.delivery_date,
+                    paymentTerms: r.payment_terms,
+                    numberOfDays: r.number_of_days,
+                    pdf: r.pdf,
+                    payAmount: r.pay_amount,
+                    file: r.file,
+                    remark: r.remark,
+                    totalPaidAmount: r.total_paid_amount,
+                    outstandingAmount: r.outstanding_amount,
+                    status: r.status,
+                    planned: r.planned,
+                    actual: r.actual,
+                    delay: r.delay,
+                    status1: r.status1,
+                    paymentForm: r.payment_form,
+                    firmNameMatch: r.firm_name,
+                    paymentDone: r.payment_done || false,
+                }));
+
+                setOriginalData(mappedPayments);
+                setPaymentsSheet(mappedPayments);
+
+                // Filter Pending: Has planned date, no actual date, not completed, and not pending HOD approval
+                const pendingItems = mappedPayments
+                    .filter((sheet: PaymentsRecord) => {
+                        const plannedValue = String(sheet?.planned || '').trim();
+                        const isNotDone = !sheet?.paymentDone;
+                        const hasPlanned = plannedValue !== '';
+                        const status1 = String(sheet?.status1 || '').toLowerCase();
+                        const isNotPendingApproval = status1 !== 'hod_approval_pending';
+                        return hasPlanned && isNotDone && isNotPendingApproval;
+                    })
+                    .map((sheet: PaymentsRecord, index) => ({
                         rowIndex: sheet?.rowIndex || index,
                         uniqueNo: sheet?.uniqueNo || '',
                         partyName: sheet?.partyName || '',
@@ -174,59 +203,57 @@ export default function MakePayment() {
                         status1: sheet?.status1 || '',
                         paymentForm: sheet?.paymentForm || '',
                         firmNameMatch: sheet?.firmNameMatch || '',
-                    };
+                    }));
+
+                setPendingData(pendingItems);
+
+                // Filter History: Mark as paymentDone
+                const historyItems = mappedPayments
+                    .filter((sheet: PaymentsRecord) => sheet?.paymentDone)
+                    .map((sheet: PaymentsRecord, index) => ({
+                        rowIndex: sheet?.rowIndex || index,
+                        timestamp: sheet?.actual || sheet?.timestamp || '',
+                        apPaymentNumber: '', // Not used anymore
+                        status: sheet?.status || 'Completed',
+                        uniqueNumber: sheet?.uniqueNo || '',
+                        fmsName: sheet?.firmNameMatch || '',
+                        payTo: sheet?.partyName || '',
+                        amountToBePaid: Number(sheet?.payAmount || 0),
+                        remarks: sheet?.remark || '',
+                        anyAttachments: sheet?.file || sheet?.pdf || '',
+                    }));
+
+                setHistoryData(historyItems);
+
+                const totalAmount = pendingItems.reduce((sum, item) => sum + item.outstandingAmount, 0);
+                setStats({
+                    total: pendingItems.length,
+                    totalAmount,
+                    pendingCount: pendingItems.length,
+                    historyCount: historyItems.length
                 });
 
-            console.log('✅ Final pending items found:', pendingItems.length);
-            
-            setPendingData(pendingItems);
-            
-            // Process payment history
-            const safeHistorySheet: PaymentHistoryRecord[] = Array.isArray(paymentHistorySheet) ? paymentHistorySheet : [];
-            console.log('📊 Total payment history records:', safeHistorySheet.length);
-            
-            const historyItems = safeHistorySheet.map((sheet: PaymentHistoryRecord, index) => {
-                return {
-                    rowIndex: sheet?.rowIndex || index,
-                    timestamp: sheet?.timestamp || '',
-                    apPaymentNumber: sheet?.apPaymentNumber || '',
-                    status: sheet?.status || '',
-                    uniqueNumber: sheet?.uniqueNumber || '',
-                    fmsName: sheet?.fmsName || '',
-                    payTo: sheet?.payTo || '',
-                    amountToBePaid: Number(sheet?.amountToBePaid || 0),
-                    remarks: sheet?.remarks || '',
-                    anyAttachments: sheet?.anyAttachments || '',
-                };
-            });
+                setSelectedRows(new Set());
 
-            console.log('✅ Payment history items found:', historyItems.length);
-            setHistoryData(historyItems);
-            
-            const totalAmount = pendingItems.reduce((sum, item) => sum + item.outstandingAmount, 0);
-            setStats({
-                total: pendingItems.length,
-                totalAmount,
-                pendingCount: pendingItems.length,
-                historyCount: historyItems.length
-            });
+            } catch (error) {
+                console.error('❌ Error in Make Payment fetchData:', error);
+                setPendingData([]);
+                setHistoryData([]);
+            } finally {
+                setPaymentsLoading(false);
+                setPaymentHistoryLoading(false);
+            }
+        };
 
-            // Clear selected rows when data changes
-            setSelectedRows(new Set());
-
-        } catch (error) {
-            console.error('❌ Error in Make Payment useEffect:', error);
-            setPendingData([]);
-            setHistoryData([]);
-        }
-    }, [paymentsSheet, paymentHistorySheet]);
+        fetchData();
+    }, [reloadKey]);
 
     const formatDate = (dateString: string) => {
         if (!dateString) return '-';
         try {
             // Try multiple date formats
             let date = new Date(dateString);
-            
+
             if (isNaN(date.getTime())) {
                 // Try DD/MM/YYYY
                 const parts = dateString.split('/');
@@ -234,16 +261,16 @@ export default function MakePayment() {
                     date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
                 }
             }
-            
+
             if (isNaN(date.getTime())) {
                 // Try YYYY-MM-DD
                 date = new Date(dateString.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
             }
-            
+
             if (isNaN(date.getTime())) {
                 return dateString; // Return original if can't parse
             }
-            
+
             return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
         } catch (error) {
             console.warn('Date formatting error:', error);
@@ -252,8 +279,7 @@ export default function MakePayment() {
     };
 
     const formatCurrentDate = (): string => {
-        const now = new Date();
-        return `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+        return new Date().toISOString();
     };
 
     const formatCurrentDateTime = (): string => {
@@ -300,64 +326,41 @@ export default function MakePayment() {
         try {
             // Get the selected items
             const selectedItems = Array.from(selectedRows).map(index => pendingData[index]);
-            
+
             console.log('🔍 Selected items to update:', selectedItems);
-            
-            // Create updates with CORRECT row index calculation
-            const updates: UpdatePayload[] = selectedItems.map(item => {
-                // Calculate the correct row number in Google Sheet
-                const actualSheetRow = item.rowIndex + 5; // rowIndex + header offset
-                
-                console.log('📝 Preparing update for:', {
-                    poNumber: item.poNumber,
-                    uniqueNo: item.uniqueNo,
-                    arrayIndex: item.rowIndex,
-                    calculatedSheetRow: actualSheetRow,
-                    currentStatus: item.status
-                });
-                
-                return {
-                    rowIndex: actualSheetRow,
-                    actual: currentDate,
-                    status: 'Completed',
-                    status1: 'ok'
-                };
-            });
-            
-            console.log('📤 Submitting updates to Google Sheet:', updates);
-            
-            if (updates.length === 0) {
+
+            // Prepare IDs and update payments table in Supabase
+            const ids = selectedItems.map(item => item.rowIndex).filter(Boolean);
+            if (ids.length === 0) {
                 toast.error('Could not find matching records to update');
                 setIsSubmitting(false);
                 return;
             }
 
-            // Update the Google Sheet
-            const result = await postToSheet(updates, 'update', 'Payments');
-            
-            console.log('✅ Update result:', result);
-            
-            if (result.success) {
-                toast.success(`Successfully updated ${updates.length} payment(s)`);
-                
-                // Show what was updated
-                const updatedItems = selectedItems.map(item => 
-                    `${item.poNumber} (${item.uniqueNo})`
-                ).join(', ');
-                
-                toast.info(`Updated: ${updatedItems}`);
-                
-                // Refresh the data
-                setTimeout(() => {
-                    updateAll();
-                }, 1000);
-                
-                // Clear selected rows
-                setSelectedRows(new Set());
-            } else {
-                console.error('❌ Update failed:', result);
-                toast.error(`Failed to update payments: ${result.error || 'Unknown error'}`);
+            // Update payments rows in bulk
+            // Update payments rows in bulk
+            const { error: updateError } = await supabase
+                .from('payments')
+                .update({
+                    actual: currentDate,
+                    status: 'Completed',
+                    status1: 'ok',
+                    payment_done: true
+                })
+                .in('id', ids);
+
+            if (updateError) {
+                console.error('❌ Supabase update error:', updateError);
+                toast.error('Failed to update payments in database');
+                setIsSubmitting(false);
+                return;
             }
+
+            toast.success(`Successfully updated ${ids.length} payment(s)`);
+
+            // Refresh data
+            setTimeout(() => updateAll(), 800);
+            setSelectedRows(new Set());
         } catch (error) {
             console.error('❌ Error submitting payments:', error);
             toast.error('Error updating payments. Check console for details.');
@@ -396,7 +399,7 @@ export default function MakePayment() {
             cell: ({ row }: { row: Row<DisplayPayment> }) => {
                 const item = row.original;
                 const hasPaymentForm = item.paymentForm?.trim() !== '';
-                
+
                 return (
                     <div className="flex gap-2">
                         {hasPaymentForm ? (
@@ -472,6 +475,15 @@ export default function MakePayment() {
             )
         },
         {
+            accessorKey: 'payAmount',
+            header: 'Pay Amount',
+            cell: ({ row }) => (
+                <span className="font-bold text-emerald-600">
+                    ₹{row.original.payAmount?.toLocaleString('en-IN')}
+                </span>
+            )
+        },
+        {
             accessorKey: 'outstandingAmount',
             header: 'Outstanding',
             cell: ({ row }) => (
@@ -487,15 +499,14 @@ export default function MakePayment() {
                 const status = row.original.status?.toLowerCase() || '';
                 const isPending = status === 'pending' || status === '';
                 const isComplete = status === 'complete' || status === 'completed';
-                
+
                 return (
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                        isComplete 
-                            ? 'bg-green-100 text-green-800 border border-green-300' 
-                            : isPending 
-                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                : 'bg-gray-100 text-gray-800 border border-gray-300'
-                    }`}>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${isComplete
+                        ? 'bg-green-100 text-green-800 border border-green-300'
+                        : isPending
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-gray-100 text-gray-800 border border-gray-300'
+                        }`}>
                         {isComplete && <CheckCircle className="mr-1 h-3 w-3" />}
                         {isPending && <AlertCircle className="mr-1 h-3 w-3" />}
                         {row.original.status || 'Pending'}
@@ -512,7 +523,7 @@ export default function MakePayment() {
                 </span>
             )
         },
-        
+
     ];
 
     const historyColumns: ColumnDef<DisplayPaymentHistory>[] = [
@@ -525,15 +536,15 @@ export default function MakePayment() {
                 </div>
             )
         },
-    //     {
-    //     accessorKey: 'apPaymentNumber',
-    //     header: 'AP Payment Number',
-    //     cell: ({ row }) => (
-    //         <div className="font-medium text-purple-700">
-    //             {row.original.apPaymentNumber || '-'}
-    //         </div>
-    //     )
-    // },
+        //     {
+        //     accessorKey: 'apPaymentNumber',
+        //     header: 'AP Payment Number',
+        //     cell: ({ row }) => (
+        //         <div className="font-medium text-purple-700">
+        //             {row.original.apPaymentNumber || '-'}
+        //         </div>
+        //     )
+        // },
 
         {
             accessorKey: 'uniqueNumber',
@@ -574,15 +585,14 @@ export default function MakePayment() {
                 const status = row.original.status?.toLowerCase() || '';
                 const isPaid = status.includes('paid') || status.includes('completed') || status.includes('done');
                 const isPending = status.includes('pending') || status === '';
-                
+
                 return (
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                        isPaid 
-                            ? 'bg-green-100 text-green-800 border border-green-300' 
-                            : isPending 
-                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                : 'bg-gray-100 text-gray-800 border border-gray-300'
-                    }`}>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${isPaid
+                        ? 'bg-green-100 text-green-800 border border-green-300'
+                        : isPending
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-gray-100 text-gray-800 border border-gray-300'
+                        }`}>
                         {isPaid && <CheckCircle className="mr-1 h-3 w-3" />}
                         {isPending && <AlertCircle className="mr-1 h-3 w-3" />}
                         {row.original.status || 'Pending'}
@@ -654,7 +664,7 @@ export default function MakePayment() {
                                     </span>
                                 </div>
                             )}
-                            <Button 
+                            <Button
                                 onClick={handleRefresh}
                                 variant="outline"
                                 size="sm"
@@ -681,7 +691,7 @@ export default function MakePayment() {
                                 </div>
                             </CardContent>
                         </Card>
-                        
+
                         {/* <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
                             <CardContent className="p-5">
                                 <div className="flex items-center justify-between">
@@ -709,7 +719,7 @@ export default function MakePayment() {
                                 </div>
                             </CardContent>
                         </Card>
-                        
+
                         <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
                             <CardContent className="p-5">
                                 <div className="flex items-center justify-between">
@@ -719,9 +729,8 @@ export default function MakePayment() {
                                             {activeTab === 'pending' ? selectedRows.size : 0}
                                         </p>
                                     </div>
-                                    <div className={`h-10 w-10 flex items-center justify-center rounded-full ${
-                                        stats.pendingCount > 0 ? 'bg-amber-100' : 'bg-green-100'
-                                    }`}>
+                                    <div className={`h-10 w-10 flex items-center justify-center rounded-full ${stats.pendingCount > 0 ? 'bg-amber-100' : 'bg-green-100'
+                                        }`}>
                                         {stats.pendingCount > 0 ? (
                                             <AlertCircle className="h-6 w-6 text-amber-600" />
                                         ) : (
@@ -804,9 +813,9 @@ export default function MakePayment() {
                                         <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
                                         <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading Payment Data...</h3>
                                         <p className="text-gray-500">Fetching data from Payments sheet</p>
-                                        <Button 
-                                            onClick={handleRefresh} 
-                                            variant="outline" 
+                                        <Button
+                                            onClick={handleRefresh}
+                                            variant="outline"
                                             className="mt-4"
                                         >
                                             Retry Loading
@@ -841,7 +850,7 @@ export default function MakePayment() {
                                                 </div>
                                             </div>
                                         )}
-                                        
+
                                         {/* Data Table */}
                                         <DataTable<DisplayPayment, ColumnDef<DisplayPayment>>
                                             data={pendingData}
@@ -856,7 +865,7 @@ export default function MakePayment() {
                                         <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                                         <h3 className="text-lg font-semibold text-gray-700 mb-2">No Pending Payment Forms</h3>
                                         <div className="mt-6">
-                                            <Button 
+                                            <Button
                                                 onClick={handleRefresh}
                                                 variant="default"
                                             >
@@ -893,7 +902,7 @@ export default function MakePayment() {
                                                 </div>
                                             </div>
                                         </div>
-                                        
+
                                         <DataTable<DisplayPaymentHistory, ColumnDef<DisplayPaymentHistory>>
                                             data={historyData}
                                             columns={historyColumns}

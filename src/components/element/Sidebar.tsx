@@ -24,9 +24,9 @@ interface SidebarProps {
 export default ({ items }: SidebarProps) => {
     const navigate = useNavigate();
     // ✅ GET ALL SHEETS FROM CONTEXT
-    const { 
-        indentSheet, 
-        storeInSheet, 
+    const {
+        indentSheet,
+        storeInSheet,
         issueSheet,
         fullkittingSheet,
         pcReportSheet,
@@ -35,8 +35,8 @@ export default ({ items }: SidebarProps) => {
         receivedSheet,
         paymentHistorySheet,
         paymentsSheet,
-        updateAll, 
-        allLoading 
+        updateAll,
+        allLoading
     } = useSheets();
     const { user, logout } = useAuth();
     console.log("user", user);
@@ -78,104 +78,108 @@ export default ({ items }: SidebarProps) => {
                 <SidebarGroup>
                     <SidebarMenu>
                         {allItems
-    .filter((item) => {
-        // Check user permission
-        if (item.gateKey) {
-            return user[item.gateKey] === true || user[item.gateKey] === "true";
-        }
-        return true;
-    })
-    .map((item, i) => {
-        // ✅ DETERMINE WHICH SHEET TO USE BASED ON ROUTE PATH
-        let sheetData: any[] = [];
-        let notificationCount = 0;
+                            .filter((item) => {
+                                // Check user permission
+                                // Grant access if user is admin or has specific permission
+                                const isAdmin = user.administrate === true || (user.administrate as any) === "true";
+                                if (isAdmin) return true;
 
-        // Only calculate if notification function exists
-        // In your Sidebar component, replace the notification calculation part:
-if (item.notifications) {
-    switch (item.path) {
-        case 'Issue-data':
-        case 'store-issue':
-            sheetData = issueSheet || [];
-            break;
-        case 'store-in':
-            sheetData = storeInSheet || [];
-            break;
-        case 'Make-Payment':
-    // Pass both indentSheet and paymentHistorySheet for Make Payment
-            sheetData = [paymentsSheet || []];
-            break;
-        case 'Full-Kiting':
-            sheetData = fullkittingSheet || [];
-            break;
-        case 'rectify-the-mistake':
-        case 'reaudit-data':
-        case 'take-entry-by-tally':
-        case 'AgainAuditing':
-        case 'audit-data': // ✅ ADD THIS for Audit Data
-            sheetData = tallyEntrySheet || [];
-            break;
-        case 'po-history':
-        case 'create-po':
-            sheetData = poMasterSheet || [];
-            break;
-        case 'pending-poss':
-            sheetData = indentSheet || [];
-            break;
-        case 'Bill-Not-Received':
-        case 'Quality-Check-In-Received-Item':
-        case 'Send-Debit-Note':
-            sheetData = storeInSheet || [];
-            break;
-        case 'Payment-Status':
-            sheetData = [poMasterSheet || [], paymentsSheet || []];
-            break;
-        case 'DBforPc':
-            sheetData = pcReportSheet || [];
-            break;
-        default:
-            sheetData = indentSheet || [];
-    }
+                                if (item.gateKey) {
+                                    return user[item.gateKey] === true || user[item.gateKey] === "true";
+                                }
+                                return true;
+                            })
+                            .map((item, i) => {
+                                // ✅ DETERMINE WHICH SHEET TO USE BASED ON ROUTE PATH
+                                let sheetData: any[] = [];
+                                let notificationCount = 0;
 
-    // ✅ SMART NOTIFICATION HANDLER: Works for both old and new functions
-    try {
-        // First try with raw data (for old functions)
-        notificationCount = item.notifications(sheetData);
-        
-        // If it returns 0 but we have data, try with array-wrapped data (for new functions)
-        if (notificationCount === 0 && sheetData.length > 0) {
-            const wrappedCount = item.notifications([sheetData]);
-            if (wrappedCount > 0) {
-                notificationCount = wrappedCount;
-            }
-        }
-    } catch (error) {
-        console.error(`Error in notification function for ${item.name}:`, error);
-        notificationCount = 0;
-    }
-}
+                                // Only calculate if notification function exists
+                                // In your Sidebar component, replace the notification calculation part:
+                                if (item.notifications) {
+                                    switch (item.path) {
+                                        case 'Issue-data':
+                                        case 'store-issue':
+                                            sheetData = issueSheet || [];
+                                            break;
+                                        case 'store-in':
+                                            sheetData = storeInSheet || [];
+                                            break;
+                                        case 'Make-Payment':
+                                            // Pass both indentSheet and paymentHistorySheet for Make Payment
+                                            sheetData = [paymentsSheet || []];
+                                            break;
+                                        case 'Full-Kiting':
+                                            sheetData = fullkittingSheet || [];
+                                            break;
+                                        case 'rectify-the-mistake':
+                                        case 'reaudit-data':
+                                        case 'take-entry-by-tally':
+                                        case 'AgainAuditing':
+                                        case 'audit-data': // ✅ ADD THIS for Audit Data
+                                            sheetData = tallyEntrySheet || [];
+                                            break;
+                                        case 'po-history':
+                                        case 'create-po':
+                                            sheetData = poMasterSheet || [];
+                                            break;
+                                        case 'pending-poss':
+                                            sheetData = indentSheet || [];
+                                            break;
+                                        case 'Bill-Not-Received':
+                                        case 'Quality-Check-In-Received-Item':
+                                        case 'Send-Debit-Note':
+                                            sheetData = storeInSheet || [];
+                                            break;
+                                        case 'Payment-Status':
+                                            sheetData = [poMasterSheet || [], paymentsSheet || [], user, storeInSheet || []];
+                                            break;
+                                        case 'DBforPc':
+                                            sheetData = pcReportSheet || [];
+                                            break;
+                                        default:
+                                            sheetData = indentSheet || [];
+                                    }
 
-        return (
-            <SidebarMenuItem key={i}>
-                <SidebarMenuButton
-                    className="transition-colors duration-200 rounded-md py-5 flex justify-between font-medium text-secondary-foreground"
-                    onClick={() => navigate(item.path)}
-                    isActive={window.location.pathname.slice(1) === item.path}
-                >
-                    <div className="flex gap-2 items-center">
-                        {item.icon}
-                        {item.name}
-                    </div>
-                    {/* ✅ SHOW BADGE WITH CORRECT COUNT */}
-                    {notificationCount !== 0 && (
-                        <span className="bg-destructive text-secondary w-[1.3rem] h-[1.3rem] rounded-full text-xs grid place-items-center text-center">
-                            {notificationCount > 99 ? '99+' : notificationCount}
-                        </span>
-                    )}
-                </SidebarMenuButton>
-            </SidebarMenuItem>
-        );
-    })}
+                                    // ✅ SMART NOTIFICATION HANDLER: Works for both old and new functions
+                                    try {
+                                        // First try with raw data (for old functions)
+                                        notificationCount = item.notifications(sheetData);
+
+                                        // If it returns 0 but we have data, try with array-wrapped data (for new functions)
+                                        if (notificationCount === 0 && sheetData.length > 0) {
+                                            const wrappedCount = item.notifications([sheetData]);
+                                            if (wrappedCount > 0) {
+                                                notificationCount = wrappedCount;
+                                            }
+                                        }
+                                    } catch (error) {
+                                        console.error(`Error in notification function for ${item.name}:`, error);
+                                        notificationCount = 0;
+                                    }
+                                }
+
+                                return (
+                                    <SidebarMenuItem key={i}>
+                                        <SidebarMenuButton
+                                            className="transition-colors duration-200 rounded-md py-5 flex justify-between font-medium text-secondary-foreground"
+                                            onClick={() => navigate(item.path)}
+                                            isActive={window.location.pathname.slice(1) === item.path}
+                                        >
+                                            <div className="flex gap-2 items-center">
+                                                {item.icon}
+                                                {item.name}
+                                            </div>
+                                            {/* ✅ SHOW BADGE WITH CORRECT COUNT */}
+                                            {notificationCount !== 0 && (
+                                                <span className="bg-destructive text-secondary w-[1.3rem] h-[1.3rem] rounded-full text-xs grid place-items-center text-center">
+                                                    {notificationCount > 99 ? '99+' : notificationCount}
+                                                </span>
+                                            )}
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                );
+                            })}
 
                     </SidebarMenu>
                 </SidebarGroup>

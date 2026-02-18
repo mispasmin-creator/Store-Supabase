@@ -19,23 +19,48 @@ import { postToIssueSheet, postToSheet, uploadFile } from '@/lib/fetchers';
 import type { IndentSheet } from '@/types';
 
 import type { IssueSheet } from '@/types';
-import { useSheets } from '@/context/SheetsContext';
 import Heading from '../element/Heading';
 import { useEffect, useState } from 'react';
 
+import { fetchIssueRecords, createIssueRecords, type IssueRecord } from '@/services/issueService';
+import { fetchInventoryRecords, type InventoryRecord } from '@/services/inventoryService';
+import { fetchMasterOptions, type MasterData } from '@/services/masterService';
+import { useAuth } from '@/context/AuthContext';
+
 export default () => {
-    const { issueSheet: sheet, updateIssueSheet, masterSheet: options } = useSheets();
-    const [issueSheet, setIssueSheet] = useState<IssueSheet[]>([]);
+    const { user } = useAuth();
+    const [issueData, setIssueData] = useState<IssueRecord[]>([]);
+    const [inventoryData, setInventoryData] = useState<InventoryRecord[]>([]);
+    const [options, setOptions] = useState<MasterData | null>(null);
+    const [dataLoading, setDataLoading] = useState(true);
+
+    const fetchData = async () => {
+        try {
+            setDataLoading(true);
+            const [issues, inventory, masterOptions] = await Promise.all([
+                fetchIssueRecords(),
+                fetchInventoryRecords(),
+                fetchMasterOptions(),
+            ]);
+            setIssueData(issues);
+            setInventoryData(inventory);
+            setOptions(masterOptions);
+        } catch (error) {
+            console.error('Error fetching data for StoreIssue:', error);
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [searchTermGroupHead, setSearchTermGroupHead] = useState('');
     const [searchTermProductName, setSearchTermProductName] = useState('');
     const [searchTermUOM, setSearchTermUOM] = useState('');
-    const [searchTermLocation, setSearchTermLocation] = useState('');
-
-    useEffect(() => {
-        setIssueSheet(sheet);
-    }, [sheet]);
+    const [searchTermDepartment, setSearchTermDepartment] = useState('');
 
     const schema = z.object({
         products: z
@@ -48,7 +73,6 @@ export default () => {
                     uom: z.string().nonempty(),
                     specifications: z.string().optional(),
                     givenQuantity: z.coerce.number().gt(0, 'Must be greater than 0').optional(),
-                    location: z.string().nonempty(), // ✅ Location is required
                 })
             )
             .min(1, 'At least one product is required'),
@@ -65,7 +89,6 @@ export default () => {
                     quantity: 1,
                     groupHead: '',
                     department: '',
-                    location: '', // ✅ Location in default values
                 },
             ],
         },
@@ -79,12 +102,12 @@ export default () => {
 
     async function onSubmit(data: z.infer<typeof schema>) {
         try {
-            const getNextIssueNumber = (existingIssues: Partial<IssueSheet>[]) => {
+            const getNextIssueNumber = (existingIssues: IssueRecord[]) => {
                 if (!Array.isArray(existingIssues) || existingIssues.length === 0) return 'IS-0001';
 
                 const availableNumbers = existingIssues
-                    .filter((issue) => issue.issueNo && typeof issue.issueNo === 'string')
-                    .map((issue) => issue.issueNo!)
+                    .filter((issue) => issue.issue_no && typeof issue.issue_no === 'string')
+                    .map((issue) => issue.issue_no!)
                     .filter((num) => /^IS-\d+$/.test(num))
                     .map((num) => parseInt(num.split('-')[1], 10));
 
@@ -94,28 +117,29 @@ export default () => {
                 return `IS-${String(lastIssueNumber + 1).padStart(4, '0')}`;
             };
 
-            const nextIssueNumber = getNextIssueNumber(issueSheet || []);
+            const nextIssueNumber = getNextIssueNumber(issueData);
 
-            const rows: Partial<IssueSheet>[] = [];
+            const rows: Partial<IssueRecord>[] = [];
             for (const product of data.products) {
-                const row: Partial<IssueSheet> = {
+                const row: Partial<IssueRecord> = {
                     timestamp: new Date().toISOString(),
-                    issueNo: nextIssueNumber,
-                    issueTo: product.specifications || '',
+                    planned1: new Date().toISOString(),
+                    issue_no: nextIssueNumber,
+                    issue_to: product.specifications || '',
                     uom: product.uom,
-                    groupHead: product.groupHead,
-                    productName: product.productName,
+                    group_head: product.groupHead,
+                    product_name: product.productName,
                     quantity: product.quantity,
                     department: product.department,
-                    location: product.location, // ✅ Location included in submission
+                    status: 'Pending'
                 };
 
                 rows.push(row);
             }
 
-            await postToIssueSheet(rows);
-            setTimeout(() => updateIssueSheet(), 1000);
+            await createIssueRecords(rows);
             toast.success('Issue created successfully');
+            fetchData(); // Refresh data
 
             form.reset({
                 products: [
@@ -126,7 +150,6 @@ export default () => {
                         quantity: 1,
                         groupHead: '',
                         department: '',
-                        location: '', // ✅ Reset location too
                     },
                 ],
             });
@@ -141,8 +164,6 @@ export default () => {
         toast.error('Please fill all required fields');
     }
 
-    // Debug: Check if location data is available
-    console.log('Available locations:', options?.location);
     console.log('Form values:', form.watch());
 
     return (
@@ -154,9 +175,10 @@ export default () => {
                 <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6 p-5">
                     <div className="space-y-4">
                         {fields.map((field, index) => {
-                            const groupHead = products[index]?.groupHead;
                             const department = products[index]?.department;
-                            const productOptions = options?.groupHeads[groupHead] || [];
+                            const groupHead = products[index]?.groupHead;
+                            const groupHeadOptions = options?.groupHeads[department] || [];
+                            const productOptions = options?.products[groupHead] || [];
 
                             return (
                                 <div
@@ -244,13 +266,13 @@ export default () => {
                                                                         className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                                                                     />
                                                                 </div>
-                                                                {Object.keys(options?.groupHeads || {})
-                                                                    .filter((dep) =>
-                                                                        dep.toLowerCase().includes(searchTermGroupHead.toLowerCase())
+                                                                {groupHeadOptions
+                                                                    .filter((gh) =>
+                                                                        gh.toLowerCase().includes(searchTermGroupHead.toLowerCase())
                                                                     )
-                                                                    .map((dep, i) => (
-                                                                        <SelectItem key={i} value={dep}>
-                                                                            {dep}
+                                                                    .map((gh, i) => (
+                                                                        <SelectItem key={i} value={gh}>
+                                                                            {gh}
                                                                         </SelectItem>
                                                                     ))}
                                                             </SelectContent>
@@ -368,6 +390,7 @@ export default () => {
                                                                     ))}
                                                             </SelectContent>
                                                         </Select>
+
                                                     </FormItem>
                                                 )}
                                             />
@@ -375,61 +398,6 @@ export default () => {
 
                                         {/* Second row for Location and other fields if needed */}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {/* ✅ LOCATION FIELD - Now properly placed */}
-
-{/* ✅ LOCATION FIELD - FIXED PROPERTY NAME */}
-<FormField
-    control={form.control}
-    name={`products.${index}.location`}
-    render={({ field }) => (
-        <FormItem>
-            <FormLabel>
-                Location
-                <span className="text-destructive">*</span>
-            </FormLabel>
-            <Select
-                onValueChange={field.onChange}
-                value={field.value}
-            >
-                <FormControl>
-                    <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select location" />
-                    </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                    {/* 🔍 Search Box */}
-                    <div className="flex items-center border-b px-3 pb-3">
-                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                        <input
-                            placeholder="Search locations..."
-                            value={searchTermLocation}
-                            onChange={(e) => setSearchTermLocation(e.target.value)}
-                            onKeyDown={(e) => e.stopPropagation()}
-                            className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                        />
-                    </div>
-                    {/* ✅ CHANGED: Use options?.locations instead of options?.location */}
-                    {(options?.locations || [])
-                        .filter((location) =>
-                            location.toLowerCase().includes(searchTermLocation.toLowerCase())
-                        )
-                        .map((location, i) => (
-                            <SelectItem key={i} value={location}>
-                                {location}
-                            </SelectItem>
-                        ))}
-                    {/* Fallback if no locations */}
-                    {(options?.locations || []).length === 0 && (
-                        <SelectItem value="no-locations" disabled>
-                            No locations available
-                        </SelectItem>
-                    )}
-                </SelectContent>
-            </Select>
-        </FormItem>
-    )}
-/>
-
                                             {/* Specifications Field */}
                                             <FormField
                                                 control={form.control}

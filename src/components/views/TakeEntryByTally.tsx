@@ -1,4 +1,3 @@
-import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useEffect, useState, useMemo } from 'react';
 import DataTable from '../element/DataTable';
@@ -21,88 +20,17 @@ import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
-import { postToSheet } from '@/lib/fetchers';
 import { Calculator, Search } from 'lucide-react';
-import { Tabs, TabsContent } from '../ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
 import { Input } from '../ui/input';
-
-interface TallyEntryPendingData {
-    indentNo: string;
-    indentDate: string;
-    purchaseDate: string;
-    materialInDate: string;
-    plannedDate: string;
-    productName: string;
-    billNo: string;
-    qty: number;
-    partyName: string;
-    billAmt: number;
-    billImage: string;
-    billReceivedLater: string;
-    notReceivedBillNo: string;
-    location: string;
-    typeOfBills: string;
-    productImage: string;
-    area: string;
-    indentedFor: string;
-    approvedPartyName: string;
-    rate: number;
-    indentQty: number;
-    totalRate: number;
-    status1: string;
-    remarks1: string;
-    status2: string;
-    remarks2: string;
-    status3: string;
-    remarks3: string;
-    firmNameMatch: string;
-}
-
-interface TallyEntryHistoryData {
-    indentNo: string;
-    indentDate: string;
-    purchaseDate: string;
-    materialInDate: string;
-    productName: string;
-    billNo: string;
-    qty: number;
-    partyName: string;
-    billAmt: number;
-    billImage: string;
-    billReceivedLater: string;
-    notReceivedBillNo: string;
-    location: string;
-    typeOfBills: string;
-    productImage: string;
-    area: string;
-    indentedFor: string;
-    approvedPartyName: string;
-    rate: number;
-    indentQty: number;
-    totalRate: number;
-    status1: string;
-    remarks1: string;
-    status2: string;
-    remarks2: string;
-    status3: string;
-    remarks3: string;
-    status4: string;
-    remarks4: string;
-    firmNameMatch: string;
-}
-
-// Helper function to get field value with multiple possible keys
-const getFieldValue = (item: any, ...possibleKeys: string[]): any => {
-    for (const key of possibleKeys) {
-        if (item[key] !== undefined && item[key] !== null && item[key] !== '') {
-            return item[key];
-        }
-    }
-    return '';
-};
+import {
+    fetchTallyEntryRecords,
+    updateTallyEntryRecord,
+    type TallyEntryRecord
+} from '@/services/tallyEntryService';
 
 // Helper function to format date to dd/mm/yy
 const formatDate = (dateString: string) => {
@@ -120,193 +48,96 @@ const formatDate = (dateString: string) => {
 };
 
 export default function TallyEntry() {
-    const { tallyEntrySheet, updateAll } = useSheets();
     const { user } = useAuth();
-
-    const [pendingData, setPendingData] = useState<TallyEntryPendingData[]>([]);
-    const [historyData, setHistoryData] = useState<TallyEntryHistoryData[]>([]);
-    const [selectedItem, setSelectedItem] = useState<TallyEntryPendingData | null>(null);
+    const [allData, setAllData] = useState<TallyEntryRecord[]>([]);
+    const [dataLoading, setDataLoading] = useState(true);
+    const [selectedItem, setSelectedItem] = useState<TallyEntryRecord | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedPartyName, setSelectedPartyName] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState('');
 
-    useEffect(() => {
-        console.log('🔍 Raw tallyEntrySheet data:', tallyEntrySheet);
-        if (tallyEntrySheet.length > 0) {
-            console.log('📋 First item keys:', Object.keys(tallyEntrySheet[0]));
-            console.log('📋 First item sample:', tallyEntrySheet[0]);
+    const fetchData = async () => {
+        setDataLoading(true);
+        try {
+            const records = await fetchTallyEntryRecords();
+            // Filter by firm name
+            const filteredByFirm = records.filter(item => {
+                return user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch;
+            });
+            setAllData(filteredByFirm);
+        } catch (error) {
+            console.error('Failed to fetch tally entry records:', error);
+            toast.error('Failed to load data');
+        } finally {
+            setDataLoading(false);
         }
-
-        // Filter by firm name
-        const filteredByFirm = tallyEntrySheet.filter(item => {
-            const firmName = getFieldValue(item, 'Firm Name', 'firmName', 'firmNameMatch');
-            return user.firmNameMatch.toLowerCase() === "all" || firmName === user.firmNameMatch;
-        });
-        
-        console.log('✅ Filtered by firm:', filteredByFirm.length);
-
-        setPendingData(
-            filteredByFirm
-                .filter((i) => {
-                    const planned4 = getFieldValue(i, 'Planned 4', 'planned4');
-                    const actual4 = getFieldValue(i, 'Actual 4', 'actual4');
-                    return planned4 !== '' && actual4 === '';
-                })
-                .map((i) => {
-                    const mapped = {
-                        indentNo: getFieldValue(i, 'Indent Number', 'indentNumber', 'indentNo').toString().trim(),
-                        firmNameMatch: getFieldValue(i, 'Firm Name', 'firmName', 'firmNameMatch').toString().trim(),
-                        indentDate: getFieldValue(i, 'Indent Date', 'indentDate'),
-                        purchaseDate: getFieldValue(i, 'Purchase Date', 'purchaseDate'),
-                        materialInDate: getFieldValue(i, 'Material In Date', 'materialInDate'),
-                        plannedDate: getFieldValue(i, 'Planned 4', 'planned4'),
-                        productName: getFieldValue(i, 'Product Name', 'productName'),
-                        billNo: getFieldValue(i, 'Bill No.', 'billNo').toString(),
-                        qty: Number(getFieldValue(i, 'Qty', 'qty')) || 0,
-                        partyName: getFieldValue(i, 'Party Name', 'partyName'),
-                        billAmt: Number(getFieldValue(i, 'Bill Amt', 'billAmt')) || 0,
-                        billImage: getFieldValue(i, 'Bill Image', 'billImage'),
-                        billReceivedLater: getFieldValue(i, 'Bill Recieved later', 'billReceivedLater'),
-                        notReceivedBillNo: getFieldValue(i, 'Not Received Bill No.', 'notReceivedBillNo'),
-                        location: getFieldValue(i, 'Location', 'location'),
-                        typeOfBills: getFieldValue(i, 'Type Of Bills', 'typeOfBills'),
-                        productImage: getFieldValue(i, 'Prodcut Image', 'Product Image', 'productImage'),
-                        area: getFieldValue(i, 'Area', 'area'),
-                        indentedFor: getFieldValue(i, 'Indented For', 'indentedFor'),
-                        approvedPartyName: getFieldValue(i, 'Approved Party Name', 'approvedPartyName'),
-                        rate: Number(getFieldValue(i, 'Rate', 'rate')) || 0,
-                        indentQty: Number(getFieldValue(i, 'Indent Qty', 'indentQty')) || 0,
-                        totalRate: Number(getFieldValue(i, 'Total Rate', 'totalRate')) || 0,
-                        status1: getFieldValue(i, 'Status 1', 'status1'),
-                        remarks1: getFieldValue(i, 'Remarks1', 'remarks1'),
-                        status2: getFieldValue(i, 'Status 2', 'status2'),
-                        remarks2: getFieldValue(i, 'Remarks 2', 'remarks2'),
-                        status3: getFieldValue(i, 'Status 3', 'status3'),
-                        remarks3: getFieldValue(i, 'Remarks 3', 'remarks3'),
-                    };
-                    console.log('📝 Mapped pending item:', mapped);
-                    return mapped;
-                })
-        );
-    }, [tallyEntrySheet, user.firmNameMatch]);
+    };
 
     useEffect(() => {
-        // Filter by firm name
-        const filteredByFirm = tallyEntrySheet.filter(item => {
-            const firmName = getFieldValue(item, 'Firm Name', 'firmName', 'firmNameMatch');
-            return user.firmNameMatch.toLowerCase() === "all" || firmName === user.firmNameMatch;
-        });
-        
-        setHistoryData(
-            filteredByFirm
-                .filter((i) => {
-                    const planned4 = getFieldValue(i, 'Planned 4', 'planned4');
-                    const actual4 = getFieldValue(i, 'Actual 4', 'actual4');
-                    return planned4 !== '' && actual4 !== '';
-                })
-                .map((i) => {
-                    const mapped = {
-                        indentNo: getFieldValue(i, 'Indent Number', 'indentNumber', 'indentNo').toString().trim(),
-                        firmNameMatch: getFieldValue(i, 'Firm Name', 'firmName', 'firmNameMatch').toString().trim(),
-                        indentDate: getFieldValue(i, 'Indent Date', 'indentDate'),
-                        purchaseDate: getFieldValue(i, 'Purchase Date', 'purchaseDate'),
-                        materialInDate: getFieldValue(i, 'Material In Date', 'materialInDate'),
-                        productName: getFieldValue(i, 'Product Name', 'productName'),
-                        billNo: getFieldValue(i, 'Bill No.', 'billNo').toString(),
-                        qty: Number(getFieldValue(i, 'Qty', 'qty')) || 0,
-                        partyName: getFieldValue(i, 'Party Name', 'partyName'),
-                        billAmt: Number(getFieldValue(i, 'Bill Amt', 'billAmt')) || 0,
-                        billImage: getFieldValue(i, 'Bill Image', 'billImage'),
-                        billReceivedLater: getFieldValue(i, 'Bill Recieved later', 'billReceivedLater'),
-                        notReceivedBillNo: getFieldValue(i, 'Not Received Bill No.', 'notReceivedBillNo'),
-                        location: getFieldValue(i, 'Location', 'location'),
-                        typeOfBills: getFieldValue(i, 'Type Of Bills', 'typeOfBills'),
-                        productImage: getFieldValue(i, 'Prodcut Image', 'Product Image', 'productImage'),
-                        area: getFieldValue(i, 'Area', 'area'),
-                        indentedFor: getFieldValue(i, 'Indented For', 'indentedFor'),
-                        approvedPartyName: getFieldValue(i, 'Approved Party Name', 'approvedPartyName'),
-                        rate: Number(getFieldValue(i, 'Rate', 'rate')) || 0,
-                        indentQty: Number(getFieldValue(i, 'Indent Qty', 'indentQty')) || 0,
-                        totalRate: Number(getFieldValue(i, 'Total Rate', 'totalRate')) || 0,
-                        status1: getFieldValue(i, 'Status 1', 'status1'),
-                        remarks1: getFieldValue(i, 'Remarks1', 'remarks1'),
-                        status2: getFieldValue(i, 'Status 2', 'status2'),
-                        remarks2: getFieldValue(i, 'Remarks 2', 'remarks2'),
-                        status3: getFieldValue(i, 'Status 3', 'status3'),
-                        remarks3: getFieldValue(i, 'Remarks 3', 'remarks3'),
-                        status4: getFieldValue(i, 'Status 4', 'status4'),
-                        remarks4: getFieldValue(i, 'Remarks 4', 'remarks4'),
-                    };
-                    console.log('📝 Mapped history item:', mapped);
-                    return mapped;
-                })
-        );
-    }, [tallyEntrySheet, user.firmNameMatch]);
+        fetchData();
+    }, [user.firmNameMatch]);
+
+    const pendingData = useMemo(() => {
+        return allData.filter(i => i.planned4 && !i.actual4);
+    }, [allData]);
+
+    const historyData = useMemo(() => {
+        return allData.filter(i => i.planned4 && i.actual4);
+    }, [allData]);
 
     // Get unique party names for filter
     const partyNames = useMemo(() => {
-        const allParties = [...pendingData, ...historyData]
+        const allParties = allData
             .map(item => item.partyName)
-            .filter(Boolean) as string[];
-        
+            .filter(Boolean);
+
         return ['all', ...Array.from(new Set(allParties))];
-    }, [pendingData, historyData]);
+    }, [allData]);
 
     // Filter data based on selected party and search term
     const filteredPendingData = useMemo(() => {
         let filtered = pendingData;
-        
-        // Apply party name filter
         if (selectedPartyName !== 'all') {
             filtered = filtered.filter(item => item.partyName === selectedPartyName);
         }
-        
-        // Apply search filter
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(item => 
-                item.indentNo.toLowerCase().includes(term) ||
+            filtered = filtered.filter(item =>
+                item.indentNumber.toLowerCase().includes(term) ||
                 item.productName.toLowerCase().includes(term) ||
                 item.billNo.toLowerCase().includes(term) ||
                 (item.partyName && item.partyName.toLowerCase().includes(term)) ||
                 item.firmNameMatch.toLowerCase().includes(term)
             );
         }
-        
         return filtered;
     }, [pendingData, selectedPartyName, searchTerm]);
 
     const filteredHistoryData = useMemo(() => {
         let filtered = historyData;
-        
-        // Apply party name filter
         if (selectedPartyName !== 'all') {
             filtered = filtered.filter(item => item.partyName === selectedPartyName);
         }
-        
-        // Apply search filter
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(item => 
-                item.indentNo.toLowerCase().includes(term) ||
+            filtered = filtered.filter(item =>
+                item.indentNumber.toLowerCase().includes(term) ||
                 item.productName.toLowerCase().includes(term) ||
                 item.billNo.toLowerCase().includes(term) ||
                 (item.partyName && item.partyName.toLowerCase().includes(term)) ||
                 item.firmNameMatch.toLowerCase().includes(term)
             );
         }
-        
         return filtered;
     }, [historyData, selectedPartyName, searchTerm]);
 
-    const pendingColumns: ColumnDef<TallyEntryPendingData>[] = [
+    const pendingColumns: ColumnDef<TallyEntryRecord>[] = [
         ...(user.receiveItemView
             ? [
                 {
                     header: 'Action',
-                    cell: ({ row }: { row: Row<TallyEntryPendingData> }) => {
+                    cell: ({ row }: { row: Row<TallyEntryRecord> }) => {
                         const item = row.original;
-
                         return (
                             <DialogTrigger asChild>
                                 <Button
@@ -323,28 +154,17 @@ export default function TallyEntry() {
                 },
             ]
             : []),
-        { accessorKey: 'indentNo', header: 'Indent No.' },
+        { accessorKey: 'indentNumber', header: 'Indent No.' },
         { accessorKey: 'firmNameMatch', header: 'Firm Name' },
-        {
-            accessorKey: 'indentDate',
-            header: 'Indent Date',
-            cell: ({ row }) => formatDate(row.original.indentDate)
-        },
-        {
-            accessorKey: 'purchaseDate',
-            header: 'Purchase Date',
-            cell: ({ row }) => formatDate(row.original.purchaseDate)
-        },
         {
             accessorKey: 'materialInDate',
             header: 'Material In Date',
             cell: ({ row }) => formatDate(row.original.materialInDate)
         },
         {
-            accessorKey: 'plannedDate',
+            accessorKey: 'planned4',
             header: 'Planned Date',
-           cell: ({ row }) => formatDate(row.original.plannedDate)
-
+            cell: ({ row }) => formatDate(row.original.planned4)
         },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'billNo', header: 'Bill No.' },
@@ -363,8 +183,7 @@ export default function TallyEntry() {
                 ) : null;
             },
         },
-        { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
-        { accessorKey: 'notReceivedBillNo', header: 'Not Received Bill No.' },
+        { accessorKey: 'billRecievedLater', header: 'Bill Received Later' },
         { accessorKey: 'location', header: 'Location' },
         { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
         {
@@ -393,19 +212,9 @@ export default function TallyEntry() {
         { accessorKey: 'remarks3', header: 'Remarks 3' },
     ];
 
-    const historyColumns: ColumnDef<TallyEntryHistoryData>[] = [
-        { accessorKey: 'indentNo', header: 'Indent No.' },
+    const historyColumns: ColumnDef<TallyEntryRecord>[] = [
+        { accessorKey: 'indentNumber', header: 'Indent No.' },
         { accessorKey: 'firmNameMatch', header: 'Firm Name' },
-        {
-            accessorKey: 'indentDate',
-            header: 'Indent Date',
-            cell: ({ row }) => formatDate(row.original.indentDate)
-        },
-        {
-            accessorKey: 'purchaseDate',
-            header: 'Purchase Date',
-            cell: ({ row }) => formatDate(row.original.purchaseDate)
-        },
         {
             accessorKey: 'materialInDate',
             header: 'Material In Date',
@@ -428,8 +237,7 @@ export default function TallyEntry() {
                 ) : null;
             },
         },
-        { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
-        { accessorKey: 'notReceivedBillNo', header: 'Not Received Bill No.' },
+        { accessorKey: 'billRecievedLater', header: 'Bill Received Later' },
         { accessorKey: 'location', header: 'Location' },
         { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
         {
@@ -492,22 +300,17 @@ export default function TallyEntry() {
         { accessorKey: 'remarks4', header: 'Remarks 4' },
     ];
 
-   const schema = z.object({
-        status4: z
-            .enum(['Done', 'Not Done'], {
-                required_error: 'Please select a status',
-            })
-            .optional()
-            .refine((val) => val !== undefined, {
-                message: 'Please select a status',
-            }),
+    const schema = z.object({
+        status4: z.enum(['Done', 'Not Done'], {
+            required_error: 'Please select a status',
+        }),
         remarks4: z.string().min(1, 'Remarks are required'),
     });
 
-    const form = useForm({
+    const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
         defaultValues: {
-            status4: undefined as 'Done' | 'Not Done' | undefined,
+            status4: 'Done',
             remarks4: '',
         },
     });
@@ -515,91 +318,35 @@ export default function TallyEntry() {
     useEffect(() => {
         if (!openDialog) {
             form.reset({
-                status4: undefined,
+                status4: 'Done',
                 remarks4: '',
             });
         }
     }, [openDialog, form]);
 
-   async function onSubmit(values: z.infer<typeof schema>) {
-    try {
-        if (!selectedItem) {
-            toast.error('No item selected');
-            return;
+    async function onSubmit(values: z.infer<typeof schema>) {
+        try {
+            if (!selectedItem) {
+                toast.error('No item selected');
+                return;
+            }
+
+            const currentDateTime = new Date().toISOString();
+
+            await updateTallyEntryRecord(selectedItem.indentNumber, {
+                actual4: currentDateTime,
+                status4: values.status4,
+                remarks4: values.remarks4
+            });
+
+            toast.success(`Successfully updated tally entry for ${selectedItem.indentNumber}`);
+            setOpenDialog(false);
+            fetchData();
+        } catch (error) {
+            console.error('❌ Update error:', error);
+            toast.error('Failed to update tally entry. Please try again.');
         }
-
-        console.log('🔄 Starting form submission...');
-        console.log('📝 Selected item:', selectedItem);
-        console.log('📋 Form values:', values);
-
-        // Get current date in dd/mm/yyyy format for Actual 4
-        const currentDate = new Date();
-        const day = String(currentDate.getDate()).padStart(2, '0');
-        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-        const year = currentDate.getFullYear();
-        const formattedDate = `${day}/${month}/${year}`;
-
-        console.log('📅 Actual 4 date:', formattedDate);
-
-        // Find the exact row in the original sheet data
-        const sheetRow = tallyEntrySheet.find((s) => {
-            const indentNumber = getFieldValue(s, 'Indent Number', 'indentNumber', 'indentNo').toString().trim();
-            return indentNumber === selectedItem.indentNo;
-        });
-
-        if (!sheetRow) {
-            console.error('❌ Could not find matching row in sheet data');
-            toast.error('Could not find matching record in sheet');
-            return;
-        }
-
-        console.log('✅ Found sheet row:', sheetRow);
-        console.log('📊 Row index:', sheetRow.rowIndex);
-
-        // Debug: Check what columns exist in the sheet
-        console.log('🔍 Available columns in sheet row:', Object.keys(sheetRow));
-
-        // Prepare update data with camelCase field names (matching what the backend expects)
-        const updateData = [{
-            rowIndex: sheetRow.rowIndex,
-            // Use camelCase field names that match the backend's getCamelCaseHeaders conversion
-            actual4: formattedDate,
-            status4: values.status4,
-            remarks4: values.remarks4
-        }];
-
-        console.log('📤 Update data to send:', updateData);
-
-        // Debug: Check what the postToSheet function receives
-        console.log('🔍 Sending to postToSheet with:', {
-            data: updateData,
-            action: 'update',
-            sheet: 'TALLY ENTRY'
-        });
-
-        // Send update to sheet
-        const result = await postToSheet(
-            updateData,
-            'update',
-            'TALLY ENTRY'
-        );
-
-        console.log('✅ Update result:', result);
-
-        toast.success(`Successfully updated tally entry for ${selectedItem.indentNo}`);
-        setOpenDialog(false);
-        
-        // Refresh data after successful update
-        setTimeout(() => {
-            updateAll();
-            console.log('🔄 Data refreshed after update');
-        }, 1500);
-
-    } catch (error) {
-        console.error('❌ Update error:', error);
-        toast.error('Failed to update tally entry. Please try again.');
     }
-}
 
     function onError(e: any) {
         console.log(e);
@@ -617,6 +364,11 @@ export default function TallyEntry() {
                     >
                         <Calculator size={50} className="text-primary" />
                     </Heading>
+
+                    <TabsList className="mb-4">
+                        <TabsTrigger value="pending">Pending ({pendingData.length})</TabsTrigger>
+                        <TabsTrigger value="history">History ({historyData.length})</TabsTrigger>
+                    </TabsList>
 
                     {/* Filter Controls Section */}
                     <div className="mb-6 space-y-4">
@@ -654,35 +406,8 @@ export default function TallyEntry() {
                                                 ))}
                                         </SelectContent>
                                     </Select>
-                                    {selectedPartyName !== 'all' && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setSelectedPartyName('all')}
-                                            className="text-sm"
-                                        >
-                                            Clear
-                                        </Button>
-                                    )}
                                 </div>
                             </div>
-                        </div>
-                        
-                        {/* Filter Summary */}
-                        <div className="flex flex-wrap items-center gap-2 text-sm">
-                            <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full">
-                                Total Entries: {filteredPendingData.length + filteredHistoryData.length}
-                            </div>
-                            {selectedPartyName !== 'all' && (
-                                <div className="bg-green-50 text-green-700 px-3 py-1 rounded-full">
-                                    Party: {selectedPartyName}
-                                </div>
-                            )}
-                            {searchTerm && (
-                                <div className="bg-amber-50 text-amber-700 px-3 py-1 rounded-full">
-                                    Search: "{searchTerm}"
-                                </div>
-                            )}
                         </div>
                     </div>
 
@@ -690,16 +415,16 @@ export default function TallyEntry() {
                         <DataTable
                             data={filteredPendingData}
                             columns={pendingColumns}
-                            searchFields={['indentNo', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-                            dataLoading={false}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                     <TabsContent value="history">
                         <DataTable
                             data={filteredHistoryData}
                             columns={historyColumns}
-                            searchFields={['indentNo', 'productName', 'partyName', 'billNo', 'status1', 'firmNameMatch']}
-                            dataLoading={false}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'status1', 'firmNameMatch']}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                 </Tabs>
@@ -715,7 +440,7 @@ export default function TallyEntry() {
                                     <DialogTitle>Process Tally Entry</DialogTitle>
                                     <DialogDescription>
                                         Process entry for indent number{' '}
-                                        <span className="font-medium">{selectedItem.indentNo}</span>
+                                        <span className="font-medium">{selectedItem.indentNumber}</span>
                                     </DialogDescription>
                                 </DialogHeader>
 
@@ -725,7 +450,7 @@ export default function TallyEntry() {
                                         <div className="space-y-1">
                                             <p className="font-medium text-nowrap">Indent No.</p>
                                             <p className="text-sm font-light">
-                                                {selectedItem.indentNo}
+                                                {selectedItem.indentNumber}
                                             </p>
                                         </div>
                                         <div className="space-y-1">

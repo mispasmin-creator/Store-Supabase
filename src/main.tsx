@@ -77,7 +77,19 @@ function GatedRoute({
 }) {
     const { user } = useAuth();
     if (!identifier) return children;
-    if (!user || !(user as any)[identifier]) {
+
+    // Check if user is admin
+    const isAdmin = user?.administrate === true || (user?.administrate as any) === "true";
+
+    // If admin, allow access regardless of specific permission
+    if (isAdmin) {
+        return children;
+    }
+
+    // Otherwise check specific permission
+    const hasPermission = user && ((user as any)[identifier] === true || (user as any)[identifier] === "true");
+
+    if (!hasPermission) {
         return <Navigate to="/" replace />;
     }
     return children;
@@ -100,19 +112,19 @@ const routes: RouteAttributes[] = [
         notifications: () => 0,
     },
 
-     {
-    path: 'Issue-data',
-    gateKey: 'issueDataView', // ✅ CHANGE: Use issueDataView for viewing permission
-    name: 'Issue Data',
-    icon: <ClipboardCheck size={20} />,
-    element: <IssueData />,
-    notifications: (issueSheet: any[]) =>
-        issueSheet.filter((sheet: any) =>
-            sheet.planned1 &&
-            sheet.planned1.toString().trim() !== '' &&
-            (!sheet.actual1 || sheet.actual1.toString().trim() === '')
-        ).length,
-},
+    {
+        path: 'Issue-data',
+        gateKey: 'issueData',
+        name: 'Issue Data',
+        icon: <ClipboardCheck size={20} />,
+        element: <IssueData />,
+        notifications: (issueSheet: any[]) =>
+            issueSheet.filter((sheet: any) =>
+                sheet.planned1 &&
+                sheet.planned1.toString().trim() !== '' &&
+                (!sheet.actual1 || sheet.actual1.toString().trim() === '')
+            ).length,
+    },
 
 
     {
@@ -123,7 +135,7 @@ const routes: RouteAttributes[] = [
         element: <Inventory />,
         notifications: () => 0,
     },
-    
+
 
     {
         path: 'create-indent',
@@ -143,7 +155,7 @@ const routes: RouteAttributes[] = [
             sheets.filter(
                 (sheet: any) =>
                     sheet.planned1 !== '' &&
-                    sheet.vendorType === '' 
+                    sheet.vendorType === ''
             ).length,
     },
     {
@@ -169,44 +181,44 @@ const routes: RouteAttributes[] = [
                     sheet.vendorType === 'Three Party'
             ).length,
     },
-   {
-    path: 'pending-pos',
-    gateKey: 'pendingIndentsView',
-    name: 'PO to Make/Not',
-    icon: <ListTodo size={20} />,
-    element: <PendingIndents />,
-    notifications: (sheets: any[]) =>
-        sheets.filter((sheet: any) => 
-            sheet.status === "Pending" && 
-            sheet.approvedVendorName && 
-            sheet.approvedVendorName.toString().trim() !== '' &&
-            (!sheet.poRequred || 
-             sheet.poRequred.toString().trim() === '' || 
-             sheet.poRequred.toString().trim() === 'undefined' ||
-             sheet.poRequred === null)
-        ).length,
-},
-
- {
-    path: 'pending-poss',
-    gateKey: 'pendingPo', // ✅ CHANGE: lowercase 'o'
-    name: 'Pending PO',
-    icon: <FilePlus2 size={20} />,
-    element: <PendingPo />,
-    notifications: (sheets: any[]) => {
-        // Count only items that are likely NOT in PO Master yet
-        // This approximates the PO Master filter by checking for pending status indicators
-        return sheets.filter((sheet: any) => 
-            sheet.poRequred && 
-            sheet.poRequred.toString().trim() === 'Yes' &&
-            // Additional conditions that typically indicate NOT in PO Master yet
-            sheet.pendingPoQty && 
-            sheet.pendingPoQty > 0 &&
-            sheet.approvedVendorName &&
-            sheet.approvedVendorName.toString().trim() !== ''
-        ).length;
+    {
+        path: 'pending-pos',
+        gateKey: 'pendingIndentsView',
+        name: 'PO to Make/Not',
+        icon: <ListTodo size={20} />,
+        element: <PendingIndents />,
+        notifications: (sheets: any[]) =>
+            sheets.filter((sheet: any) =>
+                sheet.status === "Pending" &&
+                sheet.approvedVendorName &&
+                sheet.approvedVendorName.toString().trim() !== '' &&
+                (!sheet.poRequred ||
+                    sheet.poRequred.toString().trim() === '' ||
+                    sheet.poRequred.toString().trim() === 'undefined' ||
+                    sheet.poRequred === null)
+            ).length,
     },
-},
+
+    {
+        path: 'pending-poss',
+        gateKey: 'pendingPo', // ✅ CHANGE: lowercase 'o'
+        name: 'Pending PO',
+        icon: <FilePlus2 size={20} />,
+        element: <PendingPo />,
+        notifications: (sheets: any[]) => {
+            // Count only items that are likely NOT in PO Master yet
+            // This approximates the PO Master filter by checking for pending status indicators
+            return sheets.filter((sheet: any) =>
+                sheet.poRequred &&
+                sheet.poRequred.toString().trim() === 'Yes' &&
+                // Additional conditions that typically indicate NOT in PO Master yet
+                sheet.pendingPoQty &&
+                sheet.pendingPoQty > 0 &&
+                sheet.approvedVendorName &&
+                sheet.approvedVendorName.toString().trim() !== ''
+            ).length;
+        },
+    },
 
     {
         path: 'create-po',
@@ -217,208 +229,256 @@ const routes: RouteAttributes[] = [
         notifications: () => 0,
     },
 
-   {
-    path: 'po-history',
-    gateKey: 'ordersView',
-    name: 'PO History',
-    icon: <Package2 size={20} />,
-    element: <Order /> , // Changed from <Order /> to <POHistory />
-    notifications: (sheets: any[]) => {
-        if (!Array.isArray(sheets) || sheets.length === 0) {
-            return 0;
-        }
-        
-        try {
-            // Filter sheets with valid PO numbers
-            const sheetsWithPoNumbers = sheets.filter((sheet: any) => 
-                sheet?.poNumber && 
-                sheet?.poNumber.toString().trim() !== ''
-            );
-            
-            if (sheetsWithPoNumbers.length === 0) {
-                return 0;
-            }
-            
-            // Create a Map to store unique PO numbers
-            const uniquePOMap = new Map<string, any>();
-            
-            // Add only unique PO numbers to the Map
-            sheetsWithPoNumbers.forEach((sheet: any) => {
-                const poNumber = sheet?.poNumber.toString().trim();
-                if (poNumber && !uniquePOMap.has(poNumber)) {
-                    uniquePOMap.set(poNumber, sheet);
-                }
-            });
-            
-            // Return count of unique PO numbers
-            return uniquePOMap.size;
-        } catch (error) {
-            console.error('Error calculating PO notifications:', error);
-            return 0;
-        }
-    },
-},
-
-
-   {
-    path: 'get-lift',
-    gateKey: 'ordersView',
-    name: 'Lifting',
-    icon: <Package2 size={20} />,
-    element: <GetLift />,
-    notifications: (sheets: any[]) =>
-        sheets.filter(
-            (sheet: any) =>
-                sheet.liftingStatus === 'Pending' &&
-                sheet.planned5 &&
-                sheet.planned5.toString().trim() !== '' &&
-                (!sheet.actual5 || sheet.actual5.toString().trim() === '')
-        ).length,
-},
-
-
-   {
-    path: 'store-in',
-    gateKey: 'storeIn',
-    name: 'Store In',
-    icon: <Truck size={20} />,
-    element: <StoreIn />,
-    notifications: (sheets: any[]) =>
-        sheets.filter((sheet: any) => 
-            sheet.planned6 !== '' && 
-            sheet.actual6 === ''
-        ).length,
-},
-
- {
-    path: 'Full-Kiting',
-    gateKey: 'fullKiting', // ✅ ADD THIS
-    name: 'Freight Payment',
-    icon: <FilePlus2 size={20} />,
-    element: <FullKiting />,
-    notifications: (sheets: any[]) =>
-        sheets.filter((sheet: any) => 
-            sheet.planned && 
-            sheet.planned.toString().trim() !== '' && 
-            (!sheet.actual || sheet.actual.toString().trim() === '')
-        ).length,
-},
-{
-    path: 'Payment-Status',
-    name: 'HOD Approval',
-    icon: <RotateCcw size={20} />,
-    element: <PaymentStatus />,
-    gateKey: 'paymentStatus',
-    notifications: (sheetsData: any[]) => {
-        try {
-            // ✅ IMPORTANT: Expect [poMasterSheet, paymentsSheet, user] from Sidebar
-            const [poMasterSheet = [], paymentsSheet = []] = sheetsData;
-            
-            if (!Array.isArray(poMasterSheet) || poMasterSheet.length === 0) {
+    {
+        path: 'po-history',
+        gateKey: 'ordersView',
+        name: 'PO History',
+        icon: <Package2 size={20} />,
+        element: <Order />, // Changed from <Order /> to <POHistory />
+        notifications: (sheets: any[]) => {
+            if (!Array.isArray(sheets) || sheets.length === 0) {
                 return 0;
             }
 
-            // ✅ Get the current user's firm from context (you'll need to pass this)
-            // For now, we'll assume we need to count all firms or filter by user.firmNameMatch
-            // Since we can't access user here, we'll remove firm filtering
-            
-            // ✅ FILTER 1: Get PO numbers that already have payments
-            const paidPONumbers = new Set(
-                (paymentsSheet || []).map((payment: any) => payment.poNumber)
-            );
+            try {
+                // Filter sheets with valid PO numbers
+                const sheetsWithPoNumbers = sheets.filter((sheet: any) =>
+                    sheet?.poNumber &&
+                    sheet?.poNumber.toString().trim() !== ''
+                );
 
-            // ✅ FILTER 2: Only PENDING status and NOT already paid
-            const pendingItems = poMasterSheet.filter((record: any) => {
-                const poNumber = record?.poNumber || '';
-                const status = (record?.status || '').toString().trim().toLowerCase();
-                
-                // Check if NOT paid yet AND status is pending/empty
-                const notPaid = !paidPONumbers.has(poNumber);
-                const isPending = status === 'pending' || status === '' || status === undefined;
-                
-                return notPaid && isPending;
-            });
-
-            // ✅ FILTER 3: Remove duplicate PO numbers (same as your page logic)
-            const uniquePOMap = new Map();
-            pendingItems.forEach(item => {
-                const poNumber = item?.poNumber || '';
-                if (poNumber && !uniquePOMap.has(poNumber)) {
-                    uniquePOMap.set(poNumber, item);
+                if (sheetsWithPoNumbers.length === 0) {
+                    return 0;
                 }
-            });
 
-            return uniquePOMap.size;
-            
-        } catch (error) {
-            console.error('Error calculating Payment-Status notifications:', error);
-            return 0;
-        }
-    }
-},   
+                // Create a Map to store unique PO numbers
+                const uniquePOMap = new Map<string, any>();
 
-
-  // Then update the notification function:
-{
-    path: 'Make-Payment',
-    gateKey: 'makePayment',
-    name: 'Make Payment',
-    icon: <FilePlus2 size={20} />,
-    element: <MakePayment />,
-    notifications: (sheets: any[]) => {
-        // ✅ SIMPLIFIED: Since we're only passing paymentsSheet now
-        const paymentsData = Array.isArray(sheets[0]) ? sheets[0] : [];
-        
-        if (paymentsData.length === 0) {
-            console.log('⚠️ No payments data available');
-            return 0;
-        }
-        
-        console.log('📊 Total payments records:', paymentsData.length);
-        
-        // ✅ Count from Payments sheet: Planned has value BUT Actual is empty
-        const pendingCount = paymentsData.filter((payment: any) => {
-            const planned = String(payment?.planned || '').trim();
-            const actual = String(payment?.actual || '').trim();
-            
-            const hasPlanned = planned !== '';
-            const noActual = actual === '';
-            
-            const shouldCount = hasPlanned && noActual;
-            
-            // Debug logging
-            if (payment?.uniqueNo) {
-                console.log(`🔍 ${payment.uniqueNo}:`, {
-                    planned,
-                    actual,
-                    hasPlanned,
-                    noActual,
-                    shouldCount
+                // Add only unique PO numbers to the Map
+                sheetsWithPoNumbers.forEach((sheet: any) => {
+                    const poNumber = sheet?.poNumber.toString().trim();
+                    if (poNumber && !uniquePOMap.has(poNumber)) {
+                        uniquePOMap.set(poNumber, sheet);
+                    }
                 });
+
+                // Return count of unique PO numbers
+                return uniquePOMap.size;
+            } catch (error) {
+                console.error('Error calculating PO notifications:', error);
+                return 0;
             }
-            
-            return shouldCount;
-        }).length;
-        
-        console.log('✅ Pending payments count:', pendingCount);
-        return pendingCount;
+        },
     },
-},
 
 
     {
-    path: 'Quality-Check-In-Received-Item',
-    gateKey: 'insteadOfQualityCheckInReceivedItem',
-    name: 'Reject For GRN',
-    icon: <Users size={20} />,
-    element: <QuantityCheckInReceiveItem />,
-    notifications: (sheets: any[]) =>
-        sheets.filter((sheet: any) => 
-            sheet.planned7 && 
-            sheet.planned7.toString().trim() !== '' && 
-            (!sheet.actual7 || sheet.actual7.toString().trim() === '')
-        ).length,
-},
+        path: 'get-lift',
+        gateKey: 'ordersView',
+        name: 'Lifting',
+        icon: <Package2 size={20} />,
+        element: <GetLift />,
+        notifications: (sheets: any[]) =>
+            sheets.filter(
+                (sheet: any) =>
+                    sheet.liftingStatus === 'Pending' &&
+                    sheet.planned5 &&
+                    sheet.planned5.toString().trim() !== '' &&
+                    (!sheet.actual5 || sheet.actual5.toString().trim() === '')
+            ).length,
+    },
+
+
+    {
+        path: 'store-in',
+        gateKey: 'storeIn',
+        name: 'Store In',
+        icon: <Truck size={20} />,
+        element: <StoreIn />,
+        notifications: (sheets: any[]) =>
+            sheets.filter((sheet: any) =>
+                sheet.planned6 &&
+                sheet.planned6.toString().trim() !== '' &&
+                (!sheet.actual6 || sheet.actual6.toString().trim() === '') &&
+                sheet.billStatus === 'Bill Received'
+            ).length,
+    },
+
+    {
+        path: 'Full-Kiting',
+        gateKey: 'fullKiting', // ✅ ADD THIS
+        name: 'Freight Payment',
+        icon: <FilePlus2 size={20} />,
+        element: <FullKiting />,
+        notifications: (sheets: any[]) =>
+            sheets.filter((sheet: any) =>
+                sheet.planned &&
+                sheet.planned.toString().trim() !== '' &&
+                (!sheet.actual || sheet.actual.toString().trim() === '')
+            ).length,
+    },
+    {
+        path: 'Payment-Status',
+        name: 'HOD Approval',
+        icon: <RotateCcw size={20} />,
+        element: <PaymentStatus />,
+        gateKey: 'paymentStatus',
+        notifications: (sheetsData: any[]) => {
+            try {
+                // ✅ IMPORTANT: Expect [poMasterSheet, paymentsSheet, user, storeInSheet] from Sidebar
+                const [poMasterSheet = [], paymentsSheet = [], user = null, storeInSheet = []] = sheetsData;
+
+                if (!Array.isArray(poMasterSheet)) return 0;
+
+                // 1. Identify received PO numbers from storeInSheet
+                const receivedPos = new Set(
+                    (storeInSheet || [])
+                        .filter((s: any) => s.actual6 && s.actual6.toString().trim() !== '')
+                        .map((s: any) => s.poNumber || s.po_number)
+                        .filter(Boolean)
+                );
+
+                // 2. Calculate payment totals per PO from payments table
+                const paymentsByPo: { [key: string]: number } = {};
+                (paymentsSheet || []).forEach((p: any) => {
+                    const key = p.poNumber || p.po_number || '';
+                    if (key) {
+                        paymentsByPo[key] = (paymentsByPo[key] || 0) + Number(p.payAmount || p.pay_amount || 0);
+                    }
+                });
+
+                // 3. Identify PO-based pending items (Filter by received status)
+                const poBasedPendingItems = poMasterSheet.filter((record: any) => {
+                    // Firm filtering
+                    const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
+                        record.firmNameMatch === user.firmNameMatch;
+                    if (!firmMatch) return false;
+
+                    // Only show if received
+                    const isReceived = receivedPos.has(record.poNumber || '');
+                    if (!isReceived) return false;
+
+                    // ✅ Check if Bill Type is "common" in Store In
+                    const linkedStoreIn = (storeInSheet || []).find((s: any) =>
+                        (s.poNumber || s.po_number || '') === (record.poNumber || record.po_number || record.po_no || '')
+                    );
+
+                    if (linkedStoreIn?.typeOfBill) {
+                        if (linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                            return false;
+                        }
+                    }
+
+                    // Outstanding amount calculation
+                    const totalPo = Number(record.totalPoAmount || 0);
+                    const totalPaid = paymentsByPo[record.poNumber || ''] || 0;
+                    const outstanding = totalPo - totalPaid;
+
+                    // Status filtering
+                    const status = (record.status || '').toString().trim().toLowerCase();
+                    const isPending = status === 'pending' || status === '' || status === undefined;
+
+                    return outstanding > 0 && isPending;
+                });
+
+                // 3. Identify Payment-based pending items (Store-In and Freight)
+                const paymentBasedPendingItems = (paymentsSheet || []).filter((payment: any) => {
+                    // Firm filtering
+                    const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
+                        (payment.firmNameMatch || payment.firm_name) === user.firmNameMatch;
+
+                    // Status and planning filtering
+                    const status = String(payment.status || '').toLowerCase();
+                    const isPending = status === 'pending';
+                    const notScheduled = !payment.planned || String(payment.planned || '').trim() === '';
+
+                    // ✅ Link with StoreIn to check Bill Type
+                    const linkedStoreIn = (storeInSheet || []).find((s: any) =>
+                        (s.indentNo || s.indentNumber) === (payment.internalCode || payment.internal_code)
+                    );
+
+                    if (linkedStoreIn?.typeOfBill) {
+                        if (linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                            return false;
+                        }
+                    }
+
+                    return firmMatch && isPending && notScheduled;
+                });
+
+                // 4. Merge logic (same as page logic)
+                const poNumbersInList = new Set(poBasedPendingItems.map((item: any) => item.poNumber));
+                let count = poBasedPendingItems.length;
+
+                paymentBasedPendingItems.forEach((paymentItem: any) => {
+                    if (paymentItem.poNumber && !poNumbersInList.has(paymentItem.poNumber)) {
+                        count++;
+                        poNumbersInList.add(paymentItem.poNumber);
+                    } else if (!paymentItem.poNumber) {
+                        count++; // Items without PO number are also added
+                    }
+                });
+
+                return count;
+
+            } catch (error) {
+                console.error('Error calculating Payment-Status notifications:', error);
+                return 0;
+            }
+        }
+    },
+
+
+    // Then update the notification function:
+    {
+        path: 'Make-Payment',
+        gateKey: 'makePayment',
+        name: 'Make Payment',
+        icon: <FilePlus2 size={20} />,
+        element: <MakePayment />,
+        notifications: (sheets: any[]) => {
+            // ✅ SIMPLIFIED: Since we're only passing paymentsSheet now
+            const paymentsData = Array.isArray(sheets[0]) ? sheets[0] : [];
+
+            if (paymentsData.length === 0) {
+                console.log('⚠️ No payments data available');
+                return 0;
+            }
+
+            console.log('📊 Total payments records:', paymentsData.length);
+
+            // ✅ Count from Payments sheet: Planned has value BUT Payment is not Done
+            const pendingCount = paymentsData.filter((payment: any) => {
+                const planned = String(payment?.planned || '').trim();
+                const isDone = payment?.paymentDone === true || payment?.payment_done === true;
+                const status1 = String(payment?.status1 || '').toLowerCase();
+
+                const hasPlanned = planned !== '';
+                const isNotDone = !isDone;
+                const isNotPendingApproval = status1 !== 'hod_approval_pending';
+
+                return hasPlanned && isNotDone && isNotPendingApproval;
+            }).length;
+
+            console.log('✅ Pending payments count:', pendingCount);
+            return pendingCount;
+        },
+    },
+
+
+    {
+        path: 'Quality-Check-In-Received-Item',
+        gateKey: 'insteadOfQualityCheckInReceivedItem',
+        name: 'Reject For GRN',
+        icon: <Users size={20} />,
+        element: <QuantityCheckInReceiveItem />,
+        notifications: (sheets: any[]) =>
+            sheets.filter((sheet: any) =>
+                sheet.planned7 &&
+                sheet.planned7.toString().trim() !== '' &&
+                (!sheet.actual7 || sheet.actual7.toString().trim() === '')
+            ).length,
+    },
 
 
     // {
@@ -440,150 +500,150 @@ const routes: RouteAttributes[] = [
     // },
 
     {
-    path: 'Send-Debit-Note',
-    gateKey: 'sendDebitNote',
-    name: 'Send Debit Note',
-    icon: <FilePlus2 size={20} />,
-    element: <SendDebitNote />,
-    notifications: (sheets: any[]) =>
-        sheets.filter((sheet: any) => 
-            sheet.planned9 && 
-            sheet.planned9.toString().trim() !== '' && 
-            (!sheet.actual9 || sheet.actual9.toString().trim() === '')
-        ).length,
-},
+        path: 'Send-Debit-Note',
+        gateKey: 'sendDebitNote',
+        name: 'Send Debit Note',
+        icon: <FilePlus2 size={20} />,
+        element: <SendDebitNote />,
+        notifications: (sheets: any[]) =>
+            sheets.filter((sheet: any) =>
+                sheet.planned9 &&
+                sheet.planned9.toString().trim() !== '' &&
+                (!sheet.actual9 || sheet.actual9.toString().trim() === '')
+            ).length,
+    },
 
     {
-    path: 'audit-data',
-    gateKey: 'auditData',
-    name: 'Audit Data',
-    icon: <Users size={20} />,
-    element: <AuditData />,
-    notifications: (sheets: any[]) =>
-        sheets.filter((sheet: any) => 
-            sheet.planned1 && 
-            sheet.planned1.toString().trim() !== '' && 
-            (!sheet.actual1 || sheet.actual1.toString().trim() === '')
-        ).length,
-},
+        path: 'audit-data',
+        gateKey: 'auditData',
+        name: 'Audit Data',
+        icon: <Users size={20} />,
+        element: <AuditData />,
+        notifications: (sheets: any[]) =>
+            sheets.filter((sheet: any) =>
+                sheet.planned1 &&
+                sheet.planned1.toString().trim() !== '' &&
+                (!sheet.actual1 || sheet.actual1.toString().trim() === '')
+            ).length,
+    },
 
-// {
-//     path: 'rectify-the-mistake',
-//     gateKey: 'rectifyTheMistake',
-//     name: 'Rectify the mistake',
-//     icon: <Users size={20} />,
-//     element: <RectifyTheMistake />,
-//     notifications: (sheets: any[]) => {
-//         if (!sheets || !Array.isArray(sheets) || sheets.length === 0) return 0;
-        
-//         const sheetData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
-        
-//         let count = 0;
-//         sheetData.forEach((item: any) => {
-//             const planned2 = item['Planned 2'] || item['planned2'];
-//             const actual2 = item['Actual 2'] || item['actual2'];
-            
-//             const hasPlanned2 = planned2 && planned2.toString().trim() !== '';
-//             const noActual2 = !actual2 || actual2.toString().trim() === '';
-            
-//             if (hasPlanned2 && noActual2) {
-//                 count++;
-//             }
-//         });
-        
-//         return count;
-//     },
-// },
+    // {
+    //     path: 'rectify-the-mistake',
+    //     gateKey: 'rectifyTheMistake',
+    //     name: 'Rectify the mistake',
+    //     icon: <Users size={20} />,
+    //     element: <RectifyTheMistake />,
+    //     notifications: (sheets: any[]) => {
+    //         if (!sheets || !Array.isArray(sheets) || sheets.length === 0) return 0;
 
-// {
-//     path: 'reaudit-data',
-//     gateKey: 'reauditData',
-//     name: 'Reaudit Data',
-//     icon: <Users size={20} />,
-//     element: <ReauditData />,
-//     notifications: (sheets: any[]) => {
-//         if (!sheets || !Array.isArray(sheets) || sheets.length === 0) return 0;
-        
-//         const sheetData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
-        
-//         let count = 0;
-//         sheetData.forEach((item: any) => {
-//             const planned3 = item['Planned 3'] || item['planned3'];
-//             const actual3 = item['Actual 3'] || item['actual3'];
-            
-//             const hasPlanned3 = planned3 && planned3.toString().trim() !== '';
-//             const noActual3 = !actual3 || actual3.toString().trim() === '';
-            
-//             if (hasPlanned3 && noActual3) {
-//                 count++;
-//             }
-//         });
-        
-//         return count;
-//     },
-// },
+    //         const sheetData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
+
+    //         let count = 0;
+    //         sheetData.forEach((item: any) => {
+    //             const planned2 = item['Planned 2'] || item['planned2'];
+    //             const actual2 = item['Actual 2'] || item['actual2'];
+
+    //             const hasPlanned2 = planned2 && planned2.toString().trim() !== '';
+    //             const noActual2 = !actual2 || actual2.toString().trim() === '';
+
+    //             if (hasPlanned2 && noActual2) {
+    //                 count++;
+    //             }
+    //         });
+
+    //         return count;
+    //     },
+    // },
+
+    // {
+    //     path: 'reaudit-data',
+    //     gateKey: 'reauditData',
+    //     name: 'Reaudit Data',
+    //     icon: <Users size={20} />,
+    //     element: <ReauditData />,
+    //     notifications: (sheets: any[]) => {
+    //         if (!sheets || !Array.isArray(sheets) || sheets.length === 0) return 0;
+
+    //         const sheetData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
+
+    //         let count = 0;
+    //         sheetData.forEach((item: any) => {
+    //             const planned3 = item['Planned 3'] || item['planned3'];
+    //             const actual3 = item['Actual 3'] || item['actual3'];
+
+    //             const hasPlanned3 = planned3 && planned3.toString().trim() !== '';
+    //             const noActual3 = !actual3 || actual3.toString().trim() === '';
+
+    //             if (hasPlanned3 && noActual3) {
+    //                 count++;
+    //             }
+    //         });
+
+    //         return count;
+    //     },
+    // },
 
 
-//     {
-//     path: 'take-entry-by-tally',
-//     gateKey: 'takeEntryByTelly',
-//     name: 'Take Entry By Tally',
-//     icon: <ClipboardList size={20} />,
-//     element: <TakeEntryByTally />,
-//     notifications: (sheets: any[]) => {
-//         if (!sheets || !Array.isArray(sheets) || sheets.length === 0) return 0;
-        
-//         const sheetData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
-        
-//         let count = 0;
-//         sheetData.forEach((item: any) => {
-//             const planned4 = item['Planned 4'] || item['planned4'];
-//             const actual4 = item['Actual 4'] || item['actual4'];
-            
-//             const hasPlanned4 = planned4 && planned4.toString().trim() !== '';
-//             const noActual4 = !actual4 || actual4.toString().trim() === '';
-            
-//             if (hasPlanned4 && noActual4) {
-//                 count++;
-//             }
-//         });
-        
-//         return count;
-//     },
-// },
+    //     {
+    //     path: 'take-entry-by-tally',
+    //     gateKey: 'takeEntryByTelly',
+    //     name: 'Take Entry By Tally',
+    //     icon: <ClipboardList size={20} />,
+    //     element: <TakeEntryByTally />,
+    //     notifications: (sheets: any[]) => {
+    //         if (!sheets || !Array.isArray(sheets) || sheets.length === 0) return 0;
 
-//   {
-//     path: 'AgainAuditing',
-//     gateKey: 'againAuditing',
-//     name: 'Again Auditing',
-//     icon: <UserCheck size={20} />,
-//     element: <AgainAuditing />,
-//     notifications: (sheets: any[]) => {
-//         if (!sheets || !Array.isArray(sheets) || sheets.length === 0) return 0;
-        
-//         // The sheet data is passed as the first item in the array
-//         const sheetData = sheets[0];
-//         if (!Array.isArray(sheetData)) return 0;
-        
-//         console.log('🔍 Again Auditing - Sheet data count:', sheetData.length);
-        
-//         let count = 0;
-//         sheetData.forEach((item: any) => {
-//             const planned5 = item['Planned 5'] || item['planned5'];
-//             const actual5 = item['Actual 5'] || item['actual5'];
-            
-//             const hasPlanned5 = planned5 && planned5.toString().trim() !== '';
-//             const noActual5 = !actual5 || actual5.toString().trim() === '';
-            
-//             if (hasPlanned5 && noActual5) {
-//                 count++;
-//             }
-//         });
-        
-//         console.log('📈 Again Auditing - Final count:', count);
-//         return count;
-//     },
-// },
+    //         const sheetData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
+
+    //         let count = 0;
+    //         sheetData.forEach((item: any) => {
+    //             const planned4 = item['Planned 4'] || item['planned4'];
+    //             const actual4 = item['Actual 4'] || item['actual4'];
+
+    //             const hasPlanned4 = planned4 && planned4.toString().trim() !== '';
+    //             const noActual4 = !actual4 || actual4.toString().trim() === '';
+
+    //             if (hasPlanned4 && noActual4) {
+    //                 count++;
+    //             }
+    //         });
+
+    //         return count;
+    //     },
+    // },
+
+    //   {
+    //     path: 'AgainAuditing',
+    //     gateKey: 'againAuditing',
+    //     name: 'Again Auditing',
+    //     icon: <UserCheck size={20} />,
+    //     element: <AgainAuditing />,
+    //     notifications: (sheets: any[]) => {
+    //         if (!sheets || !Array.isArray(sheets) || sheets.length === 0) return 0;
+
+    //         // The sheet data is passed as the first item in the array
+    //         const sheetData = sheets[0];
+    //         if (!Array.isArray(sheetData)) return 0;
+
+    //         console.log('🔍 Again Auditing - Sheet data count:', sheetData.length);
+
+    //         let count = 0;
+    //         sheetData.forEach((item: any) => {
+    //             const planned5 = item['Planned 5'] || item['planned5'];
+    //             const actual5 = item['Actual 5'] || item['actual5'];
+
+    //             const hasPlanned5 = planned5 && planned5.toString().trim() !== '';
+    //             const noActual5 = !actual5 || actual5.toString().trim() === '';
+
+    //             if (hasPlanned5 && noActual5) {
+    //                 count++;
+    //             }
+    //         });
+
+    //         console.log('📈 Again Auditing - Final count:', count);
+    //         return count;
+    //     },
+    // },
     // {
     //     path: 'store-out-approval',
     //     gateKey: 'storeOutApprovalView',
@@ -599,27 +659,27 @@ const routes: RouteAttributes[] = [
     //         ).length,
     // },
     {
-    path: 'Bill-Not-Received',
-    gateKey: 'billNotReceived',
-    name: 'Bill Not Received',
-    icon: <ClipboardList size={20} />,
-    element: <BillNotReceived />,
-    notifications: (sheets: any[]) => {
-        // Count items where planned11 is set but actual11 is not
-        return sheets.filter((sheet: any) => {
-            const hasPlanned11 = sheet.planned11 && sheet.planned11.toString().trim() !== '';
-            const noActual11 = !sheet.actual11 || sheet.actual11.toString().trim() === '';
-            
-            return hasPlanned11 && noActual11;
-        }).length;
+        path: 'Bill-Not-Received',
+        gateKey: 'billNotReceived',
+        name: 'Bill Not Received',
+        icon: <ClipboardList size={20} />,
+        element: <BillNotReceived />,
+        notifications: (sheets: any[]) => {
+            // Count items where planned11 is set but actual11 is not
+            return sheets.filter((sheet: any) => {
+                const hasPlanned11 = sheet.planned11 && sheet.planned11.toString().trim() !== '';
+                const noActual11 = !sheet.actual11 || sheet.actual11.toString().trim() === '';
+
+                return hasPlanned11 && noActual11;
+            }).length;
+        },
     },
-},
 
     {
         path: 'DBforPc',
         gateKey: 'dbForPc',
         name: 'DB For PC',
-        icon: <PackageCheck  size={20} />,
+        icon: <PackageCheck size={20} />,
         element: <DBforPc />,
         notifications: () => 0,
     },
@@ -631,18 +691,18 @@ const routes: RouteAttributes[] = [
         element: <Administration />,
         notifications: () => 0,
     },
-{
-        path:'training-video',
-        name:'Training Video',
-        icon:<VideoIcon size={20}/>,
-        element:<TrainnigVideo/>,
+    {
+        path: 'training-video',
+        name: 'Training Video',
+        icon: <VideoIcon size={20} />,
+        element: <TrainnigVideo />,
         notifications: () => 0,
     },
     {
-        path:'license',
-        name:'License',
-        icon:<KeyRound size={20}/>,
-        element:<Liecense/>,
+        path: 'license',
+        name: 'License',
+        icon: <KeyRound size={20} />,
+        element: <Liecense />,
         notifications: () => 0,
 
     },
@@ -650,8 +710,17 @@ const routes: RouteAttributes[] = [
 ];
 
 const rootElement = document.getElementById('root');
+
+// Cache the root instance to prevent "createRoot() called multiple times" warning
+let root: ReturnType<typeof createRoot> | null = null;
+
 if (rootElement) {
-    createRoot(rootElement).render(
+    // Only create root once, reuse it on subsequent renders (HMR)
+    if (!root) {
+        root = createRoot(rootElement);
+    }
+
+    root.render(
         <StrictMode>
             <AuthProvider>
                 <BrowserRouter>

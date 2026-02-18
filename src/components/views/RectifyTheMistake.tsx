@@ -1,6 +1,5 @@
-import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import DataTable from '../element/DataTable';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -21,69 +20,16 @@ import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
-import { postToSheet } from '@/lib/fetchers';
 import { Calculator } from 'lucide-react';
-import { Tabs, TabsContent } from '../ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
-
-interface TallyEntryPendingData {
-    indentNo: string;
-    indentDate: string;
-    purchaseDate: string;
-    materialInDate: string;
-    plannedDate: string; // ✅ ADD THIS
-    productName: string;
-    billNo: string;
-    qty: number;
-    partyName: string;
-    billAmt: number;
-    billImage: string;
-    billReceivedLater: string;
-    notReceivedBillNo: string;
-    location: string;
-    typeOfBills: string;
-    productImage: string;
-    area: string;
-    indentedFor: string;
-    approvedPartyName: string;
-    rate: number;
-    indentQty: number;
-    totalRate: number;
-    status1: string;
-    remarks1: string;
-    firmNameMatch: string;
-}
-
-interface TallyEntryHistoryData {
-    indentNo: string;
-    indentDate: string;
-    purchaseDate: string;
-    materialInDate: string;
-    productName: string;
-    billNo: string;
-    qty: number;
-    partyName: string;
-    billAmt: number;
-    billImage: string;
-    billReceivedLater: string;
-    notReceivedBillNo: string;
-    location: string;
-    typeOfBills: string;
-    productImage: string;
-    area: string;
-    indentedFor: string;
-    approvedPartyName: string;
-    rate: number;
-    indentQty: number;
-    totalRate: number;
-    status1: string;
-    remarks1: string;
-    status2: string;
-    remarks2: string;
-    firmNameMatch: string;
-}
+import {
+    fetchTallyEntryRecords,
+    updateTallyEntryRecord,
+    type TallyEntryRecord
+} from '@/services/tallyEntryService';
 
 // Helper function to format date to dd/mm/yy
 const formatDate = (dateString: string) => {
@@ -100,179 +46,77 @@ const formatDate = (dateString: string) => {
     }
 };
 
-// Helper function to get field value with multiple possible keys
-const getFieldValue = (item: any, ...possibleKeys: string[]): any => {
-    for (const key of possibleKeys) {
-        if (item[key] !== undefined && item[key] !== null && item[key] !== '') {
-            return item[key];
-        }
-    }
-    return '';
-};
-
-export default () => {
-    const { tallyEntrySheet, updateAll } = useSheets();
+export default function RectifyTheMistake() {
     const { user } = useAuth();
-
-    const [pendingData, setPendingData] = useState<TallyEntryPendingData[]>([]);
-    const [historyData, setHistoryData] = useState<TallyEntryHistoryData[]>([]);
-    const [selectedItem, setSelectedItem] = useState<TallyEntryPendingData | null>(null);
+    const [allData, setAllData] = useState<TallyEntryRecord[]>([]);
+    const [dataLoading, setDataLoading] = useState(true);
+    const [selectedItem, setSelectedItem] = useState<TallyEntryRecord | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
 
-    useEffect(() => {
-        console.log('🔍 Raw tallyEntrySheet data:', tallyEntrySheet);
-        if (tallyEntrySheet.length > 0) {
-            console.log('📋 First item keys:', Object.keys(tallyEntrySheet[0]));
-            console.log('📋 First item sample:', tallyEntrySheet[0]);
+    const fetchData = async () => {
+        setDataLoading(true);
+        try {
+            const records = await fetchTallyEntryRecords();
+            // Filter by firm name
+            const filteredByFirm = records.filter(item => {
+                return user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch;
+            });
+            setAllData(filteredByFirm);
+        } catch (error) {
+            console.error('Failed to fetch tally entry records:', error);
+            toast.error('Failed to load data');
+        } finally {
+            setDataLoading(false);
         }
-
-        // Filter by firm name
-        const filteredByFirm = tallyEntrySheet.filter(item => {
-            const firmName = getFieldValue(item, 'Firm Name', 'firmName', 'firmNameMatch');
-            return user.firmNameMatch.toLowerCase() === "all" || firmName === user.firmNameMatch;
-        });
-        
-        console.log('✅ Filtered by firm:', filteredByFirm.length);
-
-        setPendingData(
-            filteredByFirm
-                .filter((i) => {
-                    const planned2 = getFieldValue(i, 'Planned 2', 'planned2');
-                    const actual2 = getFieldValue(i, 'Actual 2', 'actual2');
-                    return planned2 !== '' && actual2 === '';
-                })
-                .map((i) => {
-                    const mapped = {
-                        indentNo: getFieldValue(i, 'Indent Number', 'indentNumber', 'indentNo').toString().trim(),
-                        firmNameMatch: getFieldValue(i, 'Firm Name', 'firmName', 'firmNameMatch').toString().trim(),
-                        indentDate: getFieldValue(i, 'Indent Date', 'indentDate'),
-                        purchaseDate: getFieldValue(i, 'Purchase Date', 'purchaseDate'),
-                        materialInDate: getFieldValue(i, 'Material In Date', 'materialInDate'),
-                        plannedDate: getFieldValue(i, 'Planned 2', 'planned2'), // ✅ ADD THIS
-                        productName: getFieldValue(i, 'Product Name', 'productName'),
-                        billNo: getFieldValue(i, 'Bill No.', 'billNo').toString(),
-                        qty: Number(getFieldValue(i, 'Qty', 'qty')) || 0,
-                        partyName: getFieldValue(i, 'Party Name', 'partyName'),
-                        billAmt: Number(getFieldValue(i, 'Bill Amt', 'billAmt')) || 0,
-                        billImage: getFieldValue(i, 'Bill Image', 'billImage'),
-                        billReceivedLater: getFieldValue(i, 'Bill Recieved later', 'billReceivedLater'),
-                        notReceivedBillNo: getFieldValue(i, 'Not Received Bill No.', 'notReceivedBillNo'),
-                        location: getFieldValue(i, 'Location', 'location'),
-                        typeOfBills: getFieldValue(i, 'Type Of Bills', 'typeOfBills'),
-                        productImage: getFieldValue(i, 'Prodcut Image', 'Product Image', 'productImage'),
-                        area: getFieldValue(i, 'Area', 'area'),
-                        indentedFor: getFieldValue(i, 'Indented For', 'indentedFor'),
-                        approvedPartyName: getFieldValue(i, 'Approved Party Name', 'approvedPartyName'),
-                        rate: Number(getFieldValue(i, 'Rate', 'rate')) || 0,
-                        indentQty: Number(getFieldValue(i, 'Indent Qty', 'indentQty')) || 0,
-                        totalRate: Number(getFieldValue(i, 'Total Rate', 'totalRate')) || 0,
-                        status1: getFieldValue(i, 'Status 1', 'status1'),
-                        remarks1: getFieldValue(i, 'Remarks1', 'remarks1'),
-                    };
-                    console.log('📝 Mapped item:', mapped);
-                    return mapped;
-                })
-        );
-    }, [tallyEntrySheet, user.firmNameMatch]);
+    };
 
     useEffect(() => {
-        // Filter by firm name
-        const filteredByFirm = tallyEntrySheet.filter(item => {
-            const firmName = getFieldValue(item, 'Firm Name', 'firmName', 'firmNameMatch');
-            return user.firmNameMatch.toLowerCase() === "all" || firmName === user.firmNameMatch;
-        });
-        
-        setHistoryData(
-            filteredByFirm
-                .filter((i) => {
-                    const planned2 = getFieldValue(i, 'Planned 2', 'planned2');
-                    const actual2 = getFieldValue(i, 'Actual 2', 'actual2');
-                    return planned2 !== '' && actual2 !== '';
-                })
-                .map((i) => ({
-                    indentNo: getFieldValue(i, 'Indent Number', 'indentNumber', 'indentNo').toString().trim(),
-                    firmNameMatch: getFieldValue(i, 'Firm Name', 'firmName', 'firmNameMatch').toString().trim(),
-                    indentDate: getFieldValue(i, 'Indent Date', 'indentDate'),
-                    purchaseDate: getFieldValue(i, 'Purchase Date', 'purchaseDate'),
-                    materialInDate: getFieldValue(i, 'Material In Date', 'materialInDate'),
-                    productName: getFieldValue(i, 'Product Name', 'productName'),
-                    billNo: getFieldValue(i, 'Bill No.', 'billNo').toString(),
-                    qty: Number(getFieldValue(i, 'Qty', 'qty')) || 0,
-                    partyName: getFieldValue(i, 'Party Name', 'partyName'),
-                    billAmt: Number(getFieldValue(i, 'Bill Amt', 'billAmt')) || 0,
-                    billImage: getFieldValue(i, 'Bill Image', 'billImage'),
-                    billReceivedLater: getFieldValue(i, 'Bill Recieved later', 'billReceivedLater'),
-                    notReceivedBillNo: getFieldValue(i, 'Not Received Bill No.', 'notReceivedBillNo'),
-                    location: getFieldValue(i, 'Location', 'location'),
-                    typeOfBills: getFieldValue(i, 'Type Of Bills', 'typeOfBills'),
-                    productImage: getFieldValue(i, 'Prodcut Image', 'Product Image', 'productImage'),
-                    area: getFieldValue(i, 'Area', 'area'),
-                    indentedFor: getFieldValue(i, 'Indented For', 'indentedFor'),
-                    approvedPartyName: getFieldValue(i, 'Approved Party Name', 'approvedPartyName'),
-                    rate: Number(getFieldValue(i, 'Rate', 'rate')) || 0,
-                    indentQty: Number(getFieldValue(i, 'Indent Qty', 'indentQty')) || 0,
-                    totalRate: Number(getFieldValue(i, 'Total Rate', 'totalRate')) || 0,
-                    status1: getFieldValue(i, 'Status 1', 'status1'),
-                    remarks1: getFieldValue(i, 'Remarks1', 'remarks1'),
-                    status2: getFieldValue(i, 'Status 2', 'status2'),
-                    remarks2: getFieldValue(i, 'Remarks 2', 'remarks2'),
-                }))
-        );
-    }, [tallyEntrySheet, user.firmNameMatch]);
+        fetchData();
+    }, [user.firmNameMatch]);
 
-    const pendingColumns: ColumnDef<TallyEntryPendingData>[] = [
+    const pendingData = useMemo(() => {
+        return allData.filter(i => i.planned2 && !i.actual2);
+    }, [allData]);
+
+    const historyData = useMemo(() => {
+        return allData.filter(i => i.planned2 && i.actual2);
+    }, [allData]);
+
+    const pendingColumns: ColumnDef<TallyEntryRecord>[] = [
         ...(user.receiveItemView
             ? [
-                  {
-                      header: 'Action',
-                      cell: ({ row }: { row: Row<TallyEntryPendingData> }) => {
-                          const item = row.original;
-                          return (
-                              <DialogTrigger asChild>
-                                  <Button
-                                      variant="outline"
-                                      onClick={() => {
-                                          setSelectedItem(item);
-                                      }}
-                                  >
-                                      Process
-                                  </Button>
-                              </DialogTrigger>
-                          );
-                      },
-                  },
-              ]
+                {
+                    header: 'Action',
+                    cell: ({ row }: { row: Row<TallyEntryRecord> }) => {
+                        const item = row.original;
+                        return (
+                            <DialogTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setSelectedItem(item);
+                                    }}
+                                >
+                                    Process
+                                </Button>
+                            </DialogTrigger>
+                        );
+                    },
+                },
+            ]
             : []),
-        { 
-            accessorKey: 'indentNo', 
-            header: 'Indent No.',
-        },
-        { 
-            accessorKey: 'firmNameMatch', 
-            header: 'Firm Name',
-        },
-        { 
-            accessorKey: 'indentDate', 
-            header: 'Indent Date',
-            cell: ({ row }) => formatDate(row.original.indentDate)
-        },
-        { 
-            accessorKey: 'purchaseDate', 
-            header: 'Purchase Date',
-            cell: ({ row }) => formatDate(row.original.purchaseDate)
-        },
-        { 
-            accessorKey: 'materialInDate', 
+        { accessorKey: 'indentNumber', header: 'Indent No.' },
+        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        {
+            accessorKey: 'materialInDate',
             header: 'Material In Date',
             cell: ({ row }) => formatDate(row.original.materialInDate)
         },
-
-        { 
-            accessorKey: 'plannedDate', 
+        {
+            accessorKey: 'planned2',
             header: 'Planned Date',
-            cell: ({ row }) => formatDate(row.original.plannedDate) // ✅ ADD THIS COLUMN
+            cell: ({ row }) => formatDate(row.original.planned2)
         },
-        
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'billNo', header: 'Bill No.' },
         { accessorKey: 'qty', header: 'Qty' },
@@ -290,8 +134,7 @@ export default () => {
                 ) : null;
             },
         },
-        { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
-        { accessorKey: 'notReceivedBillNo', header: 'Not Received Bill No.' },
+        { accessorKey: 'billRecievedLater', header: 'Bill Received Later' },
         { accessorKey: 'location', header: 'Location' },
         { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
         {
@@ -316,27 +159,11 @@ export default () => {
         { accessorKey: 'remarks1', header: 'Remarks 1' },
     ];
 
-    const historyColumns: ColumnDef<TallyEntryHistoryData>[] = [
-        { 
-            accessorKey: 'indentNo', 
-            header: 'Indent No.',
-        },
-        { 
-            accessorKey: 'firmNameMatch', 
-            header: 'Firm Name',
-        },
-        { 
-            accessorKey: 'indentDate', 
-            header: 'Indent Date',
-            cell: ({ row }) => formatDate(row.original.indentDate)
-        },
-        { 
-            accessorKey: 'purchaseDate', 
-            header: 'Purchase Date',
-            cell: ({ row }) => formatDate(row.original.purchaseDate)
-        },
-        { 
-            accessorKey: 'materialInDate', 
+    const historyColumns: ColumnDef<TallyEntryRecord>[] = [
+        { accessorKey: 'indentNumber', header: 'Indent No.' },
+        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
+        {
+            accessorKey: 'materialInDate',
             header: 'Material In Date',
             cell: ({ row }) => formatDate(row.original.materialInDate)
         },
@@ -357,8 +184,7 @@ export default () => {
                 ) : null;
             },
         },
-        { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
-        { accessorKey: 'notReceivedBillNo', header: 'Not Received Bill No.' },
+        { accessorKey: 'billRecievedLater', header: 'Bill Received Later' },
         { accessorKey: 'location', header: 'Location' },
         { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
         {
@@ -402,21 +228,16 @@ export default () => {
     ];
 
     const schema = z.object({
-        status2: z
-            .enum(['Done', 'Not Done'], {
-                required_error: 'Please select a status',
-            })
-            .optional()
-            .refine((val) => val !== undefined, {
-                message: 'Please select a status',
-            }),
+        status2: z.enum(['Done', 'Not Done'], {
+            required_error: 'Please select a status',
+        }),
         remarks2: z.string().min(1, 'Remarks are required'),
     });
 
-    const form = useForm({
+    const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
         defaultValues: {
-            status2: undefined as 'Done' | 'Not Done' | undefined,
+            status2: 'Done',
             remarks2: '',
         },
     });
@@ -424,86 +245,35 @@ export default () => {
     useEffect(() => {
         if (!openDialog) {
             form.reset({
-                status2: undefined,
+                status2: 'Done',
                 remarks2: '',
             });
         }
     }, [openDialog, form]);
 
     async function onSubmit(values: z.infer<typeof schema>) {
-    try {
-        if (!selectedItem) {
-            toast.error('No item selected');
-            return;
+        try {
+            if (!selectedItem) {
+                toast.error('No item selected');
+                return;
+            }
+
+            const currentDateTime = new Date().toISOString();
+
+            await updateTallyEntryRecord(selectedItem.indentNumber, {
+                actual2: currentDateTime,
+                status2: values.status2,
+                remarks2: values.remarks2
+            });
+
+            toast.success(`Successfully updated status for ${selectedItem.indentNumber}`);
+            setOpenDialog(false);
+            fetchData();
+        } catch (error) {
+            console.error('❌ Update error:', error);
+            toast.error('Failed to update status. Please try again.');
         }
-
-        console.log('🔄 Starting form submission...');
-        console.log('📝 Selected item:', selectedItem);
-        console.log('📋 Form values:', values);
-
-        // Get current date and time in dd/mm/yyyy hh:mm:ss format
-        const currentDateTime = new Date()
-            .toLocaleString('en-GB', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false,
-            })
-            .replace(',', '');
-
-        console.log('📅 Actual 2 date:', currentDateTime);
-
-        // Find the exact row in the original sheet data
-        const sheetRow = tallyEntrySheet.find((s) => {
-            const indentNumber = getFieldValue(s, 'Indent Number', 'indentNumber', 'indentNo').toString().trim();
-            return indentNumber === selectedItem.indentNo;
-        });
-
-        if (!sheetRow) {
-            console.error('❌ Could not find matching row in sheet data');
-            toast.error('Could not find matching record in sheet');
-            return;
-        }
-
-        console.log('✅ Found sheet row:', sheetRow);
-        console.log('📊 Row index:', sheetRow.rowIndex);
-
-        // Prepare update data with ONLY the 3 fields we want to update (using camelCase)
-        const updateData = [{
-            rowIndex: sheetRow.rowIndex,
-            actual2: currentDateTime,
-            status2: values.status2,
-            remarks2: values.remarks2
-        }];
-
-        console.log('📤 Update data to send:', updateData);
-
-        // Send update to sheet
-        const result = await postToSheet(
-            updateData,
-            'update',
-            'TALLY ENTRY'
-        );
-
-        console.log('✅ Update result:', result);
-
-        toast.success(`Successfully updated status for ${selectedItem.indentNo}`);
-        setOpenDialog(false);
-        
-        // Refresh data after successful update
-        setTimeout(() => {
-            updateAll();
-            console.log('🔄 Data refreshed after update');
-        }, 1500);
-
-    } catch (error) {
-        console.error('❌ Update error:', error);
-        toast.error('Failed to update status. Please try again.');
     }
-}
     function onError(e: any) {
         console.log(e);
         toast.error('Please fill all required fields');
@@ -521,20 +291,25 @@ export default () => {
                         <Calculator size={50} className="text-primary" />
                     </Heading>
 
+                    <TabsList className="mb-4">
+                        <TabsTrigger value="pending">Pending ({pendingData.length})</TabsTrigger>
+                        <TabsTrigger value="history">History ({historyData.length})</TabsTrigger>
+                    </TabsList>
+
                     <TabsContent value="pending">
                         <DataTable
                             data={pendingData}
                             columns={pendingColumns}
-                            searchFields={['indentNo', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-                            dataLoading={false}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                     <TabsContent value="history">
                         <DataTable
                             data={historyData}
                             columns={historyColumns}
-                            searchFields={['indentNo', 'productName', 'partyName', 'billNo', 'status1', 'firmNameMatch']}
-                            dataLoading={false}
+                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'status1', 'firmNameMatch']}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                 </Tabs>
@@ -550,7 +325,7 @@ export default () => {
                                     <DialogTitle>Process Tally Entry</DialogTitle>
                                     <DialogDescription>
                                         Process entry for indent number{' '}
-                                        <span className="font-medium">{selectedItem.indentNo}</span>
+                                        <span className="font-medium">{selectedItem.indentNumber}</span>
                                     </DialogDescription>
                                 </DialogHeader>
 
@@ -560,19 +335,13 @@ export default () => {
                                         <div className="space-y-1">
                                             <p className="font-medium text-nowrap">Indent No.</p>
                                             <p className="text-sm font-light">
-                                                {selectedItem.indentNo}
+                                                {selectedItem.indentNumber}
                                             </p>
                                         </div>
                                         <div className="space-y-1">
                                             <p className="font-medium text-nowrap">Firm Name</p>
                                             <p className="text-sm font-light">
                                                 {selectedItem.firmNameMatch}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium text-nowrap">Indent Date</p>
-                                            <p className="text-sm font-light">
-                                                {formatDate(selectedItem.indentDate)}
                                             </p>
                                         </div>
                                         <div className="space-y-1">
@@ -692,4 +461,4 @@ export default () => {
             </Dialog>
         </div>
     );
-};
+}

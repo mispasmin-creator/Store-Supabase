@@ -1,12 +1,9 @@
 import { Package2 } from 'lucide-react';
 import Heading from '../element/Heading';
-import { useSheets } from '@/context/SheetsContext';
 import { useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
-import type { TallyEntrySheet } from '@/types';
 import { useAuth } from '@/context/AuthContext';
-
 import { Button } from '../ui/button';
 import {
   Dialog,
@@ -29,18 +26,12 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { toast } from 'sonner';
-import { postToSheet } from '@/lib/fetchers';
 import { PuffLoader as Loader } from 'react-spinners';
-
-// Helper function to get field value with multiple possible keys
-const getFieldValue = (item: any, ...possibleKeys: string[]): any => {
-  for (const key of possibleKeys) {
-    if (item[key] !== undefined && item[key] !== null && item[key] !== '') {
-      return item[key];
-    }
-  }
-  return '';
-};
+import {
+  fetchTallyEntryRecords,
+  updateTallyEntryRecord,
+  type TallyEntryRecord
+} from '@/services/tallyEntryService';
 
 // Helper function to format date to dd/mm/yy
 const formatDate = (dateString: string) => {
@@ -57,118 +48,56 @@ const formatDate = (dateString: string) => {
   }
 };
 
-interface ProcessedTallyData {
-  rowIndex: string;
-  indentNo: string;
-  indentDate: string;
-  purchaseDate: string;
-  materialInDate: string;
-  plannedDate: string;
-  productName: string;
-  firmNameMatch: string;
-  billNo: string;
-  qty: number;
-  partyName: string;
-  billAmt: number;
-  billImage: string;
-  billReceivedLater: string;
-  notReceivedBillNo: string;
-  location: string;
-  typeOfBills: string;
-  productImage: string;
-  area: string;
-  indentedFor: string;
-  approvedPartyName: string;
-  rate: number;
-  indentQty: number;
-  totalRate: number;
-}
-
-export default function PcReportTable() {
-  const { tallyEntrySheet, poMasterLoading, updateAll } = useSheets();
-  const [data, setData] = useState<ProcessedTallyData[]>([]);
-  const [selectedRow, setSelectedRow] = useState<ProcessedTallyData | null>(null);
+export default function AgainAuditingTable() {
+  const [data, setData] = useState<TallyEntryRecord[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [selectedRow, setSelectedRow] = useState<TallyEntryRecord | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const { user } = useAuth();
 
-  // Update table data whenever tallyEntrySheet changes
-  useEffect(() => {
-    if (!tallyEntrySheet) return;
-    
-    console.log("🔍 Raw Tally Entry Sheet:", tallyEntrySheet);
-    if (tallyEntrySheet.length > 0) {
-      console.log('📋 First item keys:', Object.keys(tallyEntrySheet[0]));
-      console.log('📋 First item sample:', tallyEntrySheet[0]);
-    }
-    
-    // Filter by firm name first
-    const filteredByFirm = tallyEntrySheet.filter(item => {
-      const firmName = getFieldValue(item, 'Firm Name', 'firmName', 'firmNameMatch');
-      return user.firmNameMatch.toLowerCase() === "all" || firmName === user.firmNameMatch;
-    });
-    
-    console.log('✅ Filtered by firm:', filteredByFirm.length);
-    
-    // Filter the data according to planned5 has value and actual5 is empty/null
-    const filteredData = filteredByFirm
-      .filter((row) => {
-        const planned5 = getFieldValue(row, 'Planned 5', 'planned5');
-        const actual5 = getFieldValue(row, 'Actual 5', 'actual5');
-        return planned5 !== '' && actual5 === '';
-      })
-      .map((i) => {
-        const mapped = {
-          rowIndex: i.rowIndex,
-          indentNo: getFieldValue(i, 'Indent Number', 'indentNumber', 'indentNo').toString().trim(),
-          indentDate: getFieldValue(i, 'Indent Date', 'indentDate'),
-          purchaseDate: getFieldValue(i, 'Purchase Date', 'purchaseDate'),
-          materialInDate: getFieldValue(i, 'Material In Date', 'materialInDate'),
-          plannedDate: getFieldValue(i, 'Planned 5', 'planned5'),
-          productName: getFieldValue(i, 'Product Name', 'productName'),
-          firmNameMatch: getFieldValue(i, 'Firm Name', 'firmName', 'firmNameMatch').toString().trim(),
-          billNo: getFieldValue(i, 'Bill No.', 'Bill No', 'billNo').toString(),
-          qty: Number(getFieldValue(i, 'Qty', 'qty')) || 0,
-          partyName: getFieldValue(i, 'Party Name', 'partyName'),
-          billAmt: Number(getFieldValue(i, 'Bill Amt', 'billAmt')) || 0,
-          billImage: getFieldValue(i, 'Bill Image', 'billImage'),
-          billReceivedLater: getFieldValue(i, 'Bill Recieved later', 'billReceivedLater'),
-          notReceivedBillNo: getFieldValue(i, 'Not Received Bill No.', 'notReceivedBillNo'),
-          location: getFieldValue(i, 'Location', 'location'),
-          typeOfBills: getFieldValue(i, 'Type Of Bills', 'typeOfBills'),
-          productImage: getFieldValue(i, 'Prodcut Image', 'Product Image', 'productImage'),
-          area: getFieldValue(i, 'Area', 'area'),
-          indentedFor: getFieldValue(i, 'Indented For', 'indentedFor'),
-          approvedPartyName: getFieldValue(i, 'Approved Party Name', 'approvedPartyName'),
-          rate: Number(getFieldValue(i, 'Rate', 'rate')) || 0,
-          indentQty: Number(getFieldValue(i, 'Indent Qty', 'indentQty')) || 0,
-          totalRate: Number(getFieldValue(i, 'Total Rate', 'totalRate')) || 0,
-        };
-        console.log('📝 Mapped item:', mapped);
-        return mapped;
+  const fetchData = async () => {
+    setDataLoading(true);
+    try {
+      const records = await fetchTallyEntryRecords();
+
+      // Filter by firm name and status (planned5 exists, actual5 is empty)
+      const filtered = records.filter(item => {
+        const firmMatch = user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch;
+        const stageMatch = item.planned5 && !item.actual5;
+        return firmMatch && stageMatch;
       });
 
-    console.log("✅ Final Filtered Data:", filteredData);
-    setData(filteredData);
-  }, [tallyEntrySheet, user.firmNameMatch]);
+      setData(filtered);
+    } catch (error) {
+      console.error('Failed to fetch tally entry records:', error);
+      toast.error('Failed to load data');
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [user.firmNameMatch]);
 
   // Reset form when dialog closes
   useEffect(() => {
     if (!openDialog) {
-      form.reset({ status: undefined });
+      form.reset({ status: 'okey' });
     }
   }, [openDialog]);
 
   // Validation schema
   const schema = z.object({
-  status: z.enum(['okey', 'not okey']),
-});
+    status: z.enum(['okey', 'not okey']),
+  });
 
-const form = useForm<z.infer<typeof schema>>({
-  resolver: zodResolver(schema),
-  defaultValues: {
-    status: 'okey', // or 'not okey'
-  },
-});
+  const form = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      status: 'okey',
+    },
+  });
 
   // Handle form submission
   async function onSubmit(values: z.infer<typeof schema>) {
@@ -178,64 +107,19 @@ const form = useForm<z.infer<typeof schema>>({
     }
 
     try {
-      console.log('🔄 Starting form submission...');
-      console.log('📝 Selected row:', selectedRow);
-      console.log('📋 Form values:', values);
+      const currentDateTime = new Date().toISOString();
 
-      // Get current date and time in dd/mm/yyyy hh:mm:ss format
-      const currentDateTime = new Date()
-        .toLocaleString('en-GB', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        })
-        .replace(',', '');
-
-      console.log('📅 Actual 5 date:', currentDateTime);
-
-      // Find the exact row in the original sheet data
-      const sheetRow = tallyEntrySheet.find((s) => {
-        const indentNumber = getFieldValue(s, 'Indent Number', 'indentNumber', 'indentNo').toString().trim();
-        return indentNumber === selectedRow.indentNo;
-      });
-
-      if (!sheetRow) {
-        console.error('❌ Could not find matching row in sheet data');
-        toast.error('Could not find matching record in sheet');
-        return;
-      }
-
-      console.log('✅ Found sheet row:', sheetRow);
-      console.log('📊 Row index:', sheetRow.rowIndex);
-
-      // Prepare update data with camelCase field names
-      const updateData = [{
-        rowIndex: sheetRow.rowIndex,
+      await updateTallyEntryRecord(selectedRow.indentNumber, {
         actual5: currentDateTime,
         status5: values.status,
-      }];
+        remarks5: '', // No remarks field in this UI
+      });
 
-      console.log('📤 Update data to send:', updateData);
-
-      // Post to Google Sheet
-      await postToSheet(updateData, 'update', 'TALLY ENTRY');
-
-      console.log('✅ Update successful');
-      toast.success(`Status updated for Indent ${selectedRow.indentNo}`);
-
-      // Close dialog and refresh data
+      toast.success(`Status updated for Indent ${selectedRow.indentNumber}`);
       setOpenDialog(false);
-      setTimeout(() => {
-        updateAll();
-        console.log('🔄 Data refreshed after update');
-      }, 1500);
-
+      fetchData();
     } catch (err) {
-      console.error('❌ Error in onSubmit:', err);
+      console.error('Error in onSubmit:', err);
       toast.error('Failed to update status. Please try again.');
     }
   }
@@ -245,17 +129,17 @@ const form = useForm<z.infer<typeof schema>>({
     toast.error('Please fill all required fields');
   }
 
-  // Columns for TallyEntrySheet
-  const columns: ColumnDef<ProcessedTallyData>[] = [
+  // Columns for TallyEntryRecord
+  const columns: ColumnDef<TallyEntryRecord>[] = [
     {
       id: 'actions',
       header: 'Action',
-      cell: ({ row }: { row: Row<ProcessedTallyData> }) => {
+      cell: ({ row }: { row: Row<TallyEntryRecord> }) => {
         const rowData = row.original;
         return (
           <DialogTrigger asChild>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setSelectedRow(rowData);
               }}
@@ -266,32 +150,19 @@ const form = useForm<z.infer<typeof schema>>({
         );
       },
     },
-    { 
-      accessorKey: 'indentNo', 
-      header: 'Indent Number' 
-    },
-    { 
-      accessorKey: 'indentDate', 
-      header: 'Indent Date',
-      cell: ({ row }) => formatDate(row.original.indentDate)
-    },
-    { 
-      accessorKey: 'purchaseDate', 
-      header: 'Purchase Date',
-      cell: ({ row }) => formatDate(row.original.purchaseDate)
-    },
-    { 
-      accessorKey: 'materialInDate', 
+    { accessorKey: 'indentNumber', header: 'Indent Number' },
+    {
+      accessorKey: 'materialInDate',
       header: 'Material In Date',
       cell: ({ row }) => formatDate(row.original.materialInDate)
     },
-    { 
-      accessorKey: 'plannedDate', 
+    {
+      accessorKey: 'planned5',
       header: 'Planned Date',
-      cell: ({ row }) => formatDate(row.original.plannedDate)
+      cell: ({ row }) => formatDate(row.original.planned5)
     },
     { accessorKey: 'productName', header: 'Product Name' },
-    { accessorKey: 'firmNameMatch', header: 'Firm Name' }, 
+    { accessorKey: 'firmNameMatch', header: 'Firm Name' },
     { accessorKey: 'billNo', header: 'Bill No' },
     { accessorKey: 'qty', header: 'Quantity' },
     { accessorKey: 'partyName', header: 'Party Name' },
@@ -302,10 +173,10 @@ const form = useForm<z.infer<typeof schema>>({
       cell: ({ row }) => {
         const image = row.original.billImage;
         return image ? (
-          <a 
-            href={image} 
-            target="_blank" 
-            rel="noopener noreferrer" 
+          <a
+            href={image}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-blue-600 hover:underline"
           >
             View
@@ -313,8 +184,7 @@ const form = useForm<z.infer<typeof schema>>({
         ) : null;
       },
     },
-    { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
-    { accessorKey: 'notReceivedBillNo', header: 'Not Received Bill No' },
+    { accessorKey: 'billRecievedLater', header: 'Bill Received Later' },
     { accessorKey: 'location', header: 'Location' },
     { accessorKey: 'typeOfBills', header: 'Type Of Bills' },
     {
@@ -323,10 +193,10 @@ const form = useForm<z.infer<typeof schema>>({
       cell: ({ row }) => {
         const image = row.original.productImage;
         return image ? (
-          <a 
-            href={image} 
-            target="_blank" 
-            rel="noopener noreferrer" 
+          <a
+            href={image}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-blue-600 hover:underline"
           >
             View
@@ -352,8 +222,8 @@ const form = useForm<z.infer<typeof schema>>({
         <DataTable
           data={data}
           columns={columns}
-          searchFields={['indentNo', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-          dataLoading={poMasterLoading}
+          searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+          dataLoading={dataLoading}
           className='h-[80dvh]'
         />
 
@@ -366,7 +236,7 @@ const form = useForm<z.infer<typeof schema>>({
               >
                 <DialogHeader>
                   <DialogTitle>
-                    Update Status for Indent {selectedRow.indentNo}
+                    Update Status for Indent {selectedRow.indentNumber}
                   </DialogTitle>
                 </DialogHeader>
 
@@ -375,7 +245,7 @@ const form = useForm<z.infer<typeof schema>>({
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <p className="font-medium text-nowrap">Indent No.</p>
-                      <p className="text-sm font-light">{selectedRow.indentNo}</p>
+                      <p className="text-sm font-light">{selectedRow.indentNumber}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="font-medium text-nowrap">Firm Name</p>
@@ -434,7 +304,7 @@ const form = useForm<z.infer<typeof schema>>({
                   <DialogClose asChild>
                     <Button variant="outline">Close</Button>
                   </DialogClose>
-                  
+
                   <Button type="submit" disabled={form.formState.isSubmitting}>
                     {form.formState.isSubmitting && (
                       <Loader

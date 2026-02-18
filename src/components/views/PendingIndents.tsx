@@ -1,6 +1,5 @@
 import { ListTodo } from 'lucide-react';
 import Heading from '../element/Heading';
-import { useSheets } from '@/context/SheetsContext';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { formatDate } from '@/lib/utils';
@@ -19,9 +18,9 @@ import {
     DialogFooter,
     DialogClose,
 } from '../ui/dialog';
-import { postToSheet } from '@/lib/fetchers';
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
+import { supabase, supabaseEnabled } from '@/lib/supabase';
 
 interface PendingIndentsData {
     date: string;
@@ -56,7 +55,6 @@ interface HistoryIndentsData {
 }
 
 export default () => {
-    const { indentSheet, indentLoading, updateIndentSheet } = useSheets();
     const { user } = useAuth();
 
     const [pendingTableData, setPendingTableData] = useState<PendingIndentsData[]>([]);
@@ -64,80 +62,111 @@ export default () => {
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedIndent, setSelectedIndent] = useState<PendingIndentsData | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [dataLoading, setDataLoading] = useState(false);
 
-    useEffect(()=>{
-        console.log(indentSheet);
-    },[indentSheet])
-
-    // Fetching pending table data (UPDATED WITH PLANNED DATE)
-    useEffect(() => {
-        // Pehle firm name se filter karo (case-insensitive)
-        const filteredByFirm = indentSheet.filter(sheet => 
-            user.firmNameMatch.toLowerCase() === "all" || sheet.firmName === user.firmNameMatch
-        );
+    // Fetch pending PO decisions from Supabase
+    const fetchPendingPoDecisions = async () => {
+        if (!supabaseEnabled) return;
         
-        setPendingTableData(
-            filteredByFirm
-                .filter((sheet: any) => {
-                    return sheet.status === "Pending" && 
-                        sheet.approvedVendorName && 
-                        sheet.approvedVendorName.toString().trim() !== '' &&
-                        (!sheet.poRequred || 
-                        sheet.poRequred.toString().trim() === '' || 
-                        sheet.poRequred.toString().trim() === 'undefined' ||
-                        sheet.poRequred === null);
-                })
-                .map((sheet: any) => ({
-                    date: formatDate(new Date(sheet.timestamp)),
-                    indentNo: sheet.indentNumber,
-                    firmNameMatch: sheet.firmNameMatch || '',
-                    product: sheet.productName,
-                    quantity: sheet.pendingPoQty || 0,
-                    rate: sheet.approvedRate || 0,
-                    withTaxOrNot: sheet.withTaxOrNot1 || 'Yes',
-                    uom: sheet.uom,
-                    vendorName: sheet.approvedVendorName,
-                    paymentTerm: sheet.approvedPaymentTerm,
-                    specifications: sheet.specifications || '',
-                    plannedDate: sheet.planned4 || '',
-                }))
-                .sort((a, b) => b.indentNo.localeCompare(a.indentNo))
-        );
-    }, [indentSheet, user.firmNameMatch]);
+        try {
+            setDataLoading(true);
+            let query = supabase
+                .from('indent')
+                .select('*')
+                .eq('status', 'Pending')
+                .not('approved_vendor_name', 'is', null)
+                .neq('approved_vendor_name', '')
+                .or('po_requred.is.null,po_requred.eq.');
 
-    // Fetching history table data (UPDATED WITH PLANNED DATE)
-    useEffect(() => {
-        // Pehle firm name se filter karo (case-insensitive)
-        const filteredByFirm = indentSheet.filter(sheet => 
-            user.firmNameMatch.toLowerCase() === "all" || sheet.firmName === user.firmNameMatch
-        );
-        
-        setHistoryTableData(
-            filteredByFirm
-                .filter((sheet: any) => {
-                    return sheet.poRequred && 
-                        sheet.poRequred.toString().trim() !== '' &&
-                        (sheet.poRequred.toString().trim() === 'Yes' || sheet.poRequred.toString().trim() === 'No');
-                })
-                .map((sheet: any) => ({
-                    date: formatDate(new Date(sheet.timestamp)),
-                    indentNo: sheet.indentNumber,
-                    firmNameMatch: sheet.firmNameMatch || '',
-                    product: sheet.productName,
-                    quantity: sheet.pendingPoQty || sheet.quantity || 0,
-                    rate: sheet.approvedRate || sheet.rate1 || 0,
-                    withTaxOrNot: sheet.withTaxOrNot1 || 'Yes',
-                    uom: sheet.uom,
-                    vendorName: sheet.approvedVendorName || sheet.vendorName1,
-                    paymentTerm: sheet.approvedPaymentTerm || sheet.paymentTerm1,
-                    specifications: sheet.specifications || '',
-                    poRequired: sheet.poRequred,
-                    poRequiredStatus: sheet.poRequred.toString().trim() as 'Yes' | 'No',
-                    plannedDate: sheet.planned4 || '',
+            if (user.firmNameMatch.toLowerCase() !== 'all') {
+                query = query.eq('firm_name', user.firmNameMatch);
+            }
+
+            const { data, error } = await query.order('indent_number', { ascending: false });
+
+            if (error) throw error;
+
+            const rows = (data ?? []) as any[];
+            setPendingTableData(
+                rows.map((r) => ({
+                    date: formatDate(new Date(r.timestamp)),
+                    indentNo: r.indent_number || '',
+                    firmNameMatch: r.firm_name_match || '',
+                    product: r.product_name || '',
+                    quantity: r.pending_po_qty || 0,
+                    rate: r.approved_rate || 0,
+                    withTaxOrNot: r.with_tax_or_not1 || 'Yes',
+                    uom: r.uom || '',
+                    vendorName: r.approved_vendor_name || '',
+                    paymentTerm: r.approved_payment_term || '',
+                    specifications: r.specifications || '',
+                    plannedDate: r.planned4 || '',
                 }))
-                .sort((a, b) => b.indentNo.localeCompare(a.indentNo))
-        );
-    }, [indentSheet, user.firmNameMatch]);
+            );
+        } catch (err) {
+            console.error('Error fetching pending PO decisions:', err);
+            toast.error('Failed to fetch pending PO decisions');
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPendingPoDecisions();
+    }, [user.firmNameMatch]);
+
+    // Fetch PO decision history from Supabase
+    const fetchPoDecisionHistory = async () => {
+        if (!supabaseEnabled) return;
+        
+        try {
+            setDataLoading(true);
+            let query = supabase
+                .from('indent')
+                .select('*')
+                .not('po_requred', 'is', null)
+                .neq('po_requred', '')
+                .in('po_requred', ['Yes', 'No']);
+
+            if (user.firmNameMatch.toLowerCase() !== 'all') {
+                query = query.eq('firm_name', user.firmNameMatch);
+            }
+
+            const { data, error } = await query.order('indent_number', { ascending: false });
+
+            if (error) throw error;
+
+            const rows = (data ?? []) as any[];
+            setHistoryTableData(
+                rows.map((r) => ({
+                    date: formatDate(new Date(r.timestamp)),
+                    indentNo: r.indent_number || '',
+                    firmNameMatch: r.firm_name_match || '',
+                    product: r.product_name || '',
+                    quantity: r.pending_po_qty || r.quantity || 0,
+                    rate: r.approved_rate || r.rate1 || 0,
+                    withTaxOrNot: r.with_tax_or_not1 || 'Yes',
+                    uom: r.uom || '',
+                    vendorName: r.approved_vendor_name || r.vendor_name1 || '',
+                    paymentTerm: r.approved_payment_term || r.payment_term1 || '',
+                    specifications: r.specifications || '',
+                    poRequired: r.po_requred || '',
+                    poRequiredStatus: (r.po_requred?.toString().trim() || 'No') as 'Yes' | 'No',
+                    plannedDate: r.planned4 || '',
+                }))
+            );
+        } catch (err) {
+            console.error('Error fetching PO decision history:', err);
+            toast.error('Failed to fetch PO decision history');
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPendingPoDecisions();
+        fetchPoDecisionHistory();
+    }, [user.firmNameMatch]);
 
     const handlePoRequired = async (response: 'Yes' | 'No') => {
         if (!selectedIndent) return;
@@ -145,40 +174,29 @@ export default () => {
         setIsSubmitting(true);
 
         try {
-            // Find the matching row from indentSheet
-            const matchingRow = indentSheet.find(
-                (sheet: any) => sheet.indentNumber === selectedIndent.indentNo
-            );
-
-            if (!matchingRow) {
-                toast.error('Indent not found');
-                setIsSubmitting(false);
-                return;
-            }
-
-            // Create updated row with ONLY poRequred field (note the spelling)
-            const updatedRow = {
-                rowIndex: matchingRow.rowIndex,
-                sheetName: 'INDENT',
-                poRequred: response, // Column BT - "Po Requred" becomes "poRequred" in camelCase
+            const updates: any = {
+                po_requred: response,
             };
 
-            console.log('Updating row:', updatedRow);
-
-            const result = await postToSheet([updatedRow], 'update', 'INDENT');
-            
-            if (result && result.success) {
-                toast.success(`PO Required status updated to ${response}`);
-                setOpenDialog(false);
-                setSelectedIndent(null);
-                
-                // Refresh the indent sheet after 1 second
-                setTimeout(() => {
-                    updateIndentSheet();
-                }, 1000);
-            } else {
-                toast.error('Failed to update PO Required status');
+            // If PO is required, set planned4 for the next workflow stage
+            if (response === 'Yes') {
+                updates.planned4 = new Date().toISOString();
             }
+
+            const { error } = await supabase
+                .from('indent')
+                .update(updates)
+                .eq('indent_number', selectedIndent.indentNo);
+
+            if (error) throw error;
+
+            toast.success(`PO Required status updated to ${response}`);
+            setOpenDialog(false);
+            setSelectedIndent(null);
+            
+            // Refresh both tables
+            fetchPendingPoDecisions();
+            fetchPoDecisionHistory();
         } catch (error) {
             console.error('Error updating PO Required:', error);
             toast.error('Failed to update PO Required status');
@@ -441,7 +459,7 @@ export default () => {
                             data={pendingTableData}
                             columns={pendingColumns}
                             searchFields={['product', 'vendorName', 'paymentTerm', 'specifications','firmNameMatch']}
-                            dataLoading={indentLoading}
+                            dataLoading={dataLoading}
                             className="h-[80dvh]"
                         />
                     </TabsContent>
@@ -451,7 +469,7 @@ export default () => {
                             data={historyTableData}
                             columns={historyColumns}
                             searchFields={['product', 'vendorName', 'paymentTerm', 'specifications','firmNameMatch']}
-                            dataLoading={indentLoading}
+                            dataLoading={dataLoading}
                             className="h-[80dvh]"
                         />
                     </TabsContent>

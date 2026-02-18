@@ -1,10 +1,15 @@
-import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import {
+    fetchStoreInRecords,
+    updateStoreInDebitNote,
+    uploadDebitNoteCopy,
+    type StoreInRecord,
+} from '@/services/storeInService';
 import {
     Dialog,
     DialogContent,
@@ -21,32 +26,27 @@ import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
-import { postToSheet, uploadFile } from '@/lib/fetchers';
 import { Truck } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
 
-
-
 function formatDateDisplay(dateString: string): string {
     if (!dateString) return '';
-    
     try {
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return dateString;
-        
         const day = date.getDate().toString().padStart(2, '0');
         const month = (date.getMonth() + 1).toString().padStart(2, '0');
         const year = date.getFullYear().toString().slice(-2);
-        
         return `${day}/${month}/${year}`;
     } catch (error) {
         console.error('Date formatting error:', error);
         return dateString;
     }
 }
+
 interface StoreInPendingData {
     liftNumber: string;
     indentNumber: string;
@@ -63,9 +63,8 @@ interface StoreInPendingData {
     transporterName: string;
     amount: number;
     firmNameMatch: string;
-    reason: string;  // ✅ ADD THIS
+    reason: string;
     plannedDate: string;
-
 }
 
 interface StoreInHistoryData {
@@ -85,89 +84,172 @@ interface StoreInHistoryData {
     reason: string;
     billNumber: string;
     statusPurchaser: string;
-    debitNoteCopy: string; // Add this
-    billCopy: string; // Add this
-    returnCopy: string; // Add this
+    debitNoteCopy: string;
+    billCopy: string;
+    returnCopy: string;
     firmNameMatch: string;
-
 }
 
+const schema = z.object({
+    debitNoteCopy: z.instanceof(File).optional(),
+    debitNoteNumber: z.string().optional(),
+});
+
+type FormValues = z.infer<typeof schema>;
+
 export default () => {
-    const { storeInSheet, updateAll } = useSheets();
     const { user } = useAuth();
 
+    const [storeInRecords, setStoreInRecords] = useState<StoreInRecord[]>([]);
+    const [dataLoading, setDataLoading] = useState(false);
     const [pendingData, setPendingData] = useState<StoreInPendingData[]>([]);
     const [historyData, setHistoryData] = useState<StoreInHistoryData[]>([]);
     const [selectedItem, setSelectedItem] = useState<StoreInPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
 
+    const form = useForm<FormValues>({
+        resolver: zodResolver(schema),
+        defaultValues: {
+            debitNoteCopy: undefined,
+            debitNoteNumber: '',
+        },
+    });
 
-useEffect(() => {
-    // Pehle firm name se filter karo (case-insensitive)
-    const filteredByFirm = storeInSheet.filter(item => 
-        user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
-    );
-    
-    setPendingData(
-        filteredByFirm
-            .filter((i) => i.planned9 !== '' && i.actual9 === '')
-            .map((i) => ({
-                liftNumber: i.liftNumber || '',
-                indentNumber: i.indentNo || '',
-                billNo: i.billNo || '',
-                vendorName: i.vendorName || '',
-                productName: i.productName || '',
-                qty: i.qty || 0,
-                typeOfBill: i.typeOfBill || '',
-                billAmount: i.billAmount || 0,
-                paymentType: i.paymentType || '',
-                advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
-                photoOfBill: i.photoOfBill || '',
-                transportationInclude: i.transportationInclude || '',
-                transporterName: i.transporterName || '',
-                amount: i.amount || 0,
-                firmNameMatch: i.firmNameMatch || '',
-                reason: i.reason || '', 
-                plannedDate:i.planned6 || '',
-                 // ✅ ADD THIS - Fetches from "Reason" column
+    const fetchAllData = async () => {
+        setDataLoading(true);
+        try {
+            const records = await fetchStoreInRecords();
+            setStoreInRecords(records);
+        } catch (error) {
+            console.error('Failed to fetch store-in records:', error);
+            toast.error('Failed to load data');
+        } finally {
+            setDataLoading(false);
+        }
+    };
 
-            }))
-    );
-}, [storeInSheet, user.firmNameMatch]);
+    useEffect(() => {
+        fetchAllData();
+    }, []);
 
-useEffect(() => {
-    // Pehle firm name se filter karo (case-insensitive)
-    const filteredByFirm = storeInSheet.filter(item => 
-        user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
-    );
-    
-    setHistoryData(
-        filteredByFirm
-            .filter((i) => i.planned9 !== '' && i.actual9 !== '')
-            .map((i) => ({
-                liftNumber: i.liftNumber || '',
-                indentNumber: i.indentNo || '',
-                billNo: i.billNo || '',
-                vendorName: i.vendorName || '',
-                productName: i.productName || '',
-                qty: i.qty || 0,
-                typeOfBill: i.typeOfBill || '',
-                billAmount: i.billAmount || 0,
-                paymentType: i.paymentType || '',
-                advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
-                photoOfBill: i.photoOfBill || '',
-                transportationInclude: i.transportationInclude || '',
-                status: i.status || '',
-                reason: i.reason || '',
-                billNumber: i.billNo || '',
-                statusPurchaser: i.statusPurchaser || '',
-                debitNoteCopy: i.debitNoteCopy || '',
-                billCopy: i.billCopy || '',
-                returnCopy: i.returnCopy || '',
-                firmNameMatch: i.firmNameMatch || '',
-            }))
-    );
-}, [storeInSheet, user.firmNameMatch]);
+    useEffect(() => {
+        const filteredByFirm = storeInRecords.filter((item) =>
+            user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
+        );
+
+        setPendingData(
+            filteredByFirm
+                .filter((i) => i.planned9 !== '' && i.actual9 === '')
+                .map((i) => ({
+                    liftNumber: i.liftNumber || '',
+                    indentNumber: i.indentNo || '',
+                    billNo: i.billNo || '',
+                    vendorName: i.vendorName || '',
+                    productName: i.productName || '',
+                    qty: i.qty || 0,
+                    typeOfBill: i.typeOfBill || '',
+                    billAmount: i.billAmount || 0,
+                    paymentType: i.paymentType || '',
+                    advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
+                    photoOfBill: i.photoOfBill || '',
+                    transportationInclude: i.transportationInclude || '',
+                    transporterName: i.transporterName || '',
+                    amount: i.amount || 0,
+                    firmNameMatch: i.firmNameMatch || '',
+                    reason: i.reason || '',
+                    plannedDate: i.planned9 || '',
+                }))
+        );
+
+        setHistoryData(
+            filteredByFirm
+                .filter((i) => i.planned9 !== '' && i.actual9 !== '')
+                .map((i) => ({
+                    liftNumber: i.liftNumber || '',
+                    indentNumber: i.indentNo || '',
+                    billNo: i.billNo || '',
+                    vendorName: i.vendorName || '',
+                    productName: i.productName || '',
+                    qty: i.qty || 0,
+                    typeOfBill: i.typeOfBill || '',
+                    billAmount: i.billAmount || 0,
+                    paymentType: i.paymentType || '',
+                    advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
+                    photoOfBill: i.photoOfBill || '',
+                    transportationInclude: i.transportationInclude || '',
+                    status: i.status || '',
+                    reason: i.reason || '',
+                    billNumber: i.billNo || '',
+                    statusPurchaser: i.statusPurchaser || '',
+                    debitNoteCopy: i.debitNoteCopy || '',
+                    billCopy: i.billCopy || '',
+                    returnCopy: i.returnCopy || '',
+                    firmNameMatch: i.firmNameMatch || '',
+                }))
+        );
+    }, [storeInRecords, user.firmNameMatch]);
+
+    useEffect(() => {
+        if (!openDialog) {
+            form.reset({
+                debitNoteCopy: undefined,
+                debitNoteNumber: '',
+            });
+        }
+    }, [openDialog, form]);
+
+    async function onSubmit(values: FormValues) {
+        try {
+            console.log('📝 Form values:', values);
+
+            let debitNoteCopyUrl = '';
+
+            if (values.debitNoteCopy) {
+                try {
+                    console.log('📤 Uploading debit note copy...');
+                    debitNoteCopyUrl = await uploadDebitNoteCopy(
+                        values.debitNoteCopy,
+                        selectedItem?.liftNumber || 'unknown'
+                    );
+                    console.log('✅ File uploaded:', debitNoteCopyUrl);
+                } catch (uploadError) {
+                    console.error('❌ Upload error:', uploadError);
+                    toast.error('Failed to upload file');
+                    return;
+                }
+            }
+
+            const currentDateTime = new Date().toISOString();
+
+            if (!selectedItem?.liftNumber) {
+                toast.error('No record selected');
+                return;
+            }
+
+            console.log('📤 Updating record in Supabase...');
+
+            await updateStoreInDebitNote(selectedItem.liftNumber, {
+                actual9: currentDateTime,
+                debitNoteCopy: debitNoteCopyUrl,
+                debitNoteNumber: values.debitNoteNumber || '',
+            });
+
+            console.log('✅ Update successful');
+            toast.success(`Updated status for ${selectedItem.indentNumber}`);
+            setOpenDialog(false);
+
+            // Refresh data
+            setTimeout(() => fetchAllData(), 1000);
+        } catch (error) {
+            console.error('❌ Error in onSubmit:', error);
+            if (error instanceof Error) {
+                toast.error(`Failed to update: ${error.message}`);
+            } else {
+                toast.error('Failed to update status');
+            }
+        }
+    }
+
 
     const pendingColumns: ColumnDef<StoreInPendingData>[] = [
         ...(user.receiveItemView
@@ -195,7 +277,7 @@ useEffect(() => {
             : []),
         { accessorKey: 'liftNumber', header: 'Lift Number' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' }, 
+        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'billNo', header: 'Bill No.' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
         { accessorKey: 'productName', header: 'Product Name' },
@@ -221,22 +303,17 @@ useEffect(() => {
         { accessorKey: 'transportationInclude', header: 'Transportation Include' },
         { accessorKey: 'transporterName', header: 'Transporter Name' },
         { accessorKey: 'amount', header: 'Amount' },
-        { accessorKey: 'reason', header: 'Reason' }, 
-{ 
-            accessorKey: 'plannedDate', 
+        { accessorKey: 'reason', header: 'Reason' },
+        {
+            accessorKey: 'plannedDate',
             header: 'Planned Date',
-            cell: ({ row }) => {
-                const plannedDate = row.original.plannedDate;
-                return formatDateDisplay(plannedDate); // ✅ FORMATTED DATE
-            }
+            cell: ({ row }) => formatDateDisplay(row.original.plannedDate)
         },
-         // ✅ ADD THIS LINE
-
     ];
 
     const historyColumns: ColumnDef<StoreInHistoryData>[] = [
         { accessorKey: 'liftNumber', header: 'Lift Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' }, 
+        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
         { accessorKey: 'billNo', header: 'Bill No.' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
@@ -281,7 +358,6 @@ useEffect(() => {
                 return <Pill variant={variant}>{status}</Pill>;
             },
         },
-
         {
             accessorKey: 'debitNoteCopy',
             header: 'Debit Note Copy',
@@ -326,103 +402,6 @@ useEffect(() => {
         },
     ];
 
-    const schema = z.object({
-    debitNoteCopy: z.instanceof(File).optional(),
-    debitNoteNumber: z.string().optional(),  // ✅ ADD THIS
-});
-    const form = useForm({
-    resolver: zodResolver(schema),
-    defaultValues: {
-        debitNoteCopy: undefined,
-        debitNoteNumber: '',  // ✅ ADD THIS
-    },
-});
-    useEffect(() => {
-        if (!openDialog) {
-            form.reset({
-                debitNoteCopy: undefined,
-                debitNoteNumber: '',  // ✅ ADD THIS
-            });
-        }
-    }, [openDialog, form]);
-
-
-   async function onSubmit(values: z.infer<typeof schema>) {
-    try {
-        console.log('📝 Form values:', values);
-        console.log('📦 Selected item:', selectedItem);
-        
-        const currentDateTime = new Date()
-            .toLocaleString('en-GB', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false,
-            })
-            .replace(',', '');
-
-        let debitNoteCopyUrl: string = '';
-
-        // ✅ Fixed: Properly upload the file
-        if (values.debitNoteCopy) {
-            try {
-                console.log('📤 Uploading debit note copy...');
-                debitNoteCopyUrl = await uploadFile({
-                    file: values.debitNoteCopy,
-                    folderId: import.meta.env.VITE_COMPARISON_SHEET_FOLDER
-                });
-                console.log('✅ File uploaded:', debitNoteCopyUrl);
-            } catch (uploadError) {
-                console.error('❌ Upload error:', uploadError);
-                toast.error('Failed to upload file');
-                return;
-            }
-        }
-
-        // ✅ Filter by liftNumber
-        const filteredData = storeInSheet.filter(
-            (s) => s.liftNumber === selectedItem?.liftNumber
-        );
-
-        console.log('🔍 Filtered data:', filteredData);
-
-        if (filteredData.length === 0) {
-            console.error('❌ No matching record found');
-            toast.error('No matching record found');
-            return;
-        }
-
-        // ✅ Map to correct column names
-        const updateData = filteredData.map((prev) => ({
-            rowIndex: prev.rowIndex,
-            actual9: currentDateTime,
-            debitNoteCopy: debitNoteCopyUrl,        // Maps to "Debit Note Copy"
-            debitNoteNumber: values.debitNoteNumber, // Maps to "Debit Note Number"
-        }));
-
-        console.log('📤 Update data:', updateData);
-
-        await postToSheet(updateData, 'update', 'STORE IN');
-
-        console.log('✅ Update successful');
-        toast.success(`Updated status for ${selectedItem?.indentNumber}`);
-        setOpenDialog(false);
-        setTimeout(() => updateAll(), 1000);
-    } catch (error) {
-        console.error('❌ Error in onSubmit:', error);
-        
-        if (error instanceof Error) {
-            toast.error(`Failed to update: ${error.message}`);
-        } else {
-            toast.error('Failed to update status');
-        }
-    }
-}
-
-
     function onError(e: any) {
         console.log(e);
         toast.error('Please fill all required fields');
@@ -450,7 +429,7 @@ useEffect(() => {
                                 'productName',
                                 'vendorName',
                             ]}
-                            dataLoading={false}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                     <TabsContent value="history">
@@ -464,7 +443,7 @@ useEffect(() => {
                                 'vendorName',
                                 'status',
                             ]}
-                            dataLoading={false}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                 </Tabs>
@@ -550,24 +529,24 @@ useEffect(() => {
                                             </FormItem>
                                         )}
                                     />
-                                            <FormField
-                                                control={form.control}
-                                                name="debitNoteNumber"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Debit Note Number</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                type="text"
-                                                                placeholder="Enter debit note number"
-                                                                {...field}
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                                                    
-                                                                    </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="debitNoteNumber"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Debit Note Number</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        type="text"
+                                                        placeholder="Enter debit note number"
+                                                        {...field}
+                                                    />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                </div>
 
                                 <DialogFooter>
                                     <DialogClose asChild>

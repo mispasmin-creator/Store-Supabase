@@ -1,11 +1,12 @@
 import { Package2 } from 'lucide-react';
 import Heading from '../element/Heading';
-import { useSheets } from '@/context/SheetsContext';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
 import { Pill } from '../ui/pill';
 import { useAuth } from '@/context/AuthContext';
+import { supabase, supabaseEnabled } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface HistoryData {
     poNumber: string;
@@ -36,75 +37,105 @@ interface ReceivedRecord {
 }
 
 export default function POHistory() {
-    const { poMasterLoading, poMasterSheet, indentSheet, receivedSheet } = useSheets();
     const { user } = useAuth();
+    
     const [historyData, setHistoryData] = useState<HistoryData[]>([]);
+    const [dataLoading, setDataLoading] = useState(false);
 
     useEffect(() => {
-    try {
-        // Safe array check
-        const safePoMasterSheet: POMasterRecord[] = Array.isArray(poMasterSheet) ? poMasterSheet : [];
-        
-        const filteredByFirm = safePoMasterSheet.filter((sheet: POMasterRecord) => 
-            user?.firmNameMatch?.toLowerCase() === "all" || 
-            sheet?.firmNameMatch === user?.firmNameMatch
-        );
-        
-        // Create a Map to store unique PO numbers with their data
-        const uniquePOMap = new Map<string, POMasterRecord>();
-        
-        // Filter duplicates - keep only the first occurrence of each PO number
-        filteredByFirm.forEach((sheet: POMasterRecord) => {
-            const poNumber = sheet?.poNumber;
-            if (poNumber && !uniquePOMap.has(poNumber)) {
-                uniquePOMap.set(poNumber, sheet);
-            }
-        });
-        
-        // Convert Map back to array
-        const uniquePoMasterData = Array.from(uniquePOMap.values());
-        
-        const processedHistoryData: HistoryData[] = uniquePoMasterData.map((sheet: POMasterRecord) => ({
-            approvedBy: sheet?.approvedBy || '',
-            poCopy: sheet?.pdf || '',
-            poNumber: sheet?.poNumber || '',
-            preparedBy: sheet?.preparedBy || '',
-            totalAmount: Number(sheet?.totalPoAmount) || 0,
-            vendorName: sheet?.partyName || '',
+        async function fetchPOHistory() {
+            if (!supabaseEnabled) return;
             
-            // Safe status calculation
-            status: (() => {
-                try {
-                    const safeIndentSheet: IndentRecord[] = Array.isArray(indentSheet) ? indentSheet : [];
-                    const safeReceivedSheet: ReceivedRecord[] = Array.isArray(receivedSheet) ? receivedSheet : [];
-                    
-                    const poNumber = sheet?.poNumber;
-                    if (!poNumber) return 'Unknown';
-                    
-                    const isInIndentSheet = safeIndentSheet
-                        .some((s: IndentRecord) => s?.poNumber === poNumber);
-                        
-                    const isInReceivedSheet = safeReceivedSheet
-                        .some((r: ReceivedRecord) => r?.poNumber === poNumber);
-                    
-                    if (isInIndentSheet) {
-                        return isInReceivedSheet ? 'Received' : 'Not Received';
-                    }
-                    return 'Revised';
-                } catch (error) {
-                    console.warn('Error calculating status:', error);
-                    return 'Unknown';
+            try {
+                setDataLoading(true);
+
+                // Fetch PO Master data
+                let poQuery = supabase
+                    .from('po_master')
+                    .select('*')
+                    .order('timestamp', { ascending: false });
+
+                if (user?.firmNameMatch?.toLowerCase() !== 'all') {
+                    poQuery = poQuery.eq('firm_name_match', user.firmNameMatch);
                 }
-            })()
-        }));
-        
-        setHistoryData(processedHistoryData);
-        
-    } catch (error) {
-        console.error('❌ Error in useEffect:', error);
-        setHistoryData([]);
-    }
-}, [indentSheet, poMasterSheet, receivedSheet, user?.firmNameMatch]);
+
+                const { data: poMasterData, error: poError } = await poQuery;
+                if (poError) throw poError;
+
+                // Fetch indent data to check PO status
+                const { data: indentData, error: indentError } = await supabase
+                    .from('indent')
+                    .select('indent_number, po_number')
+                    .not('po_number', 'is', null);
+
+                if (indentError) throw indentError;
+
+                // Fetch received data to check if PO is received
+                const { data: receivedData, error: receivedError } = await supabase
+                    .from('received')
+                    .select('po_number')
+                    .not('po_number', 'is', null);
+
+                if (receivedError) throw receivedError;
+
+                // Create sets for quick lookup
+                const indentPoNumbers = new Set(
+                    (indentData || [])
+                        .map(r => r.po_number)
+                        .filter(Boolean)
+                );
+
+                const receivedPoNumbers = new Set(
+                    (receivedData || [])
+                        .map(r => r.po_number)
+                        .filter(Boolean)
+                );
+
+                // Get unique PO numbers
+                const uniquePOMap = new Map<string, any>();
+                (poMasterData || []).forEach((sheet: any) => {
+                    const poNumber = sheet?.po_number;
+                    if (poNumber && !uniquePOMap.has(poNumber)) {
+                        uniquePOMap.set(poNumber, sheet);
+                    }
+                });
+
+                // Process history data
+                const processedHistoryData: HistoryData[] = Array.from(uniquePOMap.values()).map((sheet: any) => {
+                    const poNumber = sheet.po_number || '';
+                    
+                    // Determine status
+                    let status: 'Revised' | 'Not Received' | 'Received' | 'Unknown' = 'Unknown';
+                    
+                    if (indentPoNumbers.has(poNumber)) {
+                        status = receivedPoNumbers.has(poNumber) ? 'Received' : 'Not Received';
+                    } else {
+                        status = 'Revised';
+                    }
+
+                    return {
+                        approvedBy: sheet.approved_by || '',
+                        poCopy: sheet.pdf || '',
+                        poNumber: poNumber,
+                        preparedBy: sheet.prepared_by || '',
+                        totalAmount: Number(sheet.total_po_amount) || 0,
+                        vendorName: sheet.party_name || '',
+                        status: status,
+                    };
+                });
+
+                setHistoryData(processedHistoryData);
+            } catch (error) {
+                console.error('Error fetching PO history:', error);
+                toast.error('Failed to fetch PO history');
+                setHistoryData([]);
+            } finally {
+                setDataLoading(false);
+            }
+        }
+
+        fetchPOHistory();
+    }, [user?.firmNameMatch]);
 
 
     // Creating table columns
@@ -175,7 +206,7 @@ export default function POHistory() {
                 data={historyData}
                 columns={historyColumns}
                 searchFields={['vendorName', 'poNumber', 'preparedBy', 'approvedBy']}
-                dataLoading={poMasterLoading}
+                dataLoading={dataLoading}
                 className='h-[80dvh]'
             />
         </div>

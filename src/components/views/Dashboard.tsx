@@ -11,12 +11,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ChartContainer, ChartTooltip, type ChartConfig } from '../ui/chart';
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts';
 import { useEffect, useState } from 'react';
-import { useSheets } from '@/context/SheetsContext';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { format } from 'date-fns';
 import { Calendar } from '../ui/calendar';
 import { ComboBox } from '../ui/combobox';
+import { fetchIndentRecords, type IndentRecord } from '@/services/indentService';
+import { fetchStoreInRecords, type StoreInRecord } from '@/services/storeInService';
+import { fetchIssueRecords, type IssueRecord } from '@/services/issueService';
+import { fetchMasterOptions } from '@/services/masterService';
 
 interface ChartDataItem {
     name: string;
@@ -40,38 +43,6 @@ interface AlertsData {
     outOfStock: number;
 }
 
-interface IndentSheetItem {
-    planned4?: string;
-    actual4?: string;
-    approvedVendorName?: string | number;
-    firmName?: string;
-    indentNumber?: string;
-    productName?: string;
-    specifications?: string;
-    taxValue1?: string | number;
-    taxValue4?: string | number;
-    approvedQuantity?: number;
-    uom?: string;
-    approvedRate?: number;
-    vendorType?: string;
-    actual1?: string;
-    planned1?: string;
-    quantity?: number;
-}
-
-interface ReceivedSheetItem {
-    poNumber?: string;
-    quantity?: number;
-    vendorName?: string;
-    productName?: string;
-}
-
-interface StoreInSheetItem {
-    liftNumber?: string;
-    qty?: number;
-    actual6?: string;
-}
-
 function CustomChartTooltipContent({
     payload,
     label,
@@ -93,8 +64,11 @@ function CustomChartTooltipContent({
 }
 
 export default function Dashboard() {
-    const { receivedSheet, indentSheet, storeInSheet, inventoryLoading } = useSheets();
-    
+    const [indents, setIndents] = useState<IndentRecord[]>([]);
+    const [storeIns, setStoreIns] = useState<StoreInRecord[]>([]);
+    const [issues, setIssues] = useState<IssueRecord[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
     const [chartData, setChartData] = useState<ChartDataItem[]>([]);
     const [topVendorsData, setTopVendors] = useState<VendorDataItem[]>([]);
     const [indent, setIndent] = useState<StatsData>({ count: 0, quantity: 0 });
@@ -110,29 +84,44 @@ export default function Dashboard() {
     const [allProducts, setAllProducts] = useState<string[]>([]);
 
     useEffect(() => {
-        if (!indentSheet || !receivedSheet || !storeInSheet) return;
+        const loadData = async () => {
+            try {
+                setIsLoading(true);
+                const [iData, sData, issueData, mData] = await Promise.all([
+                    fetchIndentRecords(),
+                    fetchStoreInRecords(),
+                    fetchIssueRecords(),
+                    fetchMasterOptions()
+                ]);
+                setIndents(iData);
+                setStoreIns(sData);
+                setIssues(issueData);
+                setAllVendors(mData.vendorNames);
+            } catch (error) {
+                console.error("Error loading dashboard data:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadData();
+    }, []);
 
-        // Get unique vendors and products
-        const vendors = Array.from(
-            new Set(
-                indentSheet
-                    .filter((item: IndentSheetItem) => item.approvedVendorName)
-                    .map((item: IndentSheetItem) => String(item.approvedVendorName))
-            )
-        );
-        setAllVendors(vendors);
+    useEffect(() => {
+        if (isLoading) return;
+
+        // Get unique products from Indents
 
         const products = Array.from(
             new Set(
-                indentSheet
-                    .filter((item: IndentSheetItem) => item.productName)
-                    .map((item: IndentSheetItem) => item.productName || '')
+                indents
+                    .filter((item) => item.product_name)
+                    .map((item) => item.product_name || '')
             )
         );
         setAllProducts(products);
 
         // Filter data by date range, vendors, and products
-        const filterByDateAndSelection = (item: IndentSheetItem) => {
+        const filterByDateAndSelection = (item: IndentRecord) => {
             let valid = true;
 
             if (startDate && item.actual1) {
@@ -145,29 +134,29 @@ export default function Dashboard() {
                 valid = valid && itemDate <= endDate;
             }
 
-            if (filteredVendors.length > 0 && item.approvedVendorName) {
-                valid = valid && filteredVendors.includes(String(item.approvedVendorName));
+            if (filteredVendors.length > 0 && item.vendor_name) {
+                valid = valid && filteredVendors.includes(String(item.vendor_name));
             }
 
-            if (filteredProducts.length > 0 && item.productName) {
-                valid = valid && filteredProducts.includes(item.productName);
+            if (filteredProducts.length > 0 && item.product_name) {
+                valid = valid && filteredProducts.includes(item.product_name);
             }
 
             return valid;
         };
 
         // Calculate Approved Indents (actual1 is filled)
-        const approvedIndents = indentSheet.filter(
-            (item: IndentSheetItem) => item.actual1 && filterByDateAndSelection(item)
+        const approvedIndents = indents.filter(
+            (item) => item.actual1 && filterByDateAndSelection(item)
         );
         const totalApprovedQuantity = approvedIndents.reduce(
-            (sum: number, item: IndentSheetItem) => sum + (item.approvedQuantity || 0),
+            (sum, item) => sum + (item.approved_quantity || 0),
             0
         );
         setIndent({ count: approvedIndents.length, quantity: totalApprovedQuantity });
 
-        // Calculate Purchases (from receivedSheet)
-        const filterReceived = (item: ReceivedSheetItem) => {
+        // Calculate Purchases (Store In - Received items)
+        const filterStoreIn = (item: StoreInRecord) => {
             let valid = true;
             if (filteredVendors.length > 0 && item.vendorName) {
                 valid = valid && filteredVendors.includes(item.vendorName);
@@ -178,30 +167,41 @@ export default function Dashboard() {
             return valid;
         };
 
-        const purchases = receivedSheet.filter(filterReceived);
+        // Assuming Purchases = Received items (Stage 6)
+        const purchases = storeIns.filter(item => item.actual6 && filterStoreIn(item));
         const totalPurchasedQuantity = purchases.reduce(
-            (sum: number, item: ReceivedSheetItem) => sum + (item.quantity || 0),
+            (sum, item) => sum + (item.receivedQuantity || 0),
             0
         );
         setPurchase({ count: purchases.length, quantity: totalPurchasedQuantity });
 
-        // Calculate Out/Issued (from storeInSheet with actual6 filled)
-        const issued = storeInSheet.filter((item: StoreInSheetItem) => item.actual6);
+        // Calculate Out/Issued (from Issue Records)
+        // Using Issue Service for "Issued" stats
+        const filterIssue = (item: IssueRecord) => {
+            let valid = true;
+            // Issue record might not have vendor name in the same way, but has product name
+            if (filteredProducts.length > 0 && item.product_name) {
+                valid = valid && filteredProducts.includes(item.product_name);
+            }
+            return valid;
+        }
+
+        const issued = issues.filter(item => item.actual1 && filterIssue(item)); // actual1 is issue date
         const totalIssuedQuantity = issued.reduce(
-            (sum: number, item: StoreInSheetItem) => sum + (item.qty || 0),
+            (sum, item) => sum + (item.given_qty || 0),
             0
         );
         setOut({ count: issued.length, quantity: totalIssuedQuantity });
 
-        // Calculate Top Products by frequency and quantity
+        // Calculate Top Products by frequency and quantity (based on Approved Indents)
         const productMap: Record<string, { frequency: number; quantity: number }> = {};
-        approvedIndents.forEach((item: IndentSheetItem) => {
-            if (item.productName) {
-                if (!productMap[item.productName]) {
-                    productMap[item.productName] = { frequency: 0, quantity: 0 };
+        approvedIndents.forEach((item) => {
+            if (item.product_name) {
+                if (!productMap[item.product_name]) {
+                    productMap[item.product_name] = { frequency: 0, quantity: 0 };
                 }
-                productMap[item.productName].frequency += 1;
-                productMap[item.productName].quantity += item.approvedQuantity || 0;
+                productMap[item.product_name].frequency += 1;
+                productMap[item.product_name].quantity += item.approved_quantity || 0;
             }
         });
 
@@ -216,16 +216,16 @@ export default function Dashboard() {
 
         setChartData(topProducts);
 
-        // Calculate Top Vendors
+        // Calculate Top Vendors (based on Approved Indents)
         const vendorMap: Record<string, { orders: number; quantity: number }> = {};
-        approvedIndents.forEach((item: IndentSheetItem) => {
-            const vendorName = String(item.approvedVendorName || '');
+        approvedIndents.forEach((item) => {
+            const vendorName = String(item.vendor_name || '');
             if (vendorName) {
                 if (!vendorMap[vendorName]) {
                     vendorMap[vendorName] = { orders: 0, quantity: 0 };
                 }
                 vendorMap[vendorName].orders += 1;
-                vendorMap[vendorName].quantity += item.approvedQuantity || 0;
+                vendorMap[vendorName].quantity += item.approved_quantity || 0;
             }
         });
 
@@ -240,10 +240,10 @@ export default function Dashboard() {
 
         setTopVendors(topVendors);
 
-        // For now, set alerts to 0 (you can implement inventory tracking logic)
+        // Alerts (can be implemented with inventoryService later)
         setAlerts({ lowStock: 0, outOfStock: 0 });
 
-    }, [startDate, endDate, filteredProducts, filteredVendors, indentSheet, receivedSheet, storeInSheet]);
+    }, [startDate, endDate, filteredProducts, filteredVendors, indents, storeIns, issues, isLoading]);
 
     const chartConfig = {
         quantity: {

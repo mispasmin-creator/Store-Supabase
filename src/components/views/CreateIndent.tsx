@@ -15,31 +15,26 @@ import {
 } from '@/components/ui/select';
 import { ClipLoader as Loader } from 'react-spinners';
 import { ClipboardList, Trash, Search } from 'lucide-react';
-import { postToSheet, uploadFile } from '@/lib/fetchers';
-import type { IndentSheet } from '@/types';
 import { useSheets } from '@/context/SheetsContext';
 import Heading from '../element/Heading';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { supabase, supabaseEnabled } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 
 export default () => {
-    const { indentSheet: sheet, updateIndentSheet, masterSheet: options } = useSheets();
-    const [indentSheet, setIndentSheet] = useState<IndentSheet[]>([]);
+    const { masterSheet: options } = useSheets();
+    const { user } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [searchTermGroupHead, setSearchTermGroupHead] = useState('');
     const [searchTermProductName, setSearchTermProductName] = useState('');
     const [searchTermUOM, setSearchTermUOM] = useState('');
     const [searchTermFirmName, setSearchTermFirmName] = useState('');
-    useEffect(() => {
-        setIndentSheet(sheet);
-    }, [sheet]);
 
     const schema = z.object({
         indenterName: z.string().nonempty(),
-        // indentApproveBy: z.string().nonempty(),
-        // indentType: z.enum(['Purchase', 'Store Out'], { required_error: 'Select a status' }),
         indentStatus: z.enum(['Critical', 'None Critical'], {
             required_error: 'Select indent status',
-        }), // Add this line
+        }),
         products: z
             .array(
                 z.object({
@@ -62,8 +57,6 @@ export default () => {
         resolver: zodResolver(schema),
         defaultValues: {
             indenterName: '',
-            // indentApproveBy: '',
-            // indentType: undefined,
             indentStatus: undefined,
             products: [
                 {
@@ -88,106 +81,137 @@ export default () => {
         name: 'products',
     });
 
-   // ... imports and other code remains the same ...
+    // Helper: Generate next indent number from Supabase
+    const getNextIndentNumber = async (): Promise<string> => {
+        try {
+            const { data, error } = await supabase
+                .from('indent')
+                .select('indent_number')
+                .order('indent_number', { ascending: false })
+                .limit(1);
 
-async function onSubmit(data: z.infer<typeof schema>) {
-    try {
-        // Helper: find next indent number based on last available indent number
-        const getNextIndentNumber = (existingIndents: Partial<IndentSheet>[]) => {
-            if (!Array.isArray(existingIndents) || existingIndents.length === 0)
-                return 'SI-0001';
+            if (error) throw error;
 
-            // Get all available indent numbers (only existing rows in sheet)
-            const availableNumbers = existingIndents
-                .filter(
-                    (indent) => indent.indentNumber && typeof indent.indentNumber === 'string'
-                )
-                .map((indent) => indent.indentNumber!)
-                .filter((num) => /^SI-\d+$/.test(num))
-                .map((num) => parseInt(num.split('-')[1], 10));
+            if (!data || data.length === 0) return 'SI-0001';
 
-            // If no valid numbers found, start from 1
-            if (availableNumbers.length === 0) return 'SI-0001';
+            const lastIndent = data[0].indent_number;
+            if (!lastIndent || !/^SI-\d+$/.test(lastIndent)) return 'SI-0001';
 
-            // Find the highest/last available indent number and increment by 1
-            const lastIndentNumber = Math.max(...availableNumbers);
-            return `SI-${String(lastIndentNumber + 1).padStart(4, '0')}`;
-        };
+            const lastNumber = parseInt(lastIndent.split('-')[1], 10);
+            return `SI-${String(lastNumber + 1).padStart(4, '0')}`;
+        } catch (error) {
+            console.error('Error generating indent number:', error);
+            return 'SI-0001';
+        }
+    };
 
-        // IMPORTANT: Fresh data sheet se le lo before generating indent number
-        await updateIndentSheet(); // Pehle fresh data load karo
+    // Helper: Upload file to Supabase Storage
+    const uploadFileToSupabase = async (file: File, indentNumber: string): Promise<string> => {
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${indentNumber}_${Date.now()}.${fileExt}`;
+            const filePath = `indent-attachments/${fileName}`;
 
-        // Wait for state to update
-        await new Promise((resolve) => setTimeout(resolve, 500));
+            const { error: uploadError } = await supabase.storage
+                .from('attachments')
+                .upload(filePath, file);
 
-        // Ab fresh data ke saath indent number generate karo
-        const nextIndentNumber = getNextIndentNumber(indentSheet || []);
+            if (uploadError) throw uploadError;
 
-        const rows: Partial<IndentSheet>[] = [];
-        for (const product of data.products) {
-            const row: Partial<IndentSheet> = {
-                timestamp: new Date().toISOString(),
-                indentNumber: nextIndentNumber,
-                indenterName: data.indenterName,
-                department: product.department,
-                areaOfUse: product.areaOfUse,
-                groupHead: product.groupHead,
-                productName: product.productName,
-                quantity: product.quantity,
-                uom: product.uom,
-                firmName: product.firmName,
-                specifications: product.specifications || '',
-                indentStatus: data.indentStatus,
-                noDay: product.numberOfDays,
-            };
+            const { data: { publicUrl } } = supabase.storage
+                .from('attachments')
+                .getPublicUrl(filePath);
 
-            // ✅ FIXED: Check if attachment exists and is a valid File object
-            if (product.attachment && product.attachment instanceof File) {
-                try {
-                    row.attachment = await uploadFile({
-                        file: product.attachment, // ✅ ADDED: Pass the file parameter
-                        folderId: import.meta.env.VITE_IDENT_ATTACHMENT_FOLDER
-                    });
-                } catch (uploadError) {
-                    console.error('File upload failed:', uploadError);
-                    // Continue without attachment if upload fails
-                    row.attachment = 'Upload Failed';
-                }
+            return publicUrl;
+        } catch (error) {
+            console.error('File upload error:', error);
+            throw error;
+        }
+    };
+
+    async function onSubmit(data: z.infer<typeof schema>) {
+        try {
+            if (!supabaseEnabled) {
+                toast.error('Supabase is not enabled. Please configure Supabase.');
+                return;
             }
 
-            rows.push(row);
+            // Generate next indent number
+            const nextIndentNumber = await getNextIndentNumber();
+
+            // Prepare rows for insertion (with snake_case for database)
+            const rows = [];
+            for (const product of data.products) {
+                let attachmentUrl = '';
+
+                // Upload attachment if exists
+                if (product.attachment && product.attachment instanceof File) {
+                    try {
+                        attachmentUrl = await uploadFileToSupabase(
+                            product.attachment,
+                            nextIndentNumber
+                        );
+                    } catch (uploadError) {
+                        console.error('File upload failed:', uploadError);
+                        toast.warning('Attachment upload failed, continuing without it');
+                    }
+                }
+
+                // Map to database schema (snake_case)
+                const row = {
+                    timestamp: new Date().toISOString(),
+                    indent_number: nextIndentNumber,
+                    indenter_name: data.indenterName,
+                    department: product.department,
+                    area_of_use: product.areaOfUse,
+                    group_head: product.groupHead,
+                    product_name: product.productName,
+                    quantity: product.quantity,
+                    uom: product.uom,
+                    firm_name: product.firmName,
+                    specifications: product.specifications || '',
+                    indent_status: data.indentStatus,
+                    no_day: product.numberOfDays,
+                    attachment: attachmentUrl,
+                    firm_name_match: user?.firmNameMatch || '',
+                    status: 'Pending',
+                };
+
+                rows.push(row);
+            }
+
+            // Insert into Supabase
+            const { error } = await supabase.from('indent').insert(rows);
+
+            if (error) throw error;
+
+            toast.success(`Indent ${nextIndentNumber} created successfully!`);
+
+            // Reset form
+            form.reset({
+                indenterName: '',
+                indentStatus: undefined,
+                products: [
+                    {
+                        attachment: undefined,
+                        uom: '',
+                        firmName: '',
+                        productName: '',
+                        specifications: '',
+                        quantity: 1,
+                        areaOfUse: '',
+                        numberOfDays: 1,
+                        groupHead: '',
+                        department: '',
+                    },
+                ],
+            });
+        } catch (error) {
+            console.error('Error in onSubmit:', error);
+            toast.error('Error while creating indent! Please try again');
         }
-
-        await postToSheet(rows);
-        setTimeout(() => updateIndentSheet(), 1000);
-
-        toast.success('Indent created successfully');
-
-        form.reset({
-            indenterName: '',
-            indentStatus: undefined,
-            products: [
-                {
-                    attachment: undefined,
-                    uom: '',
-                    firmName: '',
-                    productName: '',
-                    specifications: '',
-                    quantity: 1,
-                    areaOfUse: '',
-                    numberOfDays: 1,
-                    groupHead: '',
-                    department: '',
-                },
-            ],
-        });
-    } catch (error) {
-        console.error('Error in onSubmit:', error);
-        toast.error('Error while creating indent! Please try again');
     }
-}
 
-// ... rest of the code remains the same ...
     function onError(e: any) {
         console.log(e);
         toast.error('Please fill all required fields');
@@ -259,8 +283,6 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                         firmName: '',
                                         areaOfUse: '',
                                         numberOfDays: 1,
-                                        // @ts-ignore
-                                        priority: undefined,
                                         attachment: undefined,
                                         specifications: '',
                                     })
@@ -271,8 +293,10 @@ async function onSubmit(data: z.infer<typeof schema>) {
                         </div>
 
                         {fields.map((field, index) => {
-                            const groupHead = products[index]?.groupHead;
-                            const productOptions = options?.groupHeads[groupHead] || [];
+                            const currentDept = products[index]?.department;
+                            const currentGroupHead = products[index]?.groupHead;
+                            const groupHeadOptions = options?.groupHeads[currentDept] || [];
+                            const productOptions = options?.products[currentGroupHead] || [];
 
                             return (
                                 <div
@@ -300,13 +324,18 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <FormLabel>
-                                                            Location
+                                                            Department
                                                             <span className="text-destructive">
                                                                 *
                                                             </span>
                                                         </FormLabel>
                                                         <Select
-                                                            onValueChange={field.onChange}
+                                                            onValueChange={(val) => {
+                                                                field.onChange(val);
+                                                                // Reset dependent fields
+                                                                form.setValue(`products.${index}.groupHead`, '');
+                                                                form.setValue(`products.${index}.productName`, '');
+                                                            }}
                                                             value={field.value}
                                                         >
                                                             <FormControl>
@@ -315,11 +344,10 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                                 </SelectTrigger>
                                                             </FormControl>
                                                             <SelectContent>
-                                                                {/* 🔍 Search Box */}
                                                                 <div className="flex items-center border-b px-3 pb-3">
                                                                     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                                                                     <input
-                                                                        placeholder="Search departments..."
+                                                                        placeholder="Search locations..."
                                                                         value={searchTerm}
                                                                         onChange={(e) =>
                                                                             setSearchTerm(
@@ -328,13 +356,11 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                                         }
                                                                         onKeyDown={(e) =>
                                                                             e.stopPropagation()
-                                                                        } // ✅ Prevent 1-letter freeze
+                                                                        }
                                                                         className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                                                                     />
                                                                 </div>
-
-                                                                {/* Filtered List */}
-                                                                {options?.departments
+                                                                {(options?.departments || [])
                                                                     .filter((dep) =>
                                                                         dep
                                                                             .toLowerCase()
@@ -367,8 +393,13 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                             </span>
                                                         </FormLabel>
                                                         <Select
-                                                            onValueChange={field.onChange}
+                                                            onValueChange={(val) => {
+                                                                field.onChange(val);
+                                                                // Reset dependent fields
+                                                                form.setValue(`products.${index}.productName`, '');
+                                                            }}
                                                             value={field.value}
+                                                            disabled={!currentDept}
                                                         >
                                                             <FormControl>
                                                                 <SelectTrigger className="w-full">
@@ -376,7 +407,6 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                                 </SelectTrigger>
                                                             </FormControl>
                                                             <SelectContent>
-                                                                {/* 🔍 Search Box */}
                                                                 <div className="flex items-center border-b px-3 pb-3">
                                                                     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                                                                     <input
@@ -389,28 +419,24 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                                         }
                                                                         onKeyDown={(e) =>
                                                                             e.stopPropagation()
-                                                                        } // ✅ Prevent 1-letter freeze
+                                                                        }
                                                                         className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                                                                     />
                                                                 </div>
-
-                                                                {/* Filtered List */}
-                                                                {Object.keys(
-                                                                    options?.groupHeads || {}
-                                                                )
-                                                                    .filter((dep) =>
-                                                                        dep
+                                                                {groupHeadOptions
+                                                                    .filter((gh) =>
+                                                                        gh
                                                                             .toLowerCase()
                                                                             .includes(
                                                                                 searchTermGroupHead.toLowerCase()
                                                                             )
                                                                     )
-                                                                    .map((dep, i) => (
+                                                                    .map((gh, i) => (
                                                                         <SelectItem
                                                                             key={i}
-                                                                            value={dep}
+                                                                            value={gh}
                                                                         >
-                                                                            {dep}
+                                                                            {gh}
                                                                         </SelectItem>
                                                                     ))}
                                                             </SelectContent>
@@ -431,7 +457,7 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                         </FormLabel>
                                                         <FormControl>
                                                             <Input
-                                                                placeholder="Enter area of user"
+                                                                placeholder="Enter area of use"
                                                                 {...field}
                                                             />
                                                         </FormControl>
@@ -452,7 +478,7 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                         <Select
                                                             onValueChange={field.onChange}
                                                             value={field.value}
-                                                            disabled={!groupHead}
+                                                            disabled={!currentGroupHead}
                                                         >
                                                             <FormControl>
                                                                 <SelectTrigger className="w-full">
@@ -460,7 +486,6 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                                 </SelectTrigger>
                                                             </FormControl>
                                                             <SelectContent>
-                                                                {/* 🔍 Search Box */}
                                                                 <div className="flex items-center border-b px-3 pb-3">
                                                                     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                                                                     <input
@@ -475,26 +500,24 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                                         }
                                                                         onKeyDown={(e) =>
                                                                             e.stopPropagation()
-                                                                        } // ✅ Freeze fix
+                                                                        }
                                                                         className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                                                                     />
                                                                 </div>
-
-                                                                {/* Filtered List */}
                                                                 {productOptions
-                                                                    .filter((dep) =>
-                                                                        dep
+                                                                    .filter((prod: string) =>
+                                                                        prod
                                                                             .toLowerCase()
                                                                             .includes(
                                                                                 searchTermProductName.toLowerCase()
                                                                             )
                                                                     )
-                                                                    .map((dep, i) => (
+                                                                    .map((prod: string, i: number) => (
                                                                         <SelectItem
                                                                             key={i}
-                                                                            value={dep}
+                                                                            value={prod}
                                                                         >
-                                                                            {dep}
+                                                                            {prod}
                                                                         </SelectItem>
                                                                     ))}
                                                             </SelectContent>
@@ -517,7 +540,7 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                             <Input
                                                                 type="number"
                                                                 {...field}
-                                                                disabled={!groupHead}
+                                                                disabled={!currentGroupHead}
                                                             />
                                                         </FormControl>
                                                     </FormItem>
@@ -537,7 +560,7 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                         <Select
                                                             onValueChange={field.onChange}
                                                             value={field.value}
-                                                            disabled={!groupHead}
+                                                            disabled={!currentGroupHead}
                                                         >
                                                             <FormControl>
                                                                 <SelectTrigger className="w-full">
@@ -545,7 +568,6 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                                 </SelectTrigger>
                                                             </FormControl>
                                                             <SelectContent>
-                                                                {/* 🔍 Search Box */}
                                                                 <div className="flex items-center border-b px-3 pb-3">
                                                                     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                                                                     <input
@@ -558,8 +580,6 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                                         className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                                                                     />
                                                                 </div>
-
-                                                                {/* Filtered List */}
                                                                 {(options?.uoms || [])
                                                                     .filter((uom) =>
                                                                         uom
@@ -576,8 +596,6 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                     </FormItem>
                                                 )}
                                             />
-
-
                                             <FormField
                                                 control={form.control}
                                                 name={`products.${index}.numberOfDays`}
@@ -593,7 +611,7 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                             <Input
                                                                 type="number"
                                                                 {...field}
-                                                                disabled={!groupHead}
+                                                                disabled={!currentGroupHead}
                                                             />
                                                         </FormControl>
                                                     </FormItem>
@@ -601,7 +619,7 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                             />
                                             <FormField
                                                 control={form.control}
-                                                name={`products.${index}.firmName`}  // CHANGE FROM uom TO firmName
+                                                name={`products.${index}.firmName`}
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <FormLabel>
@@ -611,7 +629,7 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                         <Select
                                                             onValueChange={field.onChange}
                                                             value={field.value}
-                                                            disabled={!groupHead}
+                                                            disabled={!currentGroupHead}
                                                         >
                                                             <FormControl>
                                                                 <SelectTrigger className="w-full">
@@ -619,26 +637,23 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                                 </SelectTrigger>
                                                             </FormControl>
                                                             <SelectContent>
-                                                                {/* 🔍 Search Box */}
                                                                 <div className="flex items-center border-b px-3 pb-3">
                                                                     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                                                                     <input
-                                                                        placeholder="Search Firm Name..."  // CHANGE PLACEHOLDER
-                                                                        value={searchTermFirmName}  // CHANGE STATE
-                                                                        onChange={(e) => setSearchTermFirmName(e.target.value)}  // CHANGE SETTER
+                                                                        placeholder="Search Firm Name..."
+                                                                        value={searchTermFirmName}
+                                                                        onChange={(e) => setSearchTermFirmName(e.target.value)}
                                                                         onKeyDown={(e) => e.stopPropagation()}
                                                                         className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
                                                                     />
                                                                 </div>
-
-                                                                {/* Filtered List */}
                                                                 {(options?.firms || [])
-                                                                    .filter((firm) =>  // CHANGE VARIABLE NAME
+                                                                    .filter((firm) =>
                                                                         firm
                                                                             .toLowerCase()
-                                                                            .includes(searchTermFirmName.toLowerCase())  // CHANGE STATE
+                                                                            .includes(searchTermFirmName.toLowerCase())
                                                                     )
-                                                                    .map((firm, i) => (  // CHANGE VARIABLE NAME
+                                                                    .map((firm, i) => (
                                                                         <SelectItem key={i} value={firm}>
                                                                             {firm}
                                                                         </SelectItem>
@@ -648,7 +663,6 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                     </FormItem>
                                                 )}
                                             />
-
                                         </div>
                                         <FormField
                                             control={form.control}
@@ -676,7 +690,7 @@ async function onSubmit(data: z.infer<typeof schema>) {
                                                     <FormControl>
                                                         <Textarea
                                                             placeholder="Enter specifications"
-                                                            className="resize-y" // or "resize-y" to allow vertical resizing
+                                                            className="resize-y"
                                                             {...field}
                                                         />
                                                     </FormControl>

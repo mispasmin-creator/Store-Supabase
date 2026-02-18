@@ -1,12 +1,13 @@
 import { CheckCircle } from 'lucide-react';
 import Heading from '../element/Heading';
-import { useSheets } from '@/context/SheetsContext';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { formatDate } from '@/lib/utils';
 import DataTable from '../element/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { Pill } from '../ui/pill';
+import { supabase, supabaseEnabled } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface ApprovedPOData {
     date: string;
@@ -24,113 +25,114 @@ interface ApprovedPOData {
     poRequiredStatus: 'Yes';
 }
 
-interface IndentSheetRecord {
-    timestamp?: string | number | Date;
-    firmName?: string;
-    firmNameMatch?: string;
-    poRequred?: string;
-    planned4?: string | number | Date;
-    indentNumber?: string;
-    productName?: string;
-    pendingPoQty?: string | number;
-    quantity?: string | number;
-    approvedRate?: string | number;
-    rate1?: string | number;
-    uom?: string;
-    approvedVendorName?: string;
-    vendorName1?: string;
-    approvedPaymentTerm?: string;
-    paymentTerm1?: string;
-    specifications?: string;
-}
-
-interface POMasterRecord {
-    internalCode?: string;
-}
-
 export default function ApprovedPOs() {
-    const { indentSheet, poMasterSheet, indentLoading } = useSheets();
     const { user } = useAuth();
 
     const [approvedTableData, setApprovedTableData] = useState<ApprovedPOData[]>([]);
+    const [dataLoading, setDataLoading] = useState(false);
 
-    useEffect(() => {
-        console.log(indentSheet);
-    }, [indentSheet]);
-
-    // Fetching approved PO data (ONLY "Yes" entries) and filtering out PO Master entries
-    useEffect(() => {
-        // Get all internal codes from PO Master sheet
-        const poMasterInternalCodes = new Set(
-            (poMasterSheet as POMasterRecord[] || [])
-                .filter((sheet: POMasterRecord) => sheet.internalCode)
-                .map((sheet: POMasterRecord) => sheet.internalCode?.toString().trim())
-                .filter(Boolean)
-        );
-
-        console.log('PO Master Internal Codes:', Array.from(poMasterInternalCodes));
-
-        // Filter by firm name first
-        const filteredByFirm = indentSheet.filter((sheet: IndentSheetRecord) => 
-            user?.firmNameMatch?.toLowerCase() === "all" || sheet.firmName === user?.firmNameMatch
-        );
+    // Fetch pending PO data from Supabase
+    const fetchPendingPOs = async () => {
+        if (!supabaseEnabled) return;
         
-        const mappedData = filteredByFirm
-            .filter((sheet: IndentSheetRecord) => {
-                // Show ONLY when poRequred (column BT) has "Yes" value
-                const isPoRequired = sheet.poRequred && 
-                      sheet.poRequred.toString().trim() === 'Yes';
-                
-                // Check if indent number exists in PO Master internal codes
-                const indentNumber = sheet.indentNumber?.toString().trim();
+        try {
+            setDataLoading(true);
+
+            // First, get all internal codes from PO Master
+            const { data: poMasterData, error: poMasterError } = await supabase
+                .from('po_master')
+                .select('internal_code');
+
+            if (poMasterError) throw poMasterError;
+
+            const poMasterInternalCodes = new Set(
+                (poMasterData || [])
+                    .filter((record) => record.internal_code)
+                    .map((record) => record.internal_code?.toString().trim())
+                    .filter(Boolean)
+            );
+
+            console.log('PO Master Internal Codes:', Array.from(poMasterInternalCodes));
+
+            // Fetch indents where po_required = 'Yes'
+            let query = supabase
+                .from('indent')
+                .select('*')
+                .eq('po_requred', 'Yes'); // Note: column name has typo in DB
+
+            // Filter by firm name if not "all"
+            if (user?.firmNameMatch?.toLowerCase() !== 'all') {
+                query = query.eq('firm_name', user.firmNameMatch);
+            }
+
+            const { data: indentData, error: indentError } = await query;
+
+            if (indentError) throw indentError;
+
+            // Filter out indents that already exist in PO Master
+            const filteredData = (indentData || []).filter((sheet) => {
+                const indentNumber = sheet.indent_number?.toString().trim();
                 const existsInPoMaster = indentNumber && poMasterInternalCodes.has(indentNumber);
                 
-                console.log(`Indent: ${indentNumber}, PO Required: ${isPoRequired}, Exists in PO Master: ${existsInPoMaster}`);
+                console.log(`Indent: ${indentNumber}, Exists in PO Master: ${existsInPoMaster}`);
                 
-                return isPoRequired && !existsInPoMaster;
-            })
-            .map((sheet: IndentSheetRecord) => {
-                let formattedDate = '';
-                let formattedPlannedDate = '';
-                
-                try {
-                    if (sheet.timestamp) {
-                        formattedDate = formatDate(new Date(sheet.timestamp));
+                return !existsInPoMaster;
+            });
+
+            // Map to table data format
+            const mappedData = filteredData
+                .map((sheet) => {
+                    let formattedDate = '';
+                    let formattedPlannedDate = '';
+                    
+                    try {
+                        if (sheet.timestamp) {
+                            formattedDate = formatDate(new Date(sheet.timestamp));
+                        }
+                    } catch (error) {
+                        console.warn('Invalid timestamp format:', sheet.timestamp);
                     }
-                } catch (error) {
-                    console.warn('Invalid timestamp format:', sheet.timestamp);
-                }
 
-                try {
-                    if (sheet.planned4) {
-                        formattedPlannedDate = formatDate(new Date(sheet.planned4));
+                    try {
+                        if (sheet.planned4) {
+                            formattedPlannedDate = formatDate(new Date(sheet.planned4));
+                        }
+                    } catch (error) {
+                        console.warn('Invalid planned date format:', sheet.planned4);
                     }
-                } catch (error) {
-                    console.warn('Invalid planned date format:', sheet.planned4);
-                }
 
-                return {
-                    date: formattedDate,
-                    plannedDate: formattedPlannedDate,
-                    indentNo: sheet.indentNumber?.toString() || '',
-                    firmNameMatch: sheet.firmNameMatch || '',
-                    product: sheet.productName || '',
-                    quantity: Number(sheet.pendingPoQty) || Number(sheet.quantity) || 0,
-                    rate: Number(sheet.approvedRate) || Number(sheet.rate1) || 0,
-                    uom: sheet.uom || '',
-                    vendorName: sheet.approvedVendorName || sheet.vendorName1 || '',
-                    paymentTerm: sheet.approvedPaymentTerm || sheet.paymentTerm1 || '',
-                    specifications: sheet.specifications || '',
-                    poRequired: sheet.poRequred?.toString() || '',
-                    poRequiredStatus: 'Yes' as const,
-                };
-            })
-            // Sort by indentNo in descending order
-            .sort((a, b) => b.indentNo.localeCompare(a.indentNo));
+                    return {
+                        date: formattedDate,
+                        plannedDate: formattedPlannedDate,
+                        indentNo: sheet.indent_number?.toString() || '',
+                        firmNameMatch: sheet.firm_name_match || '',
+                        product: sheet.product_name || '',
+                        quantity: Number(sheet.pending_po_qty) || Number(sheet.quantity) || 0,
+                        rate: Number(sheet.approved_rate) || Number(sheet.rate1) || 0,
+                        uom: sheet.uom || '',
+                        vendorName: sheet.approved_vendor_name || sheet.vendor_name1 || '',
+                        paymentTerm: sheet.approved_payment_term || sheet.payment_term1 || '',
+                        specifications: sheet.specifications || '',
+                        poRequired: sheet.po_requred?.toString() || '',
+                        poRequiredStatus: 'Yes' as const,
+                    };
+                })
+                // Sort by indentNo in descending order
+                .sort((a, b) => b.indentNo.localeCompare(a.indentNo));
 
-        console.log('Final Approved Table Data:', mappedData);
-        setApprovedTableData(mappedData);
-    }, [indentSheet, poMasterSheet, user?.firmNameMatch]);
+            console.log('Final Approved Table Data:', mappedData);
+            setApprovedTableData(mappedData);
+        } catch (err) {
+            console.error('Error fetching pending POs:', err);
+            toast.error('Failed to fetch pending POs');
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPendingPOs();
+    }, [user?.firmNameMatch]);
 
     // Creating approved PO table columns (same as history but only for "Yes" entries)
     const approvedColumns: ColumnDef<ApprovedPOData>[] = [
@@ -235,7 +237,7 @@ export default function ApprovedPOs() {
                 data={approvedTableData}
                 columns={approvedColumns}
                 searchFields={['product', 'vendorName', 'paymentTerm', 'specifications', 'firmNameMatch']}
-                dataLoading={indentLoading}
+                dataLoading={dataLoading}
                 className="h-[80dvh]"
             />
         </div>

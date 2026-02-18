@@ -9,9 +9,8 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import type { PoMasterSheet } from '@/types';
-import { postToSheet, uploadFile } from '@/lib/fetchers';
+import { uploadFile } from '@/lib/fetchers';
 import { useEffect, useState, useCallback } from 'react';
-import { useSheets } from '@/context/SheetsContext';
 import { useAuth } from '@/context/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
@@ -30,61 +29,63 @@ import { pdf } from '@react-pdf/renderer';
 import POPdf, { type POPdfProps } from '../element/POPdf';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { PDFViewer } from '@react-pdf/renderer';
+import { supabase, supabaseEnabled } from '@/lib/supabase';
+import { fetchIndents, fetchPoMaster, fetchMasterData, insertPoRecords, updateIndentsAfterPoCreation } from '@/services/poService';
 
 function generatePoNumber(poNumbers: string[]): string {
-  const prefix = 'STORE-PO-25-26-';
-  
-  console.log("🔍 All PO numbers received:", poNumbers);
-  
-  
-  if (!poNumbers || poNumbers.length === 0) {
-    console.log("⚠️ No existing PO numbers, starting from 1");
-    return `${prefix}1`;
-  }
-  
-  // Extract all numbers for this prefix
-  const existingNumbers = poNumbers
-    .filter(po => po && typeof po === 'string' && po.trim() !== '')
-    .map(po => {
-      const poStr = po.trim();
-      
-      // Check if it matches our prefix pattern exactly
-      if (poStr.startsWith(prefix)) {
-        const numberStr = poStr.replace(prefix, '').trim();
-        const num = parseInt(numberStr, 10);
-        console.log(`📝 PO: ${poStr} → Number: ${num}`);
-        return isNaN(num) ? 0 : num;
-      }
-      
-      return 0;
-    })
-    .filter(n => n > 0);
+    const prefix = 'STORE-PO-25-26-';
 
-  console.log("📊 Valid numbers found:", existingNumbers);
+    console.log("🔍 All PO numbers received:", poNumbers);
 
-  // Find highest number and add 1
-  const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-  const nextNumber = maxNumber + 1;
 
-  console.log(`✅ Max: ${maxNumber}, Next: ${nextNumber}, New PO: ${prefix}${nextNumber}`);
+    if (!poNumbers || poNumbers.length === 0) {
+        console.log("⚠️ No existing PO numbers, starting from 1");
+        return `${prefix}1`;
+    }
 
-  return `${prefix}${nextNumber}`;
+    // Extract all numbers for this prefix
+    const existingNumbers = poNumbers
+        .filter(po => po && typeof po === 'string' && po.trim() !== '')
+        .map(po => {
+            const poStr = po.trim();
+
+            // Check if it matches our prefix pattern exactly
+            if (poStr.startsWith(prefix)) {
+                const numberStr = poStr.replace(prefix, '').trim();
+                const num = parseInt(numberStr, 10);
+                console.log(`📝 PO: ${poStr} → Number: ${num}`);
+                return isNaN(num) ? 0 : num;
+            }
+
+            return 0;
+        })
+        .filter(n => n > 0);
+
+    console.log("📊 Valid numbers found:", existingNumbers);
+
+    // Find highest number and add 1
+    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+    const nextNumber = maxNumber + 1;
+
+    console.log(`✅ Max: ${maxNumber}, Next: ${nextNumber}, New PO: ${prefix}${nextNumber}`);
+
+    return `${prefix}${nextNumber}`;
 }
 
-function incrementPoRevision(poNumber: string, allPOs: PoMasterSheet[]): string {
+function incrementPoRevision(poNumber: string, allPOs: any[]): string {
     // Extract the base prefix and find the highest number
     const prefix = 'STORE-PO-25-26-';
-    
+
     // For existing PO numbers, we need to find the highest number in the entire system
     const allPoNumbers = allPOs
-        .filter(po => po.poNumber && typeof po.poNumber === 'string' && po.poNumber.trim() !== '')
-        .map(po => po.poNumber.trim());
-    
+        .filter((po: any) => po.poNumber && typeof po.poNumber === 'string' && po.poNumber.trim() !== '')
+        .map((po: any) => po.poNumber.trim());
+
     // Also include the current PO number we're revising
     allPoNumbers.push(poNumber);
-    
+
     console.log("🔍 All PO numbers for revision check:", allPoNumbers);
-    
+
     // Extract numbers from all PO numbers with the same prefix
     const existingNumbers = allPoNumbers
         .filter(po => po.startsWith(prefix))
@@ -104,13 +105,13 @@ function incrementPoRevision(poNumber: string, allPOs: PoMasterSheet[]): string 
 
     const newPoNumber = `${prefix}${nextNumber}`;
     console.log(`✅ Next PO number for revision: ${newPoNumber}`);
-    
+
     return newPoNumber;
 }
 
-function filterUniquePoNumbers(data: PoMasterSheet[]): PoMasterSheet[] {
+function filterUniquePoNumbers(data: any[]): any[] {
     const seen = new Set<string>();
-    const result: PoMasterSheet[] = [];
+    const result: any[] = [];
 
     for (const po of data) {
         if (!seen.has(po.poNumber)) {
@@ -161,15 +162,50 @@ interface MasterDetails {
     billingAddress?: string;
 }
 
+
+
+function parseCustomDate(dateStr: any): Date {
+    if (!dateStr) return new Date();
+    if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? new Date() : dateStr;
+
+    // Try standard parsing first (handles ISO strings)
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d;
+
+    // Handle DD/MM/YY HH:mm:ss or DD/MM/YYYY
+    if (typeof dateStr === 'string') {
+        const cleanStr = dateStr.trim();
+        // Regex for DD/MM/YY or DD/MM/YYYY with optional time
+        const match = cleanStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+
+        if (match) {
+            const day = parseInt(match[1], 10);
+            const month = parseInt(match[2], 10) - 1; // 0-based
+            let year = parseInt(match[3], 10);
+
+            if (year < 100) year += 2000; // Assume 20xx for 2-digit years
+
+            const hours = match[4] ? parseInt(match[4], 10) : 0;
+            const minutes = match[5] ? parseInt(match[5], 10) : 0;
+            const seconds = match[6] ? parseInt(match[6], 10) : 0;
+
+            const newD = new Date(year, month, day, hours, minutes, seconds);
+            if (!isNaN(newD.getTime())) return newD;
+        }
+    }
+
+    console.warn("Could not parse date, defaulting to now:", dateStr);
+    return new Date();
+}
+
 export default () => {
-    const {
-        indentSheet,
-        poMasterSheet,
-        updateIndentSheet,
-        updatePoMasterSheet,
-        masterSheet: details,
-    } = useSheets();
     const { user } = useAuth();
+
+    // Supabase state
+    const [indentSheet, setIndentSheet] = useState<IndentSheetItem[]>([]);
+    const [poMasterSheet, setPoMasterSheet] = useState<any[]>([]);
+    const [details, setDetails] = useState<MasterDetails | null>(null);
+    const [dataLoading, setDataLoading] = useState(false);
 
     const [readOnly, setReadOnly] = useState(-1);
     const [mode, setMode] = useState<'create' | 'revise'>('create');
@@ -179,6 +215,33 @@ export default () => {
     const [firmCompanyAddress, setFirmCompanyAddress] = useState('');
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState<POPdfProps | null>(null);
+
+    // Fetch all data from Supabase on mount
+    useEffect(() => {
+        async function loadData() {
+            if (!supabaseEnabled) return;
+
+            try {
+                setDataLoading(true);
+                const [indents, poMaster, masterData] = await Promise.all([
+                    fetchIndents(),
+                    fetchPoMaster(),
+                    fetchMasterData(),
+                ]);
+
+                setIndentSheet(indents);
+                setPoMasterSheet(poMaster);
+                setDetails(masterData);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                toast.error('Failed to load data');
+            } finally {
+                setDataLoading(false);
+            }
+        }
+
+        loadData();
+    }, []);
 
     useEffect(() => {
         if (details?.destinationAddress) {
@@ -266,48 +329,48 @@ export default () => {
     });
 
     // Vendor selection effect for CREATE mode
-   useEffect(() => {
-    if (!vendor || !details || !(details as MasterDetails).vendors || mode !== 'create') return;
+    useEffect(() => {
+        if (!vendor || !details || !(details as MasterDetails).vendors || mode !== 'create') return;
 
-    console.log("🔍 Vendor changed:", vendor);
+        console.log("🔍 Vendor changed:", vendor);
 
-    const normalize = (str: any) => {
-        // ✅ FIX: Handle cases where str might not be a string
-        if (!str) return '';
-        if (typeof str !== 'string') return String(str).trim().toLowerCase();
-        return str.trim().toLowerCase();
-    };
+        const normalize = (str: any) => {
+            // ✅ FIX: Handle cases where str might not be a string
+            if (!str) return '';
+            if (typeof str !== 'string') return String(str).trim().toLowerCase();
+            return str.trim().toLowerCase();
+        };
 
-    const selectedVendor = (details as MasterDetails).vendors?.find(
-        (v) => normalize(v.vendorName) === normalize(vendor)
-    );
+        const selectedVendor = (details as MasterDetails).vendors?.find(
+            (v) => normalize(v.vendorName) === normalize(vendor)
+        );
 
-    if (selectedVendor) {
-        console.log("✅ Matched vendor:", selectedVendor);
-        form.setValue('supplierAddress', selectedVendor.address || '', { shouldValidate: true });
-        form.setValue('gstin', selectedVendor.gstin || '', { shouldValidate: true });
-        form.setValue('companyEmail', selectedVendor.vendorEmail || '', { shouldValidate: true });
-    } else {
-        console.warn("⚠️ Vendor not found in master list:", vendor);
-        form.setValue('supplierAddress', '', { shouldValidate: true });
-        form.setValue('gstin', '', { shouldValidate: true });
-        form.setValue('companyEmail', '', { shouldValidate: true });
-    }
+        if (selectedVendor) {
+            console.log("✅ Matched vendor:", selectedVendor);
+            form.setValue('supplierAddress', selectedVendor.address || '', { shouldValidate: true });
+            form.setValue('gstin', selectedVendor.gstin || '', { shouldValidate: true });
+            form.setValue('companyEmail', selectedVendor.vendorEmail || '', { shouldValidate: true });
+        } else {
+            console.warn("⚠️ Vendor not found in master list:", vendor);
+            form.setValue('supplierAddress', '', { shouldValidate: true });
+            form.setValue('gstin', '', { shouldValidate: true });
+            form.setValue('companyEmail', '', { shouldValidate: true });
+        }
 
-    // ✅ FIX: Update the matching indents filter to handle non-string vendor names
-    const matchingIndents = indentSheet.filter((i: IndentSheetItem) => {
-        const vendorName = i.approvedVendorName;
-        const hasVendor = vendorName && (typeof vendorName === 'string' || typeof vendorName === 'number');
-        const normalizedVendorName = normalize(vendorName);
-        const normalizedSelectedVendor = normalize(vendor);
-        
-        return hasVendor && 
-               i.planned4 !== '' &&
-               i.actual4 === '' &&
-               normalizedVendorName === normalizedSelectedVendor;
-    });
+        // ✅ FIX: Update the matching indents filter to handle non-string vendor names
+        const matchingIndents = indentSheet.filter((i: IndentSheetItem) => {
+            const vendorName = i.approvedVendorName;
+            const hasVendor = vendorName && (typeof vendorName === 'string' || typeof vendorName === 'number');
+            const normalizedVendorName = normalize(vendorName);
+            const normalizedSelectedVendor = normalize(vendor);
 
-    console.log("📦 Matching indents found:", matchingIndents.length);
+            return hasVendor &&
+                i.planned4 !== '' &&
+                i.actual4 === '' &&
+                normalizedVendorName === normalizedSelectedVendor;
+        });
+
+        console.log("📦 Matching indents found:", matchingIndents.length);
 
         const firmName = matchingIndents[0]?.firmName?.trim();
         if (firmName && (details as MasterDetails).firmCompanyMap) {
@@ -336,14 +399,14 @@ export default () => {
             'indents',
             matchingIndents.map((i: IndentSheetItem) => {
                 let gstValue: number | undefined = undefined;
-                
+
                 if (i.taxValue1 && !isNaN(Number(i.taxValue1)) && Number(i.taxValue1) > 0) {
                     gstValue = Number(i.taxValue1);
                 }
                 else if (i.taxValue4 && !isNaN(Number(i.taxValue4)) && Number(i.taxValue4) > 0) {
                     gstValue = Number(i.taxValue4);
                 }
-                
+
                 return {
                     indentNumber: i.indentNumber || '',
                     productName: i.productName || '',
@@ -364,7 +427,7 @@ export default () => {
     // Mode change effect
     useEffect(() => {
         console.log("🔄 Mode changed to:", mode, "PO Master Sheet count:", poMasterSheet.length);
-        
+
         if (mode === 'revise') {
             form.reset({
                 poNumber: '',
@@ -390,10 +453,10 @@ export default () => {
             if (poMasterSheet && poMasterSheet.length > 0) {
                 const poNumbers = poMasterSheet.map((p) => p.poNumber).filter(po => po && po.trim() !== '');
                 console.log("📋 Available PO numbers for generation:", poNumbers);
-                
+
                 const newPoNumber = generatePoNumber(poNumbers);
                 console.log("🎯 Final generated PO number:", newPoNumber);
-                
+
                 form.reset({
                     poNumber: newPoNumber,
                     poDate: new Date(),
@@ -444,7 +507,7 @@ export default () => {
     useEffect(() => {
         if (mode === 'revise' && poNumber && poNumber.trim() !== '') {
             console.log("🔄 REVISE MODE: Loading PO data for:", poNumber);
-            
+
             const poItems = poMasterSheet.filter((p) => p.poNumber === poNumber);
             console.log("📦 Found PO items:", poItems.length);
 
@@ -461,9 +524,9 @@ export default () => {
                 console.log("🔍 Looking for vendor:", firstPoItem.partyName);
                 console.log("✅ Found vendor details:", vendor);
 
-                form.setValue('poDate', new Date(firstPoItem.timestamp || new Date()));
+                form.setValue('poDate', parseCustomDate(firstPoItem.timestamp));
                 form.setValue('supplierName', firstPoItem.partyName || '');
-                
+
                 if (vendor) {
                     form.setValue('supplierAddress', vendor.address || '');
                     form.setValue('gstin', vendor.gstin || '');
@@ -477,13 +540,13 @@ export default () => {
                     form.setValue('gstin', storedGstin);
                     form.setValue('companyEmail', storedEmail);
                 }
-                
+
                 form.setValue('quotationNumber', firstPoItem.quotationNumber || '');
-                form.setValue('quotationDate', firstPoItem.quotationDate ? new Date(firstPoItem.quotationDate) : new Date());
+                form.setValue('quotationDate', parseCustomDate(firstPoItem.quotationDate));
                 form.setValue('description', firstPoItem.description || '');
                 form.setValue('ourEnqNo', firstPoItem.enquiryNumber || '');
-                form.setValue('enquiryDate', firstPoItem.enquiryDate ? new Date(firstPoItem.enquiryDate) : new Date());
-                form.setValue('deliveryDate', firstPoItem.deliveryDate ? new Date(firstPoItem.deliveryDate) : new Date());
+                form.setValue('enquiryDate', parseCustomDate(firstPoItem.enquiryDate));
+                form.setValue('deliveryDate', parseCustomDate(firstPoItem.deliveryDate));
                 form.setValue('deliveryDays', firstPoItem.deliveryDays || 0);
                 form.setValue('deliveryType', (firstPoItem.deliveryType === 'for' || firstPoItem.deliveryType === 'exfactory') ? firstPoItem.deliveryType : undefined);
                 form.setValue('paymentTerms', firstPoItem.paymentTerms as any || undefined);
@@ -530,7 +593,7 @@ export default () => {
 
     async function generatePreviewData(): Promise<POPdfProps> {
         const values = form.getValues();
-        
+
         const grandTotal = calculateGrandTotal(
             values.indents.map((indent) => ({
                 quantity: indent.quantity || 0,
@@ -632,7 +695,7 @@ export default () => {
                 reader.readAsDataURL(logoBlob);
             });
 
-           const pdfProps: POPdfProps = {
+            const pdfProps: POPdfProps = {
                 companyName: firmCompanyName || (details as MasterDetails)?.companyName || '',
                 companyPhone: (details as MasterDetails)?.companyPhone || '',
                 companyGstin: (details as MasterDetails)?.companyGstin || '',
@@ -780,13 +843,22 @@ export default () => {
                 };
             });
 
-            await postToSheet(rows, 'insert', 'PO MASTER');
+            await insertPoRecords(rows);
+
+            // Update indents to mark PO as created (set actual4)
+            const indentNumbers = values.indents.map(v => v.indentNumber);
+            await updateIndentsAfterPoCreation(indentNumbers);
+
             toast.success(`Successfully ${mode}d purchase order`);
             form.reset();
-            setTimeout(() => {
-                updatePoMasterSheet();
-                updateIndentSheet();
-            }, 1000);
+
+            // Refresh data from Supabase
+            const [indents, poMaster] = await Promise.all([
+                fetchIndents(),
+                fetchPoMaster(),
+            ]);
+            setIndentSheet(indents);
+            setPoMasterSheet(poMaster);
         } catch (e) {
             console.log(e);
             toast.error(`Failed to ${mode} purchase order`);
@@ -884,7 +956,7 @@ export default () => {
                                         <FormItem>
                                             <FormLabel>PO Date</FormLabel>
                                             <FormControl>
-                                                <Input className="h-9" type="date" value={field.value ? field.value.toISOString().split('T')[0] : ''} 
+                                                <Input className="h-9" type="date" value={field.value && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
                                                     onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} />
                                             </FormControl>
                                         </FormItem>
@@ -892,97 +964,97 @@ export default () => {
                                 </div>
 
                                 <div className="grid grid-cols-3 gap-x-5">
-<FormField control={form.control} name="supplierName" render={({ field }) => (
-    <FormItem>
-        {mode === 'create' ? (
-            <FormControl>
-                <Select onValueChange={field.onChange} value={field.value || ""}>
-                    <FormLabel>Supplier Name</FormLabel>
-                    <FormControl>
-                        <SelectTrigger size="sm" className="w-full">
-                            <SelectValue placeholder="Select supplier" />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {[...new Map(
-                            indentSheet
-                                .filter((i: IndentSheetItem) => {
-                                    // ✅ FIX: Check if approvedVendorName exists and is a string
-                                    const vendorName = i.approvedVendorName;
-                                    const hasVendor = vendorName && typeof vendorName === 'string' && vendorName.trim() !== '';
-                                    const hasPlannedDate = i.planned4 !== '';
-                                    const hasNoActualDate = i.actual4 === '';
-                                    
-                                    return hasVendor && hasPlannedDate && hasNoActualDate;
-                                })
-                                .map((i) => [i.approvedVendorName, i])
-                        ).values()]
-                        .map((i, k) => (
-                            <SelectItem key={k} value={i.approvedVendorName as string}>
-                                {i.approvedVendorName as string}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </FormControl>
-        ) : (
-            <>
-                <FormLabel>Supplier Name</FormLabel>
-                <FormControl>
-                    <Input className="h-9" readOnly placeholder="Enter supplier name" {...field} />
-                </FormControl>
-            </>
-        )}
-    </FormItem>
-)} />
-                                   {/* Supplier Address - Changed to always be editable */}
-<FormField control={form.control} name="supplierAddress" render={({ field }) => (
-    <FormItem>
-        <FormLabel>Supplier Address</FormLabel>
-        <FormControl>
-            <Input 
-                className="h-9" 
-                readOnly={false}
-                placeholder="Enter supplier address" 
-                {...field} 
-                value={field.value || ''} 
-            />
-        </FormControl>
-    </FormItem>
-)} />
+                                    <FormField control={form.control} name="supplierName" render={({ field }) => (
+                                        <FormItem>
+                                            {mode === 'create' ? (
+                                                <FormControl>
+                                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                                        <FormLabel>Supplier Name</FormLabel>
+                                                        <FormControl>
+                                                            <SelectTrigger size="sm" className="w-full">
+                                                                <SelectValue placeholder="Select supplier" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {[...new Map(
+                                                                indentSheet
+                                                                    .filter((i: IndentSheetItem) => {
+                                                                        // ✅ FIX: Check if approvedVendorName exists and is a string
+                                                                        const vendorName = i.approvedVendorName;
+                                                                        const hasVendor = vendorName && typeof vendorName === 'string' && vendorName.trim() !== '';
+                                                                        const hasPlannedDate = i.planned4 !== '';
+                                                                        const hasNoActualDate = i.actual4 === '';
 
-{/* GSTIN - Changed to always be editable */}
-<FormField control={form.control} name="gstin" render={({ field }) => (
-    <FormItem>
-        <FormLabel>GSTIN</FormLabel>
-        <FormControl>
-            <Input 
-                className="h-9" 
-                readOnly={false}
-                placeholder="Enter GSTIN" 
-                {...field} 
-                value={field.value || ''} 
-            />
-        </FormControl>
-    </FormItem>
-)} />
+                                                                        return hasVendor && hasPlannedDate && hasNoActualDate;
+                                                                    })
+                                                                    .map((i) => [i.approvedVendorName, i])
+                                                            ).values()]
+                                                                .map((i, k) => (
+                                                                    <SelectItem key={k} value={i.approvedVendorName as string}>
+                                                                        {i.approvedVendorName as string}
+                                                                    </SelectItem>
+                                                                ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormControl>
+                                            ) : (
+                                                <>
+                                                    <FormLabel>Supplier Name</FormLabel>
+                                                    <FormControl>
+                                                        <Input className="h-9" readOnly placeholder="Enter supplier name" {...field} />
+                                                    </FormControl>
+                                                </>
+                                            )}
+                                        </FormItem>
+                                    )} />
+                                    {/* Supplier Address - Changed to always be editable */}
+                                    <FormField control={form.control} name="supplierAddress" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Supplier Address</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    className="h-9"
+                                                    readOnly={false}
+                                                    placeholder="Enter supplier address"
+                                                    {...field}
+                                                    value={field.value || ''}
+                                                />
+                                            </FormControl>
+                                        </FormItem>
+                                    )} />
 
-{/* Company Email - Changed to always be editable */}
-<FormField control={form.control} name="companyEmail" render={({ field }) => (
-    <FormItem>
-        <FormLabel>Company Email</FormLabel>
-        <FormControl>
-            <Input 
-                className="h-9" 
-                type="email"
-                readOnly={false}
-                placeholder="Enter company email" 
-                {...field} 
-                value={field.value || ''} 
-            />
-        </FormControl>
-    </FormItem>
-)} />
+                                    {/* GSTIN - Changed to always be editable */}
+                                    <FormField control={form.control} name="gstin" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>GSTIN</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    className="h-9"
+                                                    readOnly={false}
+                                                    placeholder="Enter GSTIN"
+                                                    {...field}
+                                                    value={field.value || ''}
+                                                />
+                                            </FormControl>
+                                        </FormItem>
+                                    )} />
+
+                                    {/* Company Email - Changed to always be editable */}
+                                    <FormField control={form.control} name="companyEmail" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Company Email</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    className="h-9"
+                                                    type="email"
+                                                    readOnly={false}
+                                                    placeholder="Enter company email"
+                                                    {...field}
+                                                    value={field.value || ''}
+                                                />
+                                            </FormControl>
+                                        </FormItem>
+                                    )} />
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-x-5">
@@ -998,7 +1070,7 @@ export default () => {
                                         <FormItem>
                                             <FormLabel>Quotation Date</FormLabel>
                                             <FormControl>
-                                                <Input className="h-9" type="date" value={field.value ? field.value.toISOString().split('T')[0] : ''} 
+                                                <Input className="h-9" type="date" value={field.value && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
                                                     onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} />
                                             </FormControl>
                                         </FormItem>
@@ -1018,7 +1090,7 @@ export default () => {
                                         <FormItem>
                                             <FormLabel>Enquiry Date</FormLabel>
                                             <FormControl>
-                                                <Input className="h-9" type="date" value={field.value ? field.value.toISOString().split('T')[0] : ''} 
+                                                <Input className="h-9" type="date" value={field.value && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
                                                     onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} />
                                             </FormControl>
                                         </FormItem>
@@ -1027,7 +1099,7 @@ export default () => {
                                         <FormItem>
                                             <FormLabel>Delivery Date</FormLabel>
                                             <FormControl>
-                                                <Input className="h-9" type="date" value={field.value ? field.value.toISOString().split('T')[0] : ''} 
+                                                <Input className="h-9" type="date" value={field.value && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
                                                     onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : undefined)} />
                                             </FormControl>
                                         </FormItem>
@@ -1079,7 +1151,7 @@ export default () => {
                                         <p><span className="font-medium">Pan No.</span> {(details as MasterDetails)?.companyPan}</p>
                                     </CardContent>
                                 </Card>
-                                
+
                                 <Card className="p-0 gap-0 shadow-xs rounded-[3px]">
                                     <CardHeader className="bg-muted px-5 py-2">
                                         <CardTitle className="text-center">Billing Address</CardTitle>
@@ -1095,13 +1167,13 @@ export default () => {
                                         )}
                                     </CardContent>
                                 </Card>
-                                
+
                                 <Card className="p-0 gap-0 shadow-xs rounded-[3px]">
                                     <CardHeader className="bg-muted px-5 py-2">
                                         <CardTitle className="text-center flex items-center justify-between">
                                             Destination Address
                                             {vendor && (
-                                                <Button type="button" variant="ghost" size="sm" 
+                                                <Button type="button" variant="ghost" size="sm"
                                                     onClick={isEditingDestination ? handleDestinationSave : handleDestinationEdit}
                                                     className="h-6 w-6 p-0 hover:bg-gray-200">
                                                     {isEditingDestination ? (
@@ -1183,7 +1255,7 @@ export default () => {
                                             {itemsArray.fields.map((field, index) => {
                                                 const formValue = form.watch(`indents.${index}`);
                                                 const amount = calculateTotal(formValue?.rate || 0, formValue?.gst || 0, formValue?.discount || 0, formValue?.quantity || 0);
-                                                
+
                                                 return (
                                                     <TableRow key={field.id}>
                                                         <TableCell>{index + 1}</TableCell>
@@ -1370,9 +1442,9 @@ export default () => {
                             <Button type="reset" variant="outline" onClick={() => form.reset()}>
                                 Reset
                             </Button>
-                            <Button 
-                                type="button" 
-                                variant="secondary" 
+                            <Button
+                                type="button"
+                                variant="secondary"
                                 onClick={handlePreview}
                                 disabled={!vendor || indents.length === 0}
                             >
@@ -1393,9 +1465,9 @@ export default () => {
                                 </DialogHeader>
                                 <div className="w-full h-[calc(95vh-70px)]">
                                     {previewData && (
-                                        <PDFViewer 
-                                            width="100%" 
-                                            height="100%" 
+                                        <PDFViewer
+                                            width="100%"
+                                            height="100%"
                                             showToolbar={true}
                                             style={{ border: 'none' }}
                                         >

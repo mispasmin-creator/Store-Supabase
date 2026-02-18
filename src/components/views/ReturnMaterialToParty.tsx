@@ -1,4 +1,3 @@
-import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
@@ -20,13 +19,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Input } from '../ui/input';
-import { postToSheet } from '@/lib/fetchers';
 import { Truck } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
+import { fetchStoreInRecords, updateStoreInReturnToParty } from '@/services/storeInService';
 
 interface StoreInPendingData {
     liftNumber: string;
@@ -43,7 +41,7 @@ interface StoreInPendingData {
     transportationInclude: string;
     transporterName: string;
     amount: number;
-    firmNameMatch: string; 
+    firmNameMatch: string;
 }
 
 interface StoreInHistoryData {
@@ -63,153 +61,112 @@ interface StoreInHistoryData {
     reason: string;
     billNumber: string;
     statusPurchaser: string;
-    firmNameMatch: string; 
+    firmNameMatch: string;
 }
 
 export default () => {
-    const { storeInSheet, updateAll } = useSheets();
     const { user } = useAuth();
 
     const [pendingData, setPendingData] = useState<StoreInPendingData[]>([]);
     const [historyData, setHistoryData] = useState<StoreInHistoryData[]>([]);
     const [selectedItem, setSelectedItem] = useState<StoreInPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
+    const [dataLoading, setDataLoading] = useState(true);
 
-// useEffect(() => {
-//         setPendingData(
-//             storeInSheet
-//                 .filter((i) => i.planned8 !== '' && i.actual8 === '')
-//                 .map((i) => ({
-//                     liftNumber: i.liftNumber || '',
-//                     indentNumber: i.indentNo || '',
-//                     billNo: i.billNo || '',
-//                     vendorName: i.vendorName || '',
-//                     productName: i.productName || '',
-//                     qty: i.qty || 0,
-//                     typeOfBill: i.typeOfBill || '',
-//                     billAmount: i.billAmount || 0,
-//                     paymentType: i.paymentType || '',
-//                     advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
-//                     photoOfBill: i.photoOfBill || '',
-//                     transportationInclude: i.transportationInclude || '',
-//                     transporterName: i.transporterName || '',
-//                     amount: i.amount || 0,
-//                 }))
-//         );
-//     }, [storeInSheet]);
+    const fetchData = async () => {
+        try {
+            setDataLoading(true);
+            const data = await fetchStoreInRecords();
 
-    
-// useEffect(() => {
-//     setHistoryData(
-//         storeInSheet
-//             .filter((i) => i.planned8 !== '' && i.actual8 !== '')
-//             .map((i) => ({
-//                 liftNumber: i.liftNumber || '',
-//                 indentNumber: i.indentNo || '',
-//                 billNo: i.billNo || '',
-//                 vendorName: i.vendorName || '',
-//                 productName: i.productName || '',
-//                 qty: i.qty || 0,
-//                 typeOfBill: i.typeOfBill || '',
-//                 billAmount: i.billAmount || 0,
-//                 paymentType: i.paymentType || '',
-//                 advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0, // Convert to number
-//                 photoOfBill: i.photoOfBill || '',
-//                 transportationInclude: i.transportationInclude || '',
-//                 status: i.status || '',
-//                 reason: i.reason || '',
-//                 billNumber: i.billNo || '',
-//                 statusPurchaser: i.statusPurchaser || '',
-//             }))
-//     );
-// }, [storeInSheet]);
+            // Filter by firm name
+            const filteredByFirm = data.filter(item =>
+                user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
+            );
 
-useEffect(() => {
-    // Pehle firm name se filter karo (case-insensitive)
-    const filteredByFirm = storeInSheet.filter(item => 
-        user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
-    );
-    
-    setPendingData(
-        filteredByFirm
-            .filter((i) => i.planned8 !== '' && i.actual8 === '')
-            .map((i) => ({
-                liftNumber: i.liftNumber || '',
-                indentNumber: i.indentNo || '',
-                billNo: i.billNo || '',
-                vendorName: i.vendorName || '',
-                productName: i.productName || '',
-                qty: i.qty || 0,
-                typeOfBill: i.typeOfBill || '',
-                billAmount: i.billAmount || 0,
-                paymentType: i.paymentType || '',
-                advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
-                photoOfBill: i.photoOfBill || '',
-                transportationInclude: i.transportationInclude || '',
-                transporterName: i.transporterName || '',
-                amount: i.amount || 0,
-                firmNameMatch: i.firmNameMatch || '',
-            }))
-    );
-}, [storeInSheet, user.firmNameMatch]);
+            const pending = filteredByFirm
+                .filter((i) => i.planned8 && i.planned8 !== '' && (!i.actual8 || i.actual8 === ''))
+                .map((i) => ({
+                    liftNumber: i.liftNumber,
+                    indentNumber: i.indentNo,
+                    billNo: i.billNo,
+                    vendorName: i.vendorName,
+                    productName: i.productName,
+                    qty: i.qty,
+                    typeOfBill: i.typeOfBill,
+                    billAmount: i.billAmount,
+                    paymentType: i.paymentType,
+                    advanceAmountIfAny: i.advanceAmountIfAny,
+                    photoOfBill: i.photoOfBill,
+                    transportationInclude: i.transportationInclude,
+                    transporterName: i.transporterName,
+                    amount: i.amount,
+                    firmNameMatch: i.firmNameMatch,
+                }));
 
-useEffect(() => {
-    // Pehle firm name se filter karo (case-insensitive)
-    const filteredByFirm = storeInSheet.filter(item => 
-        user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
-    );
-    
-    setHistoryData(
-        filteredByFirm
-            .filter((i) => i.planned8 !== '' && i.actual8 !== '')
-            .map((i) => ({
-                liftNumber: i.liftNumber || '',
-                indentNumber: i.indentNo || '',
-                billNo: i.billNo || '',
-                vendorName: i.vendorName || '',
-                productName: i.productName || '',
-                qty: i.qty || 0,
-                typeOfBill: i.typeOfBill || '',
-                billAmount: i.billAmount || 0,
-                paymentType: i.paymentType || '',
-                advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
-                photoOfBill: i.photoOfBill || '',
-                transportationInclude: i.transportationInclude || '',
-                status: i.status || '',
-                reason: i.reason || '',
-                billNumber: i.billNo || '',
-                statusPurchaser: i.statusPurchaser || '',
-                firmNameMatch: i.firmNameMatch || '',
-            }))
-    );
-}, [storeInSheet, user.firmNameMatch]);
+            setPendingData(pending);
+
+            const history = filteredByFirm
+                .filter((i) => i.planned8 && i.planned8 !== '' && i.actual8 && i.actual8 !== '')
+                .map((i) => ({
+                    liftNumber: i.liftNumber,
+                    indentNumber: i.indentNo,
+                    billNo: i.billNo,
+                    vendorName: i.vendorName,
+                    productName: i.productName,
+                    qty: i.qty,
+                    typeOfBill: i.typeOfBill,
+                    billAmount: i.billAmount,
+                    paymentType: i.paymentType,
+                    advanceAmountIfAny: i.advanceAmountIfAny,
+                    photoOfBill: i.photoOfBill,
+                    transportationInclude: i.transportationInclude,
+                    status: i.status,
+                    reason: i.reason,
+                    billNumber: i.billNumber,
+                    statusPurchaser: i.statusPurchaser,
+                    firmNameMatch: i.firmNameMatch,
+                }));
+
+            setHistoryData(history);
+
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            toast.error("Failed to fetch data");
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, [user.firmNameMatch]);
 
     const pendingColumns: ColumnDef<StoreInPendingData>[] = [
         ...(user.receiveItemView
             ? [
-                  {
-                      header: 'Action',
-                      cell: ({ row }: { row: Row<StoreInPendingData> }) => {
-                          const item = row.original;
+                {
+                    header: 'Action',
+                    cell: ({ row }: { row: Row<StoreInPendingData> }) => {
+                        const item = row.original;
 
-                          return (
-                              <DialogTrigger asChild>
-                                  <Button
-                                      variant="outline"
-                                      onClick={() => {
-                                          setSelectedItem(item);
-                                      }}
-                                  >
-                                      Process
-                                  </Button>
-                              </DialogTrigger>
-                          );
-                      },
-                  },
-              ]
+                        return (
+                            <DialogTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setSelectedItem(item);
+                                    }}
+                                >
+                                    Process
+                                </Button>
+                            </DialogTrigger>
+                        );
+                    },
+                },
+            ]
             : []),
         { accessorKey: 'liftNumber', header: 'Lift Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' }, 
+        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
         { accessorKey: 'billNo', header: 'Bill No.' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
@@ -240,7 +197,7 @@ useEffect(() => {
 
     const historyColumns: ColumnDef<StoreInHistoryData>[] = [
         { accessorKey: 'liftNumber', header: 'Lift Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' }, 
+        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
         { accessorKey: 'billNo', header: 'Bill No.' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
@@ -306,44 +263,18 @@ useEffect(() => {
         }
     }, [openDialog, form]);
 
-    //     useEffect(() => {
-    //     console.log('storeInSheet data:', storeInSheet);
-    //     console.log('storeInSheet length:', storeInSheet?.length);
-    //     if (storeInSheet?.length > 0) {
-    //         console.log('First item:', storeInSheet[0]);
-    //         console.log('planned7 values:', storeInSheet.map(item => item.planned7));
-    //         console.log('actual7 values:', storeInSheet.map(item => item.actual7));
-    //     }
-    // }, [storeInSheet]);
-
     async function onSubmit(values: z.infer<typeof schema>) {
-        try {
-            const currentDateTime = new Date()
-                .toLocaleString('en-GB', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false,
-                })
-                .replace(',', '');
+        if (!selectedItem) return;
 
-           await postToSheet(
-            storeInSheet
-                .filter((s) => s.liftNumber === selectedItem?.liftNumber)
-                .map((prev) => ({
-                    rowIndex: prev.rowIndex,  // ✅ Only send rowIndex to identify the row
-                    actual8: currentDateTime,
-                    statusPurchaser: values.statusPurchaser,
-                })),
-            'update',
-            'STORE IN'
-        );
-            toast.success(`Updated status for ${selectedItem?.liftNumber}`);
+        try {
+            await updateStoreInReturnToParty(selectedItem.liftNumber, {
+                actual8: new Date().toISOString(),
+                statusPurchaser: values.statusPurchaser,
+            });
+
+            toast.success(`Updated status for ${selectedItem.liftNumber}`);
             setOpenDialog(false);
-            setTimeout(() => updateAll(), 1000);
+            fetchData();
         } catch {
             toast.error('Failed to update status');
         }
@@ -376,7 +307,7 @@ useEffect(() => {
                                 'productName',
                                 'vendorName',
                             ]}
-                            dataLoading={false}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                     <TabsContent value="history">
@@ -390,7 +321,7 @@ useEffect(() => {
                                 'vendorName',
                                 'status',
                             ]}
-                            dataLoading={false}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                 </Tabs>

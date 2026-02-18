@@ -10,7 +10,6 @@ import {
     DialogTrigger,
 } from '../ui/dialog';
 import type { ColumnDef, Row } from '@tanstack/react-table';
-import { useSheets } from '@/context/SheetsContext';
 import { Button } from '../ui/button';
 import DataTable from '../element/DataTable';
 import { z } from 'zod';
@@ -21,15 +20,16 @@ import { Input } from '../ui/input';
 import { PuffLoader as Loader } from 'react-spinners';
 import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
-import { postToSheet } from '@/lib/fetchers';
 import { PackageCheck } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
+import { fetchIndentRecords, updateIndentStoreOutApproval, type IndentRecord } from '@/services/indentService';
 
 interface StoreOutTableData {
+    id: number;
     indentNo: string;
     department: string;
     product: string;
@@ -42,6 +42,7 @@ interface StoreOutTableData {
     attachment: string;
 }
 interface HistoryData {
+    id: number;
     approvalDate: string;
     indentNo: string;
     department: string;
@@ -56,114 +57,82 @@ interface HistoryData {
 }
 
 export default () => {
-    const { indentSheet, indentLoading, updateIndentSheet } = useSheets();
     const { user } = useAuth();
     const [openDialog, setOpenDialog] = useState(false);
     const [tableData, setTableData] = useState<StoreOutTableData[]>([]);
     const [historyData, setHistoryData] = useState<HistoryData[]>([]);
     const [selectedIndent, setSelectedIndent] = useState<StoreOutTableData | null>(null);
     const [rejecting, setRejecting] = useState(false);
+    const [dataLoading, setDataLoading] = useState(true);
 
-    // Fetching table data
-    // useEffect(() => {
-        
-    //     setTableData(
-    //         indentSheet
-    //             .filter(
-    //                 (sheet) =>
-    //                     sheet.planned6 !== '' &&
-    //                     sheet.actual6 === '' &&
-    //                     sheet.indentType === 'Store Out'
-    //             )
-    //             .map((sheet) => ({
-    //                 indentNo: sheet.indentNumber,
-    //                 indenter: sheet.indenterName,
-    //                 department: sheet.department,
-    //                 product: sheet.productName,
-    //                 date: formatDate(new Date(sheet.timestamp)),
-    //                 areaOfUse: sheet.areaOfUse,
-    //                 quantity: sheet.quantity,
-    //                 uom: sheet.uom,
-    //                 specifications: sheet.specifications || 'Not specified',
-    //                 attachment: sheet.attachment || '',
-    //             }))
-    //     );
-    //     setHistoryData(
-    //         indentSheet
-    //             .filter(
-    //                 (sheet) =>
-    //                     sheet.planned6 !== '' &&
-    //                     sheet.actual6 !== '' &&
-    //                     sheet.indentType === 'Store Out'
-    //             )
-    //             .map((sheet) => ({
-    //                 approvalDate: formatDate(new Date(sheet.actual6)),
-    //                 indentNo: sheet.indentNumber,
-    //                 indenter: sheet.indenterName,
-    //                 department: sheet.department,
-    //                 product: sheet.productName,
-    //                 date: formatDate(new Date(sheet.timestamp)),
-    //                 areaOfUse: sheet.areaOfUse,
-    //                 quantity: sheet.issuedQuantity,
-    //                 requestedQuantity: sheet.quantity,
-    //                 uom: sheet.uom,
-    //                 issuedStatus: sheet.issuedStatus,
-    //             }))
-    //     );
-    // }, [indentSheet]);
+    const fetchData = async () => {
+        try {
+            setDataLoading(true);
+            const data = await fetchIndentRecords();
 
+            // Filter by firm name match
+            const filteredByFirm = data.filter(item =>
+                user.firmNameMatch.toLowerCase() === "all" || item.firm_name_match === user.firmNameMatch
+            );
 
-    // Fetching table data
-useEffect(() => {
-    // Pehle firm name se filter karo (case-insensitive)
-    const filteredByFirm = indentSheet.filter(item => 
-        user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
-    );
-    
-    setTableData(
-        filteredByFirm
-            .filter(
-                (sheet) =>
-                    sheet.planned6 !== '' &&
-                    sheet.actual6 === '' &&
-                    sheet.indentType === 'Store Out'
-            )
-            .map((sheet) => ({
-                indentNo: sheet.indentNumber,
-                indenter: sheet.indenterName,
-                department: sheet.department,
-                product: sheet.productName,
-                date: formatDate(new Date(sheet.timestamp)),
-                areaOfUse: sheet.areaOfUse,
-                quantity: sheet.quantity,
-                uom: sheet.uom,
-                specifications: sheet.specifications || 'Not specified',
-                attachment: sheet.attachment || '',
-            }))
-    );
-    setHistoryData(
-        filteredByFirm
-            .filter(
-                (sheet) =>
-                    sheet.planned6 !== '' &&
-                    sheet.actual6 !== '' &&
-                    sheet.indentType === 'Store Out'
-            )
-            .map((sheet) => ({
-                approvalDate: formatDate(new Date(sheet.actual6)),
-                indentNo: sheet.indentNumber,
-                indenter: sheet.indenterName,
-                department: sheet.department,
-                product: sheet.productName,
-                date: formatDate(new Date(sheet.timestamp)),
-                areaOfUse: sheet.areaOfUse,
-                quantity: sheet.issuedQuantity,
-                requestedQuantity: sheet.quantity,
-                uom: sheet.uom,
-                issuedStatus: sheet.issuedStatus,
-            }))
-    );
-}, [indentSheet, user.firmNameMatch]);
+            // Filter where indentType is 'Store Out'
+            // Pending: Not approved yet (no approved_date) and not rejected
+            const pending = filteredByFirm
+                .filter(sheet =>
+                    sheet.indent_type === 'Store Out' &&
+                    !sheet.approved_date &&
+                    sheet.indent_status !== 'Rejected'
+                )
+                .map(sheet => ({
+                    id: sheet.id,
+                    indentNo: sheet.indent_number,
+                    indenter: sheet.indenter_name,
+                    department: sheet.department,
+                    product: sheet.product_name,
+                    date: formatDate(new Date(sheet.timestamp)),
+                    areaOfUse: sheet.area_of_use || '',
+                    quantity: sheet.quantity,
+                    uom: sheet.uom,
+                    specifications: sheet.specifications || 'Not specified',
+                    attachment: sheet.attachment || ''
+                }));
+
+            setTableData(pending);
+
+            // History: Approved or Rejected
+            const history = filteredByFirm
+                .filter(sheet =>
+                    sheet.indent_type === 'Store Out' &&
+                    (sheet.approved_date || sheet.indent_status === 'Rejected')
+                )
+                .map(sheet => ({
+                    id: sheet.id,
+                    approvalDate: sheet.approved_date ? formatDate(new Date(sheet.approved_date)) : '',
+                    indentNo: sheet.indent_number,
+                    indenter: sheet.indenter_name,
+                    department: sheet.department,
+                    product: sheet.product_name,
+                    date: formatDate(new Date(sheet.timestamp)),
+                    areaOfUse: sheet.area_of_use || '',
+                    quantity: sheet.approved_quantity || 0,
+                    requestedQuantity: sheet.quantity,
+                    uom: sheet.uom,
+                    issuedStatus: sheet.indent_status || 'Pending',
+                }));
+
+            setHistoryData(history);
+
+        } catch (error) {
+            console.error("Error fetching store out data:", error);
+            toast.error("Failed to fetch data");
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, [user.firmNameMatch]);
 
     // Creating table columns
     const columns: ColumnDef<StoreOutTableData>[] = [
@@ -193,22 +162,17 @@ useEffect(() => {
                                     onClick={async () => {
                                         setRejecting(true);
                                         try {
-                                            await postToSheet(
-                                                indentSheet
-                                                    .filter(
-                                                        (s) => s.indentNumber === indent.indentNo
-                                                    )
-                                                    .map((prev) => ({
-                                                        ...prev,
-                                                        actual6: new Date().toISOString(),
-                                                        issueStatus: 'Rejected',
-                                                    })),
-                                                'update'
-                                            );
+                                            await updateIndentStoreOutApproval(indent.indentNo, {
+                                                approved_by: user.name || 'System',
+                                                approved_date: new Date().toISOString(),
+                                                approved_quantity: 0, // 0 for rejected?
+                                                status: 'Rejected',
+                                            });
+
                                             toast.success(
-                                                `Updated store out approval status of ${selectedIndent?.indentNo}`
+                                                `Updated store out approval status of ${indent.indentNo}`
                                             );
-                                            setTimeout(() => updateIndentSheet(), 1000);
+                                            fetchData();
                                         } catch {
                                             toast.error('Failed to update status');
                                         } finally {
@@ -277,9 +241,12 @@ useEffect(() => {
 
     // Create approval form
     const schema = z.object({
-        approvedBy: z.string().nonempty(),
-        approvalDate: z.date(),
-        issuedQuantity: z.number(),
+        approvedBy: z.string().nonempty("Approved By is required"),
+        approvalDate: z.date({
+            required_error: "Approval Date is required",
+            invalid_type_error: "Approval Date must be a valid date",
+        }),
+        issuedQuantity: z.number().min(0, "Quantity cannot be negative"),
         notes: z.string().optional(),
     });
 
@@ -297,45 +264,29 @@ useEffect(() => {
         if (selectedIndent) {
             form.reset({
                 issuedQuantity: selectedIndent.quantity,
+                approvedBy: user.name || '',
+                approvalDate: new Date(),
             });
+        } else {
+            form.reset();
         }
-        form.reset();
-    }, [selectedIndent]);
+    }, [selectedIndent, user.name]);
 
     async function onSubmit(values: z.infer<typeof schema>) {
+        if (!selectedIndent) return;
+
         try {
-            const payload = indentSheet
-                .filter((s) => s.indentNumber === selectedIndent?.indentNo)
-                .map((prev) => {
-                    const {
-                        poQty,
-                        pendingPoQty,
-                        status,
-                        totalQty,
-                        receivedQty,
-                        ...rest // rest contains everything else
-                    } = prev;
-
-                    return {
-                        ...rest,
-                        actual6: values.approvalDate?.toISOString() ?? new Date().toISOString(),
-                        approvedBy: values.approvedBy,
-                        approvalDate: values.approvalDate,
-                        issueStatus: 'Approved',
-                        issuedQuantity: values.issuedQuantity,
-                        notes: values.notes || "",
-                    };
-                });
-
-            // 🔎 Debug log
-            console.log("🚀 Payload going to postToSheet:", JSON.stringify(payload, null, 2));
-
-            await postToSheet(payload, 'update');
+            await updateIndentStoreOutApproval(selectedIndent.indentNo, {
+                approved_by: values.approvedBy,
+                approved_date: values.approvalDate.toISOString(),
+                approved_quantity: values.issuedQuantity,
+                status: 'Approved',
+            });
 
             toast.success(`Updated store out approval status of ${selectedIndent?.indentNo}`);
             setOpenDialog(false);
             form.reset();
-            setTimeout(() => updateIndentSheet(), 1000);
+            fetchData();
         } catch {
             toast.error('Failed to update status');
         }
@@ -357,7 +308,7 @@ useEffect(() => {
                         data={tableData}
                         columns={columns}
                         searchFields={['product', 'department', 'indenter']}
-                        dataLoading={indentLoading}
+                        dataLoading={dataLoading}
                     />
                 </TabsContent>
                 <TabsContent value="history">
@@ -365,7 +316,7 @@ useEffect(() => {
                         data={historyData}
                         columns={historyColumns}
                         searchFields={['product', 'department', 'indenter']}
-                        dataLoading={indentLoading}
+                        dataLoading={dataLoading}
                     />
                 </TabsContent>
             </Tabs>
@@ -458,6 +409,7 @@ useEffect(() => {
                                                     type="number"
                                                     placeholder="Enter quantity to be issued"
                                                     {...field}
+                                                    onChange={(e) => field.onChange(Number(e.target.value))}
                                                 />
                                             </FormControl>
                                         </FormItem>
@@ -503,7 +455,7 @@ useEffect(() => {
                                         <FormControl>
                                             <Textarea
                                                 placeholder="Enter notes"
-                                                className="resize-y" // or "resize-y" to allow vertical resizing
+                                                className="resize-y"
                                                 {...field}
                                             />
                                         </FormControl>

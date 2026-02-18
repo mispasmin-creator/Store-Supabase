@@ -1,11 +1,15 @@
-import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { postToSheet, uploadFile } from '@/lib/fetchers';
+import {
+    fetchStoreInRecords,
+    updateStoreInQuantityCheck,
+    uploadBillCopy,
+    type StoreInRecord,
+} from '@/services/storeInService';
 
 import {
     Dialog,
@@ -49,7 +53,7 @@ interface StoreInPendingData {
     quantityAsPerBill?: number;
     priceAsPerPo?: number;
     remark?: string;
-    planned7Date: string; // ✅ ADDED
+    planned7Date: string;
 }
 
 interface StoreInHistoryData {
@@ -74,51 +78,18 @@ interface StoreInHistoryData {
     quantityAsPerBill?: number;
     priceAsPerPo?: number;
     remark?: string;
-    planned7Date: string; // ✅ ADDED
+    planned7Date: string;
 }
 
-interface StoreInSheetItem {
-    liftNumber?: string;
-    indentNo?: string;
-    billNo?: string;
-    vendorName?: string;
-    productName?: string;
-    qty?: number;
-    typeOfBill?: string;
-    billAmount?: number;
-    paymentType?: string;
-    advanceAmountIfAny?: number | string;
-    photoOfBill?: string;
-    transportationInclude?: string;
-    transporterName?: string;
-    amount?: number;
-    planned7?: string;
-    actual7?: string;
-    status?: string;
-    billCopyAttached?: string;
-    debitNote?: string;
-    reason?: string;
-    damageOrder?: string;
-    quantityAsPerBill?: number;
-    priceAsPerPo?: number;
-    remark?: string;
-    firmNameMatch?: string;
-    rowIndex?: number;
-}
-
-// ✅ ADDED: Safe date formatter
+// ✅ Safe date formatter
 const formatPlannedDate = (dateString: string) => {
     if (!dateString || dateString.trim() === '') return '';
     try {
-        // If it's already in dd/mm/yyyy format, return as is
         if (dateString.includes('/')) {
             return dateString;
         }
-        
-        // If it's a date string that can be parsed
         const dateObj = new Date(dateString);
         if (isNaN(dateObj.getTime())) return dateString;
-        
         const day = String(dateObj.getDate()).padStart(2, '0');
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const year = String(dateObj.getFullYear()).slice(-2);
@@ -138,9 +109,10 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default () => {
-    const { storeInSheet, updateAll } = useSheets();
     const { user } = useAuth();
 
+    const [storeInRecords, setStoreInRecords] = useState<StoreInRecord[]>([]);
+    const [dataLoading, setDataLoading] = useState(false);
     const [pendingData, setPendingData] = useState<StoreInPendingData[]>([]);
     const [historyData, setHistoryData] = useState<StoreInHistoryData[]>([]);
     const [selectedItem, setSelectedItem] = useState<StoreInPendingData | null>(null);
@@ -156,15 +128,32 @@ export default () => {
         },
     });
 
+    const fetchAllData = async () => {
+        setDataLoading(true);
+        try {
+            const records = await fetchStoreInRecords();
+            setStoreInRecords(records);
+        } catch (error) {
+            console.error('Failed to fetch store-in records:', error);
+            toast.error('Failed to load data');
+        } finally {
+            setDataLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const filteredByFirm = storeInSheet.filter((item: StoreInSheetItem) => 
+        fetchAllData();
+    }, []);
+
+    useEffect(() => {
+        const filteredByFirm = storeInRecords.filter((item) =>
             user.firmNameMatch?.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
         );
-        
+
         setPendingData(
             filteredByFirm
-                .filter((i: StoreInSheetItem) => i.planned7 !== '' && i.actual7 === '')
-                .map((i: StoreInSheetItem) => ({
+                .filter((i) => i.planned7 !== '' && i.actual7 === '')
+                .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNumber: i.indentNo || '',
                     billNo: i.billNo || '',
@@ -180,24 +169,18 @@ export default () => {
                     transporterName: i.transporterName || '',
                     amount: i.amount || 0,
                     damageOrder: i.damageOrder || '',
-                    quantityAsPerBill: i.quantityAsPerBill || 0,
+                    quantityAsPerBill: Number(i.quantityAsPerBill) || 0,
                     priceAsPerPo: i.priceAsPerPo || 0,
                     remark: i.remark || '',
                     firmNameMatch: i.firmNameMatch || '',
-                    planned7Date: i.planned7 || '', // ✅ ADDED
+                    planned7Date: i.planned7 || '',
                 }))
         );
-    }, [storeInSheet, user.firmNameMatch]);
 
-    useEffect(() => {
-        const filteredByFirm = storeInSheet.filter((item: StoreInSheetItem) => 
-            user.firmNameMatch?.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
-        );
-        
         setHistoryData(
             filteredByFirm
-                .filter((i: StoreInSheetItem) => i.planned7 !== '' && i.actual7 !== '')
-                .map((i: StoreInSheetItem) => ({
+                .filter((i) => i.planned7 !== '' && i.actual7 !== '')
+                .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNumber: i.indentNo || '',
                     billNo: i.billNo || '',
@@ -212,41 +195,106 @@ export default () => {
                     transportationInclude: i.transportationInclude || '',
                     status: i.status || '',
                     billCopyAttached: i.billCopyAttached || '',
-                    debitNote: i.debitNote || '',
+                    debitNote: i.sendDebitNote || '',
                     reason: i.reason || '',
                     damageOrder: i.damageOrder || '',
-                    quantityAsPerBill: i.quantityAsPerBill || 0,
+                    quantityAsPerBill: Number(i.quantityAsPerBill) || 0,
                     priceAsPerPo: i.priceAsPerPo || 0,
                     remark: i.remark || '',
                     firmNameMatch: i.firmNameMatch || '',
-                    planned7Date: i.planned7 || '', // ✅ ADDED
+                    planned7Date: i.planned7 || '',
                 }))
         );
-    }, [storeInSheet, user.firmNameMatch]);
+    }, [storeInRecords, user.firmNameMatch]);
+
+    useEffect(() => {
+        if (!openDialog) {
+            form.reset({
+                status: undefined,
+                billCopyAttached: undefined,
+                debitNote: undefined,
+                reason: '',
+            });
+        }
+    }, [openDialog, form]);
+
+    async function onSubmit(values: FormValues) {
+        try {
+            console.log('📝 Form values:', values);
+
+            let billCopyAttachedUrl = '';
+
+            if (values.billCopyAttached) {
+                try {
+                    console.log('📤 Uploading bill copy...');
+                    billCopyAttachedUrl = await uploadBillCopy(
+                        values.billCopyAttached,
+                        selectedItem?.liftNumber || 'unknown'
+                    );
+                    console.log('✅ Bill copy uploaded:', billCopyAttachedUrl);
+                } catch (uploadError) {
+                    console.error('❌ Upload error:', uploadError);
+                    toast.error('Failed to upload bill copy');
+                    return;
+                }
+            }
+
+            const currentDateTime = new Date().toISOString();
+
+            if (!selectedItem?.liftNumber) {
+                toast.error('No record selected');
+                return;
+            }
+
+            console.log('📤 Updating record in Supabase...');
+
+            await updateStoreInQuantityCheck(selectedItem.liftNumber, {
+                actual7: currentDateTime,
+                status: values.status,
+                billCopyAttached: billCopyAttachedUrl,
+                sendDebitNote: values.debitNote || 'No',
+                reason: values.reason,
+            });
+
+            console.log('✅ Update successful');
+            toast.success(`Updated status for ${selectedItem.liftNumber}`);
+            setOpenDialog(false);
+
+            // Refresh data
+            setTimeout(() => fetchAllData(), 1000);
+        } catch (error) {
+            console.error('❌ Error in onSubmit:', error);
+            if (error instanceof Error) {
+                toast.error(`Failed to update: ${error.message}`);
+            } else {
+                toast.error('Failed to update status');
+            }
+        }
+    }
 
     const pendingColumns: ColumnDef<StoreInPendingData>[] = [
         ...(user.receiveItemView
             ? [
-                  {
-                      header: 'Action',
-                      cell: ({ row }: { row: Row<StoreInPendingData> }) => {
-                          const item = row.original;
+                {
+                    header: 'Action',
+                    cell: ({ row }: { row: Row<StoreInPendingData> }) => {
+                        const item = row.original;
 
-                          return (
-                              <DialogTrigger asChild>
-                                  <Button
-                                      variant="outline"
-                                      onClick={() => {
-                                          setSelectedItem(item);
-                                      }}
-                                  >
-                                      Process
-                                  </Button>
-                              </DialogTrigger>
-                          );
-                      },
-                  },
-              ]
+                        return (
+                            <DialogTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setSelectedItem(item);
+                                    }}
+                                >
+                                    Process
+                                </Button>
+                            </DialogTrigger>
+                        );
+                    },
+                },
+            ]
             : []),
         { accessorKey: 'liftNumber', header: 'Lift Number' },
         { accessorKey: 'indentNumber', header: 'Indent No.' },
@@ -280,9 +328,8 @@ export default () => {
         { accessorKey: 'quantityAsPerBill', header: 'Quantity As Per Bill' },
         { accessorKey: 'priceAsPerPo', header: 'Price As Per Po' },
         { accessorKey: 'remark', header: 'Remark' },
-        // ✅ ADDED: Planned Date column
-        { 
-            accessorKey: 'planned7Date', 
+        {
+            accessorKey: 'planned7Date',
             header: 'Planned Date',
             cell: ({ row }) => formatPlannedDate(row.original.planned7Date)
         },
@@ -344,95 +391,12 @@ export default () => {
         { accessorKey: 'quantityAsPerBill', header: 'Quantity As Per Bill' },
         { accessorKey: 'priceAsPerPo', header: 'Price As Per Po' },
         { accessorKey: 'remark', header: 'Remark' },
-        // ✅ ADDED: Planned Date column
-        { 
-            accessorKey: 'planned7Date', 
+        {
+            accessorKey: 'planned7Date',
             header: 'Planned Date',
             cell: ({ row }) => formatPlannedDate(row.original.planned7Date)
         },
     ];
-
-    useEffect(() => {
-        if (!openDialog) {
-            form.reset({
-                status: undefined,
-                billCopyAttached: undefined,
-                debitNote: undefined,
-                reason: '',
-            });
-        }
-    }, [openDialog, form]);
-
-    async function onSubmit(values: FormValues) {
-        try {
-            console.log('📝 Form values:', values);
-            
-            let billCopyAttachedUrl = '';
-
-            if (values.billCopyAttached) {
-                try {
-                    console.log('📤 Uploading bill copy...');
-                    billCopyAttachedUrl = await uploadFile({
-                        file: values.billCopyAttached,
-                        folderId: import.meta.env.VITE_BILL_COPY_FOLDER || import.meta.env.VITE_PRODUCT_PHOTO_FOLDER
-                    });
-                    console.log('✅ Bill copy uploaded:', billCopyAttachedUrl);
-                } catch (uploadError) {
-                    console.error('❌ Upload error:', uploadError);
-                    toast.error('Failed to upload bill copy');
-                    return;
-                }
-            }
-
-            const currentDateTime = new Date()
-                .toLocaleString('en-GB', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false,
-                })
-                .replace(',', '');
-
-            const filteredData = storeInSheet.filter(
-                (s: StoreInSheetItem) => s.liftNumber === selectedItem?.liftNumber
-            );
-
-            if (filteredData.length === 0) {
-                console.error('❌ No matching record found');
-                toast.error('No matching record found');
-                return;
-            }
-
-            const updateData = filteredData.map((prev: StoreInSheetItem) => ({
-                rowIndex: prev.rowIndex || 0,
-                actual7: currentDateTime,
-                status: values.status,
-                billCopyAttached: billCopyAttachedUrl,
-                sendDebitNote: values.debitNote,
-                reason: values.reason,
-            }));
-
-            console.log('📤 Update data:', updateData);
-
-            await postToSheet(updateData, 'update', 'STORE IN');
-
-            console.log('✅ Update successful');
-            toast.success(`Updated status for ${selectedItem?.liftNumber}`);
-            setOpenDialog(false);
-            setTimeout(() => updateAll(), 1000);
-        } catch (error) {
-            console.error('❌ Error in onSubmit:', error);
-            
-            if (error instanceof Error) {
-                toast.error(`Failed to update: ${error.message}`);
-            } else {
-                toast.error('Failed to update status');
-            }
-        }
-    }
 
     function onError(e: any) {
         console.log(e);
@@ -461,7 +425,7 @@ export default () => {
                                 'productName',
                                 'vendorName',
                             ]}
-                            dataLoading={false}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                     <TabsContent value="history">
@@ -475,7 +439,7 @@ export default () => {
                                 'vendorName',
                                 'status',
                             ]}
-                            dataLoading={false}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                 </Tabs>

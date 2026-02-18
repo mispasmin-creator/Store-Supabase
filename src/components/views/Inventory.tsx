@@ -1,52 +1,34 @@
 import Heading from '../element/Heading';
 
 import { useEffect, useState } from 'react';
-import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pill } from '../ui/pill';
 import { Store } from 'lucide-react';
 import DataTable from '../element/DataTable';
 
-interface InventoryTable {
-    itemName: string;
-    groupHead: string;
-    uom: string;
-    status: string;
-    opening: number;
-    rate: number;
-    indented: number;
-    approved: number;
-    purchaseQuantity: number;
-    outQuantity: number;
-    current: number;
-    totalPrice: number;
-}
+
+import { fetchInventoryRecords, type InventoryRecord } from '@/services/inventoryService';
 
 export default () => {
-    const { inventorySheet, inventoryLoading } = useSheets();
+    const [tableData, setTableData] = useState<InventoryRecord[]>([]);
+    const [dataLoading, setDataLoading] = useState(true);
 
-    const [tableData, setTableData] = useState<InventoryTable[]>([]);
+    const fetchData = async () => {
+        try {
+            setDataLoading(true);
+            const data = await fetchInventoryRecords();
+            setTableData(data);
+        } catch (error) {
+            console.error('Error fetching inventory:', error);
+        } finally {
+            setDataLoading(false);
+        }
+    };
 
     useEffect(() => {
-        setTableData(
-            inventorySheet.map((i) => ({
-                totalPrice: i.totalPrice,
-                approvedIndents: i.approved,
-                uom: i.uom,
-                rate: i.individualRate,
-                current: i.current,
-                status: i.colorCode,
-                indented: i.indented,
-                opening: i.opening,
-                itemName: i.itemName,
-                groupHead: i.groupHead,
-                purchaseQuantity: i.purchaseQuantity,
-                approved: i.approved,
-                outQuantity: i.outQuantity,
-            }))
-        );
-    }, [inventorySheet]);
-    const columns: ColumnDef<InventoryTable>[] = [
+        fetchData();
+    }, []);
+    const columns: ColumnDef<InventoryRecord>[] = [
         {
             accessorKey: 'itemName',
             header: 'Item',
@@ -106,7 +88,7 @@ export default () => {
             <DataTable
                 data={tableData}
                 columns={columns}
-                dataLoading={inventoryLoading}
+                dataLoading={dataLoading}
                 searchFields={['itemName', 'groupHead', 'uom', 'status']}
                 className="h-[80dvh]"
             />

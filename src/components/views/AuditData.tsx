@@ -1,12 +1,10 @@
 import { Package2, Calculator, FileCheck, AlertTriangle, RotateCcw, ShieldCheck, CheckSquare } from 'lucide-react';
 import Heading from '../element/Heading';
-import { useSheets } from '@/context/SheetsContext';
 import { useEffect, useState, useMemo } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-
 import { Button } from '../ui/button';
 import {
   Dialog,
@@ -30,26 +28,13 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { toast } from 'sonner';
-import { postToSheet } from '@/lib/fetchers';
 import { PuffLoader as Loader } from 'react-spinners';
 import { Textarea } from '../ui/textarea';
-
-// Define a type for sheet items
-interface SheetItem {
-  rowIndex: string;
-  [key: string]: any;
-}
-
-// Helper function to get field value with multiple possible keys
-const getFieldValue = (item: SheetItem | undefined | null, ...possibleKeys: string[]): any => {
-  if (!item) return '';
-  for (const key of possibleKeys) {
-    if (item[key] !== undefined && item[key] !== null && item[key] !== '') {
-      return item[key];
-    }
-  }
-  return '';
-};
+import {
+  fetchTallyEntryRecords,
+  updateTallyEntryRecord,
+  type TallyEntryRecord,
+} from '@/services/tallyEntryService';
 
 // Helper function to format date to dd/mm/yy
 const formatDate = (dateString: string): string => {
@@ -69,21 +54,21 @@ const formatDate = (dateString: string): string => {
 // Define Stage interface
 interface StageConfig {
   name: string;
-  plannedField?: string;
-  actualField?: string;
-  statusField?: string;
-  remarksField?: string;
+  plannedField: string;
+  actualField: string;
+  statusField: string;
+  remarksField: string;
   color: string;
   icon: any;
   description: string;
-  formTitle?: string;
-  statusOptions?: string[];
+  formTitle: string;
+  statusOptions: string[];
 }
 
 // Define Stages object with proper typing
 const STAGES: Record<string, StageConfig> = {
-  AUDIT: { 
-    name: 'Audit Data', 
+  AUDIT: {
+    name: 'Audit Data',
     plannedField: 'planned1',
     actualField: 'actual1',
     statusField: 'status1',
@@ -94,65 +79,71 @@ const STAGES: Record<string, StageConfig> = {
     formTitle: 'Process Audit Data',
     statusOptions: ['Done', 'Not Done']
   },
-  RECTIFY: { 
-    name: 'Rectify Mistake', 
+  RECTIFY: {
+    name: 'Rectify Mistake',
     plannedField: 'planned2',
     actualField: 'actual2',
     statusField: 'status2',
-    remarksField: 'remarks 2',
+    remarksField: 'remarks2',
     color: 'bg-blue-100 text-blue-800 border-blue-200',
     icon: AlertTriangle,
     description: 'Correct mistakes and add bilty',
     formTitle: 'Rectify The Mistake',
     statusOptions: ['Done', 'Not Done']
   },
-  REAUDIT: { 
-    name: 'Reaudit Data', 
+  REAUDIT: {
+    name: 'Reaudit Data',
     plannedField: 'planned3',
     actualField: 'actual3',
     statusField: 'status3',
-    remarksField: 'remarks 3',
+    remarksField: 'remarks3',
     color: 'bg-purple-100 text-purple-800 border-purple-200',
     icon: RotateCcw,
     description: 'Re-audit after corrections',
     formTitle: 'Reauditing Data',
     statusOptions: ['Done', 'Not Done']
   },
-  TALLY_ENTRY: { 
-    name: 'Tally Entry', 
+  TALLY_ENTRY: {
+    name: 'Tally Entry',
     plannedField: 'planned4',
     actualField: 'actual4',
     statusField: 'status4',
-    remarksField: 'remarks 4',
+    remarksField: 'remarks4',
     color: 'bg-cyan-100 text-cyan-800 border-cyan-200',
     icon: Calculator,
     description: 'Enter data into tally system',
     formTitle: 'Tally Entry',
     statusOptions: ['Done', 'Not Done']
   },
-  AGAIN_AUDIT: { 
-    name: 'Again Auditing', 
+  AGAIN_AUDIT: {
+    name: 'Again Audit',
     plannedField: 'planned5',
     actualField: 'actual5',
     statusField: 'status5',
-    remarksField: 'remarks 5',
-    color: 'bg-orange-100 text-orange-800 border-orange-200',
+    remarksField: 'remarks5',
+    color: 'bg-rose-100 text-rose-800 border-rose-200',
     icon: ShieldCheck,
-    description: 'Final audit verification',
-    formTitle: 'Again Auditing',
-    statusOptions: ['okey', 'not okey']
+    description: 'Final audit verification after tally',
+    formTitle: 'Again Audit',
+    statusOptions: ['Done', 'Not Done']
   },
-  COMPLETED: { 
-    name: 'Completed', 
+  COMPLETED: {
+    name: 'Completed',
+    plannedField: '',
+    actualField: '',
+    statusField: '',
+    remarksField: '',
     color: 'bg-green-100 text-green-800 border-green-200',
     icon: CheckSquare,
-    description: 'All stages completed'
+    description: 'All stages completed',
+    formTitle: '',
+    statusOptions: []
   }
 };
 
 // Update the ProcessedTallyData interface to include all remarks fields
 interface ProcessedTallyData {
-  rowIndex: string;
+  id: number;
   indentNumber: string;
   indentDate: string;
   purchaseDate: string;
@@ -165,8 +156,7 @@ interface ProcessedTallyData {
   partyName: string;
   billAmt: number;
   billImage: string;
-  billReceivedLater: string;
-  notReceivedBillNo: string;
+  billRecievedLater: string;
   location: string;
   typeOfBills: string;
   productImage: string;
@@ -180,14 +170,14 @@ interface ProcessedTallyData {
   poNumber: string;
   currentStage: keyof typeof STAGES | string;
   isCompleted: boolean;
-  
+
   // Add all remarks fields
   remarks1: string;
   remarks2: string;
   remarks3: string;
   remarks4: string;
   remarks5: string;
-  
+
   // Add status fields for display
   status1: string;
   status2: string;
@@ -203,150 +193,125 @@ interface FormValues {
 }
 
 export default function PcReportTable() {
-  const { tallyEntrySheet, poMasterLoading, updateAll } = useSheets();
   const [allData, setAllData] = useState<ProcessedTallyData[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ProcessedTallyData | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('ALL');
 
-  // Process all data from sheet
+  const fetchAllData = async () => {
+    setDataLoading(true);
+    try {
+      const records = await fetchTallyEntryRecords();
+
+      const filteredByFirm = records.filter((item) => {
+        return user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch;
+      });
+
+      const processedData = filteredByFirm.map((item) => {
+        const hasValue = (value: any): boolean => {
+          return value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
+        };
+
+        // Determine current stage
+        let currentStage: keyof typeof STAGES = 'AUDIT';
+        let plannedDate = '';
+        let isCompleted = false;
+
+        if (hasValue(item.planned1) && !hasValue(item.actual1)) {
+          currentStage = 'AUDIT';
+          plannedDate = item.planned1;
+        } else if (hasValue(item.planned2) && !hasValue(item.actual2)) {
+          currentStage = 'RECTIFY';
+          plannedDate = item.planned2;
+        } else if (hasValue(item.planned3) && !hasValue(item.actual3)) {
+          currentStage = 'REAUDIT';
+          plannedDate = item.planned3;
+        } else if (hasValue(item.planned4) && !hasValue(item.actual4)) {
+          currentStage = 'TALLY_ENTRY';
+          plannedDate = item.planned4;
+        } else if (hasValue(item.planned5) && !hasValue(item.actual5)) {
+          currentStage = 'AGAIN_AUDIT';
+          plannedDate = item.planned5;
+        } else if (hasValue(item.actual5)) {
+          currentStage = 'COMPLETED';
+          isCompleted = true;
+          plannedDate = item.planned5 || item.planned4 || item.planned3 || item.planned2 || item.planned1;
+        } else {
+          return null;
+        }
+
+        return {
+          id: item.id,
+          indentNumber: item.indentNumber,
+          indentDate: '', // Not in TallyEntryRecord but was in SheetItem?
+          purchaseDate: '',
+          materialInDate: item.materialInDate,
+          plannedDate: plannedDate,
+          productName: item.productName,
+          firmNameMatch: item.firmNameMatch,
+          billNo: item.billNo,
+          qty: item.qty,
+          partyName: item.partyName,
+          billAmt: item.billAmt,
+          billImage: item.billImage,
+          billRecievedLater: item.billRecievedLater,
+          location: item.location,
+          typeOfBills: item.typeOfBills,
+          productImage: item.productImage,
+          area: item.area,
+          indentedFor: item.indentedFor,
+          approvedPartyName: item.approvedPartyName,
+          rate: item.rate,
+          indentQty: item.indentQty,
+          totalRate: item.totalRate,
+          liftNumber: item.liftNumber,
+          poNumber: item.poNumber,
+          currentStage,
+          isCompleted,
+          remarks1: item.remarks1,
+          remarks2: item.remarks2,
+          remarks3: item.remarks3,
+          remarks4: item.remarks4,
+          remarks5: item.remarks5,
+          status1: item.status1,
+          status2: item.status2,
+          status3: item.status3,
+          status4: item.status4,
+          status5: item.status5,
+        };
+      }).filter((item): item is ProcessedTallyData => item !== null);
+
+      setAllData(processedData);
+    } catch (error) {
+      console.error('Failed to fetch tally entry records:', error);
+      toast.error('Failed to load data');
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (!tallyEntrySheet) return;
-    
-    console.log("🔍 Processing tally entry sheet data...");
-    
-    // Filter by firm name first
-    const filteredByFirm = tallyEntrySheet.filter((item: SheetItem) => {
-      const firmName = getFieldValue(item, 'Firm Name', 'firmName', 'firmNameMatch');
-      return user.firmNameMatch.toLowerCase() === "all" || firmName === user.firmNameMatch;
-    });
-    
-    console.log('✅ Filtered by firm:', filteredByFirm.length);
-    
-    // Process each item
-    const processedData = filteredByFirm.map((item: SheetItem) => {
-      // Get all stage fields
-      const planned1 = getFieldValue(item, 'Planned 1', 'planned1');
-      const actual1 = getFieldValue(item, 'Actual 1', 'actual1');
-      const planned2 = getFieldValue(item, 'Planned 2', 'planned2');
-      const actual2 = getFieldValue(item, 'Actual 2', 'actual2');
-      const planned3 = getFieldValue(item, 'Planned 3', 'planned3');
-      const actual3 = getFieldValue(item, 'Actual 3', 'actual3');
-      const planned4 = getFieldValue(item, 'Planned 4', 'planned4');
-      const actual4 = getFieldValue(item, 'Actual 4', 'actual4');
-      const planned5 = getFieldValue(item, 'Planned 5', 'planned5');
-      const actual5 = getFieldValue(item, 'Actual 5', 'actual5');
-
-      // Helper function
-      const hasValue = (value: any): boolean => {
-        return value !== undefined && value !== null && value !== '' && String(value).trim() !== '';
-      };
-
-      // Determine current stage
-      let currentStage: keyof typeof STAGES = 'AUDIT';
-      let plannedDate = '';
-      let isCompleted = false;
-
-      if (hasValue(planned1) && !hasValue(actual1)) {
-        currentStage = 'AUDIT';
-        plannedDate = planned1;
-      } else if (hasValue(planned2) && !hasValue(actual2)) {
-        currentStage = 'RECTIFY';
-        plannedDate = planned2;
-      } else if (hasValue(planned3) && !hasValue(actual3)) {
-        currentStage = 'REAUDIT';
-        plannedDate = planned3;
-      } else if (hasValue(planned4) && !hasValue(actual4)) {
-        currentStage = 'TALLY_ENTRY';
-        plannedDate = planned4;
-      } else if (hasValue(planned5) && !hasValue(actual5)) {
-        currentStage = 'AGAIN_AUDIT';
-        plannedDate = planned5;
-      } else if (hasValue(actual1) && hasValue(actual2) && hasValue(actual3) && hasValue(actual4) && hasValue(actual5)) {
-        currentStage = 'COMPLETED';
-        isCompleted = true;
-        plannedDate = planned5 || planned4 || planned3 || planned2 || planned1;
-      } else {
-        return null;
-      }
-
-      const mapped: ProcessedTallyData = {
-        rowIndex: item.rowIndex.toString(),
-        indentNumber: getFieldValue(item, 'Indent Number', 'indentNumber', 'indentNo').toString().trim(),
-        indentDate: getFieldValue(item, 'Indent Date', 'indentDate'),
-        purchaseDate: getFieldValue(item, 'Purchase Date', 'purchaseDate'),
-        materialInDate: getFieldValue(item, 'Material In Date', 'materialInDate'),
-        plannedDate: plannedDate,
-        productName: getFieldValue(item, 'Product Name', 'productName'),
-        firmNameMatch: getFieldValue(item, 'Firm Name', 'firmName', 'firmNameMatch').toString().trim(),
-        billNo: getFieldValue(item, 'Bill No.', 'Bill No', 'billNo').toString(),
-        qty: Number(getFieldValue(item, 'Qty', 'qty')) || 0,
-        partyName: getFieldValue(item, 'Party Name', 'partyName'),
-        billAmt: Number(getFieldValue(item, 'Bill Amt', 'billAmt')) || 0,
-        billImage: getFieldValue(item, 'Bill Image', 'billImage'),
-        billReceivedLater: getFieldValue(item, 'Bill Recieved later', 'billReceivedLater'),
-        notReceivedBillNo: getFieldValue(item, 'Not Received Bill No.', 'notReceivedBillNo'),
-        location: getFieldValue(item, 'Location', 'location'),
-        typeOfBills: getFieldValue(item, 'Type Of Bills', 'typeOfBills'),
-        productImage: getFieldValue(item, 'Prodcut Image', 'Product Image', 'productImage'),
-        area: getFieldValue(item, 'Area', 'area'),
-        indentedFor: getFieldValue(item, 'Indented For', 'indentedFor'),
-        approvedPartyName: getFieldValue(item, 'Approved Party Name', 'approvedPartyName'),
-        rate: Number(getFieldValue(item, 'Rate', 'rate')) || 0,
-        indentQty: Number(getFieldValue(item, 'Indent Qty', 'indentQty')) || 0,
-        totalRate: Number(getFieldValue(item, 'Total Rate', 'totalRate')) || 0,
-        liftNumber: getFieldValue(item, 'Lift Number', 'liftNumber'),
-        poNumber: getFieldValue(item, 'PO Number', 'poNumber'),
-        currentStage,
-        isCompleted,
-        
-        // Add all remarks fields
-        remarks1: getFieldValue(item, 'Remarks1', 'remarks1'),
-        remarks2: getFieldValue(item, 'Remarks 2', 'remarks2'),
-        remarks3: getFieldValue(item, 'Remarks 3', 'remarks3'),
-        remarks4: getFieldValue(item, 'Remarks 4', 'remarks4'),
-        remarks5: getFieldValue(item, 'Remarks 5', 'remarks5'),
-        
-        // Add status fields
-        status1: getFieldValue(item, 'Status 1', 'status1'),
-        status2: getFieldValue(item, 'Status 2', 'status2'),
-        status3: getFieldValue(item, 'Status 3', 'status3'),
-        status4: getFieldValue(item, 'Status 4', 'status4'),
-        status5: getFieldValue(item, 'Status 5', 'status5'),
-      };
-
-      return mapped;
-    }).filter((item): item is ProcessedTallyData => item !== null);
-
-    console.log(`✅ Processed ${processedData.length} items`);
-    console.log('📊 Stage distribution:', 
-      processedData.reduce((acc, item) => {
-        const stage = item.currentStage;
-        acc[stage] = (acc[stage] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    );
-    
-    setAllData(processedData);
-  }, [tallyEntrySheet, user.firmNameMatch]);
+    fetchAllData();
+  }, [user.firmNameMatch]);
 
   // Filter data based on active tab
   const filteredData = useMemo(() => {
     let filtered = allData;
-    
+
     // Filter by stage if not "ALL" or "COMPLETED"
     if (activeTab === 'COMPLETED') {
       filtered = filtered.filter(item => item.isCompleted);
     } else if (activeTab !== 'ALL') {
-      filtered = filtered.filter(item => 
+      filtered = filtered.filter(item =>
         !item.isCompleted && item.currentStage === activeTab
       );
     } else {
       // ALL shows all pending items (not completed)
       filtered = filtered.filter(item => !item.isCompleted);
     }
-    
+
     return filtered;
   }, [allData, activeTab]);
 
@@ -358,7 +323,7 @@ export default function PcReportTable() {
     };
 
     ['AUDIT', 'RECTIFY', 'REAUDIT', 'TALLY_ENTRY', 'AGAIN_AUDIT'].forEach(stage => {
-      counts[stage] = allData.filter(item => 
+      counts[stage] = allData.filter(item =>
         !item.isCompleted && item.currentStage === stage
       ).length;
     });
@@ -368,105 +333,80 @@ export default function PcReportTable() {
 
   // Get schema based on stage
   const formSchema = z.object({
-  status: z.string().min(1, 'Please select a status'),
-  remarks: z.string().min(1, 'Remarks are required'),
-});
+    status: z.string().min(1, 'Please select a status'),
+    remarks: z.string().min(1, 'Remarks are required'),
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
-  resolver: zodResolver(formSchema),
-  defaultValues: {
-    status: '',
-    remarks: '',
-  },
-});
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      status: '',
+      remarks: '',
+    },
+  });
 
   // Reset form when dialog closes
   useEffect(() => {
     if (!openDialog) {
-      form.reset({ 
+      form.reset({
         status: undefined,
-        remarks: '' 
+        remarks: ''
       });
     }
   }, [openDialog, form]);
 
   // Handle item selection
- const handleItemSelect = (item: ProcessedTallyData) => {
-  setSelectedRow(item);
-  form.reset({
-    status: '',
-    remarks: '',
-  });
-  setOpenDialog(true);
-};
+  const handleItemSelect = (item: ProcessedTallyData) => {
+    setSelectedRow(item);
+    form.reset({
+      status: '',
+      remarks: '',
+    });
+    setOpenDialog(true);
+  };
 
   // Handle form submission
- async function onSubmit(values: z.infer<typeof formSchema>) {
-  if (!selectedRow) {
-    toast.error('No row selected!');
-    return;
-  }
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!selectedRow) {
+      toast.error('No row selected!');
+      return;
+    }
 
     try {
       console.log('🔄 Starting form submission...');
-      console.log('📝 Selected row:', selectedRow);
-      console.log('📋 Form values:', values);
 
-      // Get current date and time in dd/mm/yyyy hh:mm:ss format
-      const currentDateTime = new Date()
-        .toLocaleString('en-GB', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        })
-        .replace(',', '');
-
-      console.log('📅 Current date/time:', currentDateTime);
-
-      // Find the exact row in the original sheet data
-      const sheetRow = tallyEntrySheet?.find((s: SheetItem) => {
-        const indentNumber = getFieldValue(s, 'Indent Number', 'indentNumber', 'indentNo').toString().trim();
-        return indentNumber === selectedRow.indentNumber;
-      });
-
-      if (!sheetRow) {
-        console.error('❌ Could not find matching row in sheet data');
-        toast.error('Could not find matching record in sheet');
-        return;
-      }
-
-      console.log('✅ Found sheet row:', sheetRow);
-      console.log('📊 Row index:', sheetRow.rowIndex);
-
-      // Get stage configuration
+      const currentDateTime = new Date().toISOString();
       const stageConfig = STAGES[selectedRow.currentStage];
-      
-      // Prepare update data with camelCase field names
-      const updateData = [{
-        rowIndex: sheetRow.rowIndex,
-        [stageConfig.actualField || '']: currentDateTime,
-        [stageConfig.statusField || '']: values.status,
-        [stageConfig.remarksField || '']: values.remarks
-      }];
 
-      console.log('📤 Update data to send:', updateData);
+      // Prepare updates for current stage
+      const updates: Record<string, any> = {
+        [stageConfig.statusField]: values.status || '',
+        [stageConfig.remarksField]: values.remarks
+      };
 
-      // Post to Google Sheet
-      await postToSheet(updateData, 'update', 'TALLY ENTRY');
+      // Handle workflow logic: Set the actual completion date to fire database triggers
+      if (values.status === 'Done') {
+        // For all stages, 'Done' marks the stage as complete
+        updates[stageConfig.actualField] = currentDateTime;
+        console.log(`✅ Stage ${selectedRow.currentStage} marked as Done`);
+      } else if (selectedRow.currentStage === 'AUDIT' && values.status === 'Not Done') {
+        // Special Case: Audit Data 'Not Done' also marks the stage as complete
+        // This triggers the 'planned2' update (Rectify Mistake) via DB trigger
+        updates[stageConfig.actualField] = currentDateTime;
+        console.log('➡️ Audit marked as Not Done, triggering Rectification flow');
+      }
+      // Note: For other stages, 'Not Done' keeps the item in the current stage
+      // as the actual date is not updated.
+
+      await updateTallyEntryRecord(selectedRow.indentNumber, updates);
 
       console.log('✅ Update successful');
       toast.success(`Status updated for Indent ${selectedRow.indentNumber}`);
 
-      // Close dialog and refresh data
       setOpenDialog(false);
       setTimeout(() => {
-        updateAll();
-        console.log('🔄 Data refreshed after update');
-      }, 1500);
+        fetchAllData();
+      }, 1000);
 
     } catch (err) {
       console.error('❌ Error in onSubmit:', err);
@@ -488,11 +428,11 @@ export default function PcReportTable() {
         const rowData = row.original;
         const stageInfo = STAGES[rowData.currentStage];
         const IconComponent = stageInfo?.icon;
-        
+
         return (
           <DialogTrigger asChild>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => handleItemSelect(rowData)}
               className="flex items-center gap-2"
             >
@@ -503,17 +443,17 @@ export default function PcReportTable() {
         );
       },
     },
-    { 
-      accessorKey: 'indentNumber', 
-      header: 'Indent No.' 
+    {
+      accessorKey: 'indentNumber',
+      header: 'Indent No.'
     },
-    { 
+    {
       accessorKey: 'currentStage',
       header: 'Current Stage',
       cell: ({ row }) => {
         const stage = row.original.currentStage;
         const stageInfo = STAGES[stage];
-        
+
         return (
           <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${stageInfo?.color || 'bg-gray-100 text-gray-800'}`}>
             {stageInfo?.name}
@@ -536,8 +476,8 @@ export default function PcReportTable() {
       header: 'Material In Date',
       cell: ({ row }) => formatDate(row.original.materialInDate)
     },
-    { 
-      accessorKey: 'plannedDate', 
+    {
+      accessorKey: 'plannedDate',
       header: 'Planned Date',
       cell: ({ row }) => formatDate(row.original.plannedDate)
     },
@@ -580,7 +520,7 @@ export default function PcReportTable() {
     { accessorKey: 'rate', header: 'Rate' },
     { accessorKey: 'indentQty', header: 'Indent Qty' },
     { accessorKey: 'totalRate', header: 'Total Rate' },
-    
+
     // Add status and remarks columns for each stage
     {
       accessorKey: 'status1',
@@ -588,9 +528,8 @@ export default function PcReportTable() {
       cell: ({ row }) => {
         const status = row.original.status1;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -614,9 +553,8 @@ export default function PcReportTable() {
       cell: ({ row }) => {
         const status = row.original.status2;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -640,9 +578,8 @@ export default function PcReportTable() {
       cell: ({ row }) => {
         const status = row.original.status3;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -666,9 +603,8 @@ export default function PcReportTable() {
       cell: ({ row }) => {
         const status = row.original.status4;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -692,9 +628,8 @@ export default function PcReportTable() {
       cell: ({ row }) => {
         const status = row.original.status5;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'okey' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -716,16 +651,16 @@ export default function PcReportTable() {
 
   // Update completedColumns to show all status and remarks
   const completedColumns: ColumnDef<ProcessedTallyData>[] = [
-    { 
-      accessorKey: 'indentNumber', 
-      header: 'Indent No.' 
+    {
+      accessorKey: 'indentNumber',
+      header: 'Indent No.'
     },
-    { 
-      accessorKey: 'firmNameMatch', 
-      header: 'Firm Name' 
+    {
+      accessorKey: 'firmNameMatch',
+      header: 'Firm Name'
     },
-    { 
-      accessorKey: 'plannedDate', 
+    {
+      accessorKey: 'plannedDate',
       header: 'Completed Date',
       cell: ({ row }) => formatDate(row.original.plannedDate)
     },
@@ -740,9 +675,8 @@ export default function PcReportTable() {
       cell: ({ row }) => {
         const status = row.original.status1;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -766,9 +700,8 @@ export default function PcReportTable() {
       cell: ({ row }) => {
         const status = row.original.status2;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -792,9 +725,8 @@ export default function PcReportTable() {
       cell: ({ row }) => {
         const status = row.original.status3;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -818,9 +750,8 @@ export default function PcReportTable() {
       cell: ({ row }) => {
         const status = row.original.status4;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -840,13 +771,12 @@ export default function PcReportTable() {
     },
     {
       accessorKey: 'status5',
-      header: 'Again Audit',
+      header: 'Again Audit Status',
       cell: ({ row }) => {
         const status = row.original.status5;
         return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-            status === 'okey' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
+          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
             {status}
           </span>
         ) : null;
@@ -873,7 +803,7 @@ export default function PcReportTable() {
     { title: 'Rectify', value: stageCounts.RECTIFY, color: 'text-blue-600' },
     { title: 'Reaudit', value: stageCounts.REAUDIT, color: 'text-purple-600' },
     { title: 'Tally Entry', value: stageCounts.TALLY_ENTRY, color: 'text-cyan-600' },
-    { title: 'Again Auditing', value: stageCounts.AGAIN_AUDIT, color: 'text-orange-600' }
+    { title: 'Again Audit', value: stageCounts.AGAIN_AUDIT, color: 'text-rose-600' },
   ];
 
   return (
@@ -911,8 +841,8 @@ export default function PcReportTable() {
             <TabsTrigger value="tally" onClick={() => setActiveTab('TALLY_ENTRY')}>
               Tally Entry
             </TabsTrigger>
-            <TabsTrigger value="again-audit" onClick={() => setActiveTab('AGAIN_AUDIT')}>
-              Again Auditing
+            <TabsTrigger value="again_audit" onClick={() => setActiveTab('AGAIN_AUDIT')}>
+              Again Audit
             </TabsTrigger>
             <TabsTrigger value="completed" onClick={() => setActiveTab('COMPLETED')}>
               Completed
@@ -925,67 +855,58 @@ export default function PcReportTable() {
               data={filteredData}
               columns={pendingColumns}
               searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-              dataLoading={poMasterLoading}
+              dataLoading={dataLoading}
               className='h-[70dvh]'
             />
           </TabsContent>
-          
+
           <TabsContent value="audit">
             <DataTable
               data={filteredData}
               columns={pendingColumns}
               searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-              dataLoading={poMasterLoading}
+              dataLoading={dataLoading}
               className='h-[70dvh]'
             />
           </TabsContent>
-          
+
           <TabsContent value="rectify">
             <DataTable
               data={filteredData}
               columns={pendingColumns}
               searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-              dataLoading={poMasterLoading}
+              dataLoading={dataLoading}
               className='h-[70dvh]'
             />
           </TabsContent>
-          
+
           <TabsContent value="reaudit">
             <DataTable
               data={filteredData}
               columns={pendingColumns}
               searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-              dataLoading={poMasterLoading}
+              dataLoading={dataLoading}
               className='h-[70dvh]'
             />
           </TabsContent>
-          
+
           <TabsContent value="tally">
             <DataTable
               data={filteredData}
               columns={pendingColumns}
               searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-              dataLoading={poMasterLoading}
+              dataLoading={dataLoading}
               className='h-[70dvh]'
             />
           </TabsContent>
-          
-          <TabsContent value="again-audit">
-            <DataTable
-              data={filteredData}
-              columns={pendingColumns}
-              searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-              dataLoading={poMasterLoading}
-              className='h-[70dvh]'
-            />
-          </TabsContent>
-          
+
+
           <TabsContent value="completed">
             <DataTable
               data={filteredData}
               columns={completedColumns}
               searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
-              dataLoading={poMasterLoading}
+              dataLoading={dataLoading}
               className='h-[70dvh]'
             />
           </TabsContent>
@@ -1064,17 +985,8 @@ export default function PcReportTable() {
                               <SelectValue placeholder="Select status" />
                             </SelectTrigger>
                             <SelectContent>
-                              {selectedRow.currentStage === 'AGAIN_AUDIT' ? (
-                                <>
-                                  <SelectItem value="okey">Okey</SelectItem>
-                                  <SelectItem value="not okey">Not Okey</SelectItem>
-                                </>
-                              ) : (
-                                <>
-                                  <SelectItem value="Done">Done</SelectItem>
-                                  <SelectItem value="Not Done">Not Done</SelectItem>
-                                </>
-                              )}
+                              <SelectItem value="Done">Done</SelectItem>
+                              <SelectItem value="Not Done">Not Done</SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>
@@ -1104,7 +1016,7 @@ export default function PcReportTable() {
                   <DialogClose asChild>
                     <Button variant="outline">Close</Button>
                   </DialogClose>
-                  
+
                   <Button type="submit" disabled={form.formState.isSubmitting}>
                     {form.formState.isSubmitting && (
                       <Loader

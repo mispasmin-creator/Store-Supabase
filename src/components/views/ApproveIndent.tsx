@@ -1,7 +1,6 @@
 import { type ColumnDef, type Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
-import { useEffect, useState } from 'react';
-import { useSheets } from '@/context/SheetsContext';
+import { useEffect, useState, useMemo } from 'react';
 import { DownloadOutlined } from "@ant-design/icons";
 
 import {
@@ -12,153 +11,69 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
+    Dialog,
 } from '@/components/ui/dialog';
 import { Button } from '../ui/button';
-import { Dialog } from '@radix-ui/react-dialog';
 import { z } from 'zod';
 import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { postToSheet } from '@/lib/fetchers';
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
-import { Tabs, TabsContent } from '../ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ClipboardCheck, PenSquare } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
 import { Input } from '../ui/input';
+import {
+    fetchIndentRecords,
+    updateIndentApproval,
+    updateIndentSpecifications,
+    updateIndentHistoryFields,
+    type IndentRecord
+} from '@/services/indentService';
 
-const statuses = ['Pending', 'Reject', 'New Vendor', 'Regular'];
-
-interface ApproveTableData {
-    indentNo: string;
-    indenter: string;
-    department: string;
-    product: string;
-    quantity: number;
-    uom: string;
-    vendorType: 'Pending' | 'Reject' | 'New Vendor' | 'Regular';
-    date: string;
-    attachment: string;
-    specifications: string;
-    indentStatus: string;
-    noDay: number;
-    planned1: string;
-}
-
-interface HistoryData {
-    indentNo: string;
-    indenter: string;
-    department: string;
-    product: string;
-    uom: string;
-    approvedQuantity: number;
-    vendorType: 'Reject' | 'New Vendor' | 'Regular';
-    date: string;
-    approvedDate: string;
-    specifications: string;
-    lastUpdated?: string;
-    indentStatus: string;
-    noDay: number;
-    planned1: string;
-    actual1: string;
-}
-
-export default () => {
-    const { indentSheet, indentLoading, updateIndentSheet } = useSheets();
+export default function ApproveIndent() {
     const { user } = useAuth();
-
-    console.log("user.firmNameMatch:", user.firmNameMatch);
-    console.log("user object:", user);
-
-    //  useEffect(()=>{
-    //     console.log("indentSheet", indentSheet);
-    //     },[indentSheet])
-
-    const [selectedIndent, setSelectedIndent] = useState<ApproveTableData | null>(null);
-    const [tableData, setTableData] = useState<ApproveTableData[]>([]);
-    const [historyData, setHistoryData] = useState<HistoryData[]>([]);
+    const [allData, setAllData] = useState<IndentRecord[]>([]);
+    const [dataLoading, setDataLoading] = useState(true);
+    const [selectedIndent, setSelectedIndent] = useState<IndentRecord | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [editingRow, setEditingRow] = useState<string | null>(null);
-    const [editValues, setEditValues] = useState<Partial<HistoryData>>({});
-    const [loading, setLoading] = useState(false);
+    const [editValues, setEditValues] = useState<Partial<IndentRecord>>({});
+    const [downloading, setDownloading] = useState(false);
 
+    const fetchData = async () => {
+        setDataLoading(true);
+        try {
+            const records = await fetchIndentRecords();
+            // Filter by firm name
+            const filteredByFirm = records.filter(item => {
+                return user.firmNameMatch.toLowerCase() === "all" || item.firm_name_match === user.firmNameMatch;
+            });
+            setAllData(filteredByFirm);
+        } catch (error) {
+            console.error('Failed to fetch indent records:', error);
+            toast.error('Failed to load data');
+        } finally {
+            setDataLoading(false);
+        }
+    };
 
+    useEffect(() => {
+        fetchData();
+    }, [user.firmNameMatch]);
 
-    // Fetching table data
-useEffect(() => {
-    // Pehle firm name se filter karo
-    const filteredByFirm = indentSheet.filter(sheet => 
-        user.firmNameMatch.toLowerCase() === "all" || sheet.firmName === user.firmNameMatch
-    );
-    
-    setTableData(
-        filteredByFirm
-            .filter(
-                (sheet) =>
-                    sheet.planned1 !== '' &&
-                    sheet.actual1 === '' 
-                    // sheet.indentType === 'Purchase'
-            )
-            .map((sheet) => ({
-                indentNo: sheet.indentNumber,
-                firmNameMatch: sheet.firmNameMatch || '',
-                indenter: sheet.indenterName,
-                department: sheet.department,
-                product: sheet.productName,
-                quantity: sheet.quantity,
-                uom: sheet.uom,
-                attachment: sheet.attachment,
-                specifications: sheet.specifications || '',
-                vendorType: sheet.vendorType as ApproveTableData['vendorType'],
-                date: formatDate(new Date(sheet.timestamp)),
-                indentStatus: sheet.indentStatus || '',
-                noDay: sheet.noDay || 0,
-                planned1: sheet.planned1,
-            }))
-    );
-}, [indentSheet, user.firmNameMatch]);
+    const pendingData = useMemo(() => {
+        return allData.filter(i => i.planned1 && !i.actual1);
+    }, [allData]);
 
-useEffect(() => {
-    // Pehle firm name se filter karo
-    const filteredByFirm = indentSheet.filter(sheet => 
-        user.firmNameMatch.toLowerCase() === "all" || sheet.firmName === user.firmNameMatch
-    );
-    
-    setHistoryData(
-        filteredByFirm
-            .filter(
-                (sheet) =>
-                    sheet.planned1 !== '' &&
-                    sheet.actual1 !== '' 
-                    // sheet.indentType === 'Purchase'
-            )
-            .map((sheet) => ({
-                indentNo: sheet.indentNumber,
-                firmNameMatch: sheet.firmNameMatch || '',
-                indenter: sheet.indenterName,
-                department: sheet.department,
-                product: sheet.productName,
-                approvedQuantity: sheet.approvedQuantity || sheet.quantity,
-                vendorType: sheet.vendorType as HistoryData['vendorType'],
-                uom: sheet.uom,
-                specifications: sheet.specifications || '',
-                date: formatDate(new Date(sheet.timestamp)),
-                approvedDate: formatDate(new Date(sheet.actual1)),
-                indentStatus: sheet.indentStatus || '',
-                noDay: sheet.noDay || 0,
-                planned1: sheet.planned1, // ✅ Added
-    actual1: sheet.actual1,   // ✅ Added
-            }))
-            // Sort by indentNo in descending order (newest first)
-            .sort((a, b) => {
-                return b.indentNo.localeCompare(a.indentNo);
-            })
-    );
-}, [indentSheet, user.firmNameMatch]);
+    const historyData = useMemo(() => {
+        return allData.filter(i => i.planned1 && i.actual1);
+    }, [allData]);
 
     const handleDownload = (data: any[]) => {
         if (!data || data.length === 0) {
@@ -166,46 +81,30 @@ useEffect(() => {
             return;
         }
 
-        // Column headers
         const headers = Object.keys(data[0]);
-
-        // CSV rows
         const csvRows = [
             headers.join(","),
             ...data.map(row =>
                 headers.map(h => `"${String(row[h] ?? "").replace(/"/g, '""')}"`).join(",")
             )
         ];
-
         const csvContent = csvRows.join("\n");
-
-        // Blob create & download trigger
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.setAttribute("download", `pending-indents-${Date.now()}.csv`); // CSV extension
+        link.setAttribute("download", `approve-indent-data-${Date.now()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
 
-
-    const onDownloadClick = async () => {
-        setLoading(true);
-        try {
-            await handleDownload(tableData); // agar async function hai
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleEditClick = (row: HistoryData) => {
-        setEditingRow(row.indentNo);
+    const handleEditClick = (row: IndentRecord) => {
+        setEditingRow(row.indent_number);
         setEditValues({
-            approvedQuantity: row.approvedQuantity,
+            approved_quantity: row.approved_quantity,
             uom: row.uom,
-            vendorType: row.vendorType,
+            vendor_type: row.vendor_type,
         });
     };
 
@@ -214,66 +113,70 @@ useEffect(() => {
         setEditValues({});
     };
 
-    const handleSaveEdit = async (indentNo: string) => {
+    const handleSaveEdit = async (indentNumber: string) => {
         try {
-            await postToSheet(
-                indentSheet
-                    .filter((s) => s.indentNumber === indentNo)  // ✅ Use indentNo parameter
-                    .map((prev) => ({
-                        rowIndex: prev.rowIndex,
-                        approvedQuantity: editValues.approvedQuantity,  // ✅ Use editValues
-                        uom: editValues.uom,
-                        vendorType: editValues.vendorType,
-                        lastUpdated: new Date().toISOString(),
-                    })),
-                'update'
-            );
-            toast.success(`Updated indent ${indentNo}`);
-            updateIndentSheet();
+            await updateIndentHistoryFields(indentNumber, {
+                approved_quantity: Number(editValues.approved_quantity),
+                uom: editValues.uom,
+                vendor_type: editValues.vendor_type,
+            });
+
+            toast.success(`Updated indent ${indentNumber}`);
+            fetchData();
             setEditingRow(null);
             setEditValues({});
-        } catch {
+        } catch (err) {
+            console.error('Error updating indent:', err);
             toast.error('Failed to update indent');
         }
     };
 
-    const handleInputChange = (field: keyof HistoryData, value: any) => {
+    const handleInputChange = (field: keyof IndentRecord, value: any) => {
         setEditValues(prev => ({ ...prev, [field]: value }));
     };
 
-    // Creating table columns
-    const columns: ColumnDef<ApproveTableData>[] = [
+    const handleSpecificationUpdate = async (indentNumber: string, value: string) => {
+        try {
+            await updateIndentSpecifications(indentNumber, value);
+            toast.success(`Updated specifications for ${indentNumber}`);
+            fetchData();
+        } catch (err) {
+            console.error('Error updating specifications:', err);
+            toast.error('Failed to update specifications');
+        }
+    };
+
+    const columns: ColumnDef<IndentRecord>[] = [
         ...(user.indentApprovalAction
             ? [
                 {
                     header: 'Action',
                     id: 'action',
-                    cell: ({ row }: { row: Row<ApproveTableData> }) => {
+                    cell: ({ row }: { row: Row<IndentRecord> }) => {
                         const indent = row.original;
                         return (
-                            <div>
-                                <DialogTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => {
-                                            setSelectedIndent(indent);
-                                        }}
-                                    >
-                                        Approve
-                                    </Button>
-                                </DialogTrigger>
-                            </div>
+                            <DialogTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setSelectedIndent(indent);
+                                        setOpenDialog(true);
+                                    }}
+                                >
+                                    Approve
+                                </Button>
+                            </DialogTrigger>
                         );
                     },
                 },
             ]
             : []),
-        { accessorKey: 'indentNo', header: 'Indent No.' },
-         { accessorKey: 'firmNameMatch', header: 'Firm Name' },
-        { accessorKey: 'indenter', header: 'Indenter' },
+        { accessorKey: 'indent_number', header: 'Indent No.' },
+        { accessorKey: 'firm_name_match', header: 'Firm Name' },
+        { accessorKey: 'indenter_name', header: 'Indenter' },
         { accessorKey: 'department', header: 'Department' },
         {
-            accessorKey: 'product',
+            accessorKey: 'product_name',
             header: 'Product',
             cell: ({ getValue }) => (
                 <div className="max-w-[150px] break-words whitespace-normal">
@@ -283,35 +186,19 @@ useEffect(() => {
         },
         { accessorKey: 'quantity', header: 'Quantity' },
         { accessorKey: 'uom', header: 'UOM' },
-                {
+        {
             accessorKey: 'specifications',
             header: 'Specifications',
             cell: ({ row, getValue }) => {
                 const [value, setValue] = useState(getValue() as string);
                 const [isEditing, setIsEditing] = useState(false);
-                const indentNo = row.original.indentNo;
+                const indentNumber = row.original.indent_number;
 
                 const handleBlur = async () => {
                     setIsEditing(false);
-                    try {
-                        await postToSheet(
-                            indentSheet
-                                .filter((s) => s.indentNumber === indentNo)
-                                .map((prev) => ({
-                                    rowIndex: prev.rowIndex,
-                                    specifications: value,
-                                })),
-                            'update'
-                        );
-                        toast.success(`Updated specifications for ${indentNo}`);
-                        updateIndentSheet();
-                    } catch {
-                        toast.error('Failed to update specifications');
+                    if (value !== getValue()) {
+                        await handleSpecificationUpdate(indentNumber, value);
                     }
-                };
-
-                const handleFocus = () => {
-                    setIsEditing(true);
                 };
 
                 return (
@@ -325,10 +212,9 @@ useEffect(() => {
                                 className="border-1 focus:border-2"
                             />
                         ) : (
-                            <div 
+                            <div
                                 className="break-words whitespace-normal cursor-pointer p-2 hover:bg-gray-50 rounded"
-                                onClick={handleFocus}
-                                onFocus={handleFocus}
+                                onClick={() => setIsEditing(true)}
                                 tabIndex={0}
                             >
                                 {value || 'Click to edit...'}
@@ -339,12 +225,10 @@ useEffect(() => {
             },
         },
         {
-            accessorKey: 'vendorType',
+            accessorKey: 'vendor_type',
             header: 'Vendor Type',
-            cell: ({ row }: { row: Row<ApproveTableData> }) => {
-                const status = row.original.vendorType;
-
-                console.log("status", status);
+            cell: ({ row }: { row: Row<IndentRecord> }) => {
+                const status = row.original.vendor_type;
                 return (
                     <Pill
                         variant={
@@ -360,12 +244,11 @@ useEffect(() => {
                 );
             },
         },
-
         {
-            accessorKey: 'indentStatus',
+            accessorKey: 'indent_status',
             header: 'Priority',
-            cell: ({ row }: { row: Row<ApproveTableData> }) => {
-                const status = row.original.indentStatus;
+            cell: ({ row }: { row: Row<IndentRecord> }) => {
+                const status = row.original.indent_status;
                 return (
                     <Pill variant={status === 'Critical' ? 'reject' : 'secondary'}>
                         {status}
@@ -374,7 +257,7 @@ useEffect(() => {
             },
         },
         {
-            accessorKey: 'noDay',
+            accessorKey: 'no_day',
             header: 'Days',
             cell: ({ getValue }) => (
                 <div className="text-center">
@@ -382,39 +265,37 @@ useEffect(() => {
                 </div>
             ),
         },
-
         {
             accessorKey: 'attachment',
             header: 'Attachment',
-            cell: ({ row }: { row: Row<ApproveTableData> }) => {
+            cell: ({ row }: { row: Row<IndentRecord> }) => {
                 const attachment = row.original.attachment;
                 return attachment ? (
-                    <a href={attachment} target="_blank">
+                    <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                         Attachment
                     </a>
-                ) : (
-                    <></>
-                );
+                ) : null;
             },
         },
-        { accessorKey: 'date', header: 'Date' },
         {
-  accessorKey: 'planned1',
-  header: 'Planned Date',
-  cell: ({ row }) =>
-    row.original.planned1
-      ? formatDateTime(row.original.planned1)
-      : '-',
-}
+            accessorKey: 'timestamp',
+            header: 'Date',
+            cell: ({ row }) => row.original.timestamp ? formatDate(new Date(row.original.timestamp)) : '-',
+        },
+        {
+            accessorKey: 'planned1',
+            header: 'Planned Date',
+            cell: ({ row }) => row.original.planned1 ? formatDate(new Date(row.original.planned1)) : '-',
+        }
     ];
 
-    const historyColumns: ColumnDef<HistoryData>[] = [
-        { accessorKey: 'indentNo', header: 'Indent No.' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
-        { accessorKey: 'indenter', header: 'Indenter' },
+    const historyColumns: ColumnDef<IndentRecord>[] = [
+        { accessorKey: 'indent_number', header: 'Indent No.' },
+        { accessorKey: 'firm_name_match', header: 'Firm Name' },
+        { accessorKey: 'indenter_name', header: 'Indenter' },
         { accessorKey: 'department', header: 'Department' },
         {
-            accessorKey: 'product',
+            accessorKey: 'product_name',
             header: 'Product',
             cell: ({ getValue }) => (
                 <div className="max-w-[150px] break-words whitespace-normal">
@@ -423,20 +304,20 @@ useEffect(() => {
             ),
         },
         {
-            accessorKey: 'approvedQuantity',
+            accessorKey: 'approved_quantity',
             header: 'Quantity',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const isEditing = editingRow === row.original.indent_number;
                 return isEditing ? (
                     <Input
                         type="number"
-                        value={editValues.approvedQuantity ?? row.original.approvedQuantity}
-                        onChange={(e) => handleInputChange('approvedQuantity', Number(e.target.value))}
+                        value={editValues.approved_quantity ?? row.original.approved_quantity}
+                        onChange={(e) => handleInputChange('approved_quantity', Number(e.target.value))}
                         className="w-20"
                     />
                 ) : (
                     <div className="flex items-center gap-2">
-                        {row.original.approvedQuantity}
+                        {row.original.approved_quantity}
                         {user.indentApprovalAction && (
                             <Button
                                 variant="ghost"
@@ -455,7 +336,7 @@ useEffect(() => {
             accessorKey: 'uom',
             header: 'UOM',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const isEditing = editingRow === row.original.indent_number;
                 return isEditing ? (
                     <Input
                         value={editValues.uom ?? row.original.uom}
@@ -465,7 +346,7 @@ useEffect(() => {
                 ) : (
                     <div className="flex items-center gap-2">
                         {row.original.uom}
-                        {user.indentApprovalAction && editingRow !== row.original.indentNo && (
+                        {user.indentApprovalAction && editingRow !== row.original.indent_number && (
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -489,21 +370,21 @@ useEffect(() => {
             ),
         },
         {
-            accessorKey: 'vendorType',
+            accessorKey: 'vendor_type',
             header: 'Vendor Type',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
+                const isEditing = editingRow === row.original.indent_number;
                 return isEditing ? (
                     <Select
-                        value={editValues.vendorType ?? row.original.vendorType}
-                        onValueChange={(value) => handleInputChange('vendorType', value)}
+                        value={editValues.vendor_type ?? row.original.vendor_type}
+                        onValueChange={(value) => handleInputChange('vendor_type', value)}
                     >
                         <SelectTrigger className="w-[150px]">
                             <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="Regular Vendor">Regular</SelectItem>
-                            <SelectItem value="New Vendor">New Vendor</SelectItem>
+                            <SelectItem value="Regular">Regular</SelectItem>
+                            <SelectItem value="Three Party">Three Party</SelectItem>
                             <SelectItem value="Reject">Reject</SelectItem>
                         </SelectContent>
                     </Select>
@@ -511,16 +392,16 @@ useEffect(() => {
                     <div className="flex items-center gap-2">
                         <Pill
                             variant={
-                                row.original.vendorType === 'Reject'
+                                row.original.vendor_type === 'Reject'
                                     ? 'reject'
-                                    : row.original.vendorType === 'Regular'
+                                    : row.original.vendor_type === 'Regular'
                                         ? 'primary'
                                         : 'secondary'
                             }
                         >
-                            {row.original.vendorType}
+                            {row.original.vendor_type}
                         </Pill>
-                        {user.indentApprovalAction && editingRow !== row.original.indentNo && (
+                        {user.indentApprovalAction && editingRow !== row.original.indent_number && (
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -534,12 +415,11 @@ useEffect(() => {
                 );
             },
         },
-
         {
-            accessorKey: 'indentStatus',
+            accessorKey: 'indent_status',
             header: 'Priority',
-            cell: ({ row }: { row: Row<HistoryData> }) => {
-                const status = row.original.indentStatus;
+            cell: ({ row }: { row: Row<IndentRecord> }) => {
+                const status = row.original.indent_status;
                 return (
                     <Pill variant={status === 'Critical' ? 'reject' : 'secondary'}>
                         {status}
@@ -548,7 +428,7 @@ useEffect(() => {
             },
         },
         {
-            accessorKey: 'noDay',
+            accessorKey: 'no_day',
             header: 'Days',
             cell: ({ getValue }) => (
                 <div className="text-center">
@@ -556,36 +436,32 @@ useEffect(() => {
                 </div>
             ),
         },
-        { accessorKey: 'date', header: 'Request Date' },
-        { accessorKey: 'approvedDate', header: 'Approval Date' },
         {
-  accessorKey: 'planned1',
-  header: 'Planned Date',
-  cell: ({ row }) =>
-    row.original.planned1
-      ? formatDateTime(row.original.planned1)
-      : '-',
-},
-{
-  accessorKey: 'actual1',
-  header: 'Actual Date',
-  cell: ({ row }) =>
-    row.original.actual1
-      ? formatDateTime(row.original.actual1)
-      : '-',
-},
-
+            accessorKey: 'timestamp',
+            header: 'Request Date',
+            cell: ({ row }) => row.original.timestamp ? formatDate(new Date(row.original.timestamp)) : '-',
+        },
+        {
+            accessorKey: 'actual1',
+            header: 'Approval Date',
+            cell: ({ row }) => row.original.actual1 ? formatDate(new Date(row.original.actual1)) : '-',
+        },
+        {
+            accessorKey: 'planned1',
+            header: 'Planned Date',
+            cell: ({ row }) => row.original.planned1 ? formatDate(new Date(row.original.planned1)) : '-',
+        },
         ...(user.indentApprovalAction
             ? [
                 {
                     id: 'editActions',
-                    cell: ({ row }: { row: Row<HistoryData> }) => {
-                        const isEditing = editingRow === row.original.indentNo;
+                    cell: ({ row }: { row: Row<IndentRecord> }) => {
+                        const isEditing = editingRow === row.original.indent_number;
                         return isEditing ? (
                             <div className="flex gap-2">
                                 <Button
                                     size="sm"
-                                    onClick={() => handleSaveEdit(row.original.indentNo)}
+                                    onClick={() => handleSaveEdit(row.original.indent_number)}
                                 >
                                     Save
                                 </Button>
@@ -604,76 +480,63 @@ useEffect(() => {
             : []),
     ];
 
-    // Creating Form
-    const schema = z
-        .object({
-            approval: z.enum(['Reject', 'Three Party', 'Regular']),
-            approvedQuantity: z.coerce.number().optional(),
-        })
-        .superRefine((data, ctx) => {
-            if (data.approval !== 'Reject') {
-                if (!data.approvedQuantity || data.approvedQuantity === 0) {
-                    ctx.addIssue({
-                        path: ['approvedQuantity'],
-                        code: z.ZodIssueCode.custom,
-                    });
-                }
+    const schema = z.object({
+        approval: z.enum(['Reject', 'Three Party', 'Regular'], {
+            required_error: "Please select an approval status",
+        }),
+        approvedQuantity: z.coerce.number().optional(),
+    }).superRefine((data, ctx) => {
+        if (data.approval !== 'Reject') {
+            if (!data.approvedQuantity || data.approvedQuantity <= 0) {
+                ctx.addIssue({
+                    path: ['approvedQuantity'],
+                    code: z.ZodIssueCode.custom,
+                    message: "Approved quantity must be greater than 0",
+                });
             }
-        });
+        }
+    });
 
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
         defaultValues: { approvedQuantity: undefined, approval: undefined },
     });
 
-    const approval = form.watch('approval');
-
     useEffect(() => {
         if (selectedIndent) {
-            form.setValue("approvedQuantity", selectedIndent.quantity)
+            form.setValue("approvedQuantity", selectedIndent.quantity);
         }
     }, [selectedIndent]);
 
- async function onSubmit(values: z.infer<typeof schema>) {
-    try {
-        await postToSheet(
-            indentSheet
-                .filter((s) => s.indentNumber === selectedIndent?.indentNo)  // ✅
-                .map((prev) => ({
-                    rowIndex: prev.rowIndex,
-                    vendorType: values.approval,  // ✅ From form values
-                    approvedQuantity: values.approvedQuantity,
-                    actual1: new Date().toISOString(),
-                    lastUpdated: new Date().toISOString(),
-                })),
-            'update'
-        );
-        toast.success(`Updated approval status of ${selectedIndent?.indentNo}`);
-        setOpenDialog(false);
-        form.reset();
-        setTimeout(() => updateIndentSheet(), 1000);
-    } catch {
-        toast.error('Failed to approve indent');
+    async function onSubmit(values: z.infer<typeof schema>) {
+        try {
+            if (!selectedIndent) return;
+
+            const currentDateTime = new Date().toISOString();
+
+            await updateIndentApproval(selectedIndent.indent_number, {
+                actual1: currentDateTime,
+                vendor_type: values.approval,
+                approved_quantity: values.approvedQuantity ?? selectedIndent.quantity,
+                // Set planned2 for approved indents (not rejected)
+                ...(values.approval !== 'Reject' && { planned2: currentDateTime }),
+            });
+
+            toast.success(`Updated approval status of ${selectedIndent.indent_number}`);
+            setOpenDialog(false);
+            form.reset();
+            setSelectedIndent(null);
+            fetchData();
+        } catch (err) {
+            console.error('Error approving indent:', err);
+            toast.error('Failed to approve indent');
+        }
     }
-}
 
     function onError(e: FieldErrors<z.infer<typeof schema>>) {
         console.log(e);
         toast.error('Please fill all required fields');
     }
-
-    const formatDateTime = (isoString?: string) => {
-  if (!isoString) return '-';
-  const date = new Date(isoString);
-  const day = date.getDate().toString().padStart(2, "0");
-  const month = (date.getMonth() + 1).toString().padStart(2, "0");
-  const year = date.getFullYear();
-  const hours = date.getHours().toString().padStart(2, "0");
-  const minutes = date.getMinutes().toString().padStart(2, "0");
-  const seconds = date.getSeconds().toString().padStart(2, "0");
-  return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-};
-
 
     return (
         <div>
@@ -686,16 +549,22 @@ useEffect(() => {
                     >
                         <ClipboardCheck size={50} className="text-primary" />
                     </Heading>
+
+                    <TabsList className="mb-4">
+                        <TabsTrigger value="pending">Pending ({pendingData.length})</TabsTrigger>
+                        <TabsTrigger value="history">History ({historyData.length})</TabsTrigger>
+                    </TabsList>
+
                     <TabsContent value="pending">
                         <DataTable
-                            data={tableData}
+                            data={pendingData}
                             columns={columns}
-                            searchFields={['product', 'department', 'indenter', 'vendorType','firmNameMatch']}
-                            dataLoading={indentLoading}
+                            searchFields={['product_name', 'department', 'indenter_name', 'vendor_type', 'firm_name_match']}
+                            dataLoading={dataLoading}
                             extraActions={
                                 <Button
-                                    variant="default"  // or "outline", "secondary", etc. based on your design
-                                    onClick={onDownloadClick}
+                                    variant="default"
+                                    onClick={() => handleDownload(pendingData)}
                                     style={{
                                         background: "linear-gradient(90deg, #4CAF50, #2E7D32)",
                                         border: "none",
@@ -709,7 +578,7 @@ useEffect(() => {
                                     }}
                                 >
                                     <DownloadOutlined />
-                                    {loading ? "Downloading..." : "Download"}
+                                    {downloading ? "Downloading..." : "Download"}
                                 </Button>
                             }
                         />
@@ -718,8 +587,8 @@ useEffect(() => {
                         <DataTable
                             data={historyData}
                             columns={historyColumns}
-                            searchFields={['product', 'department', 'indenter', 'vendorType']}
-                            dataLoading={indentLoading}
+                            searchFields={['product_name', 'department', 'indenter_name', 'vendor_type', 'firm_name_match']}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
                 </Tabs>
@@ -736,7 +605,7 @@ useEffect(() => {
                                     <DialogDescription>
                                         Approve indent{' '}
                                         <span className="font-medium">
-                                            {selectedIndent.indentNo}
+                                            {selectedIndent.indent_number}
                                         </span>
                                     </DialogDescription>
                                 </DialogHeader>
@@ -772,28 +641,30 @@ useEffect(() => {
                                             </FormItem>
                                         )}
                                     />
-                                    <FormField
-                                        control={form.control}
-                                        name="approvedQuantity"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Quantity</FormLabel>
-                                                <FormControl>
-                                                    <Input
-                                                        {...field}
-                                                        disabled={approval === 'Reject'}
-                                                    />
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
+                                    {form.watch('approval') !== 'Reject' && (
+                                        <FormField
+                                            control={form.control}
+                                            name="approvedQuantity"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Approved Quantity</FormLabel>
+                                                    <FormControl>
+                                                        <Input {...field} type="number" />
+                                                    </FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
                                 </div>
                                 <DialogFooter>
                                     <DialogClose asChild>
                                         <Button variant="outline">Close</Button>
                                     </DialogClose>
 
-                                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                                    <Button
+                                        type="submit"
+                                        disabled={form.formState.isSubmitting}
+                                    >
                                         {form.formState.isSubmitting && (
                                             <Loader
                                                 size={20}
@@ -811,4 +682,4 @@ useEffect(() => {
             </Dialog>
         </div>
     );
-};
+}

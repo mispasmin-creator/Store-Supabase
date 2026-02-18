@@ -20,6 +20,7 @@ import { useState, type ReactNode } from 'react';
 import { Input } from '../ui/input';
 import { Package } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
+import { ClipLoader } from 'react-spinners';
 import { ScrollArea } from '../ui/scroll-area';
 import { cn } from '@/lib/utils';
 
@@ -83,10 +84,8 @@ export default function DataTable<TData, TValue>({
             </div>
 
             <div className="relative max-w-full overflow-x-auto">
-                <Table>
-                    <ScrollArea
-                        className={cn('rounded-sm border h-[74dvh] w-full', className)}
-                    >
+                <ScrollArea className={cn('rounded-sm border h-[74dvh] w-full', className)}>
+                    <Table className="min-w-max">
                         <TableHeader className="sticky top-0 z-10 bg-muted">
                             {table.getHeaderGroups().map((headerGroup) => (
                                 <TableRow key={headerGroup.id}>
@@ -105,20 +104,19 @@ export default function DataTable<TData, TValue>({
                                 </TableRow>
                             ))}
                         </TableHeader>
+
                         <TableBody>
                             {dataLoading ? (
-                                Array.from({ length: 15 }).map((_, i) => (
-                                    <TableRow
-                                        key={`skeleton-${i}`}
-                                        className="p-1 hover:bg-transparent"
+                                <TableRow className="hover:bg-transparent">
+                                    <TableCell
+                                        colSpan={columns.length}
+                                        className="h-50 text-center"
                                     >
-                                        {columns.map((_, j) => (
-                                            <TableCell key={`skeleton-cell-${j}`}>
-                                                <Skeleton className="h-4 w-full" />
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                ))
+                                        <div className="flex justify-center items-center w-full py-20">
+                                            <ClipLoader color="#9333ea" size={40} />
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
                             ) : table.getRowModel().rows?.length ? (
                                 table.getRowModel().rows.map((row) => (
                                     <TableRow
@@ -152,8 +150,8 @@ export default function DataTable<TData, TValue>({
                                 </TableRow>
                             )}
                         </TableBody>
-                    </ScrollArea>
-                </Table>
+                    </Table>
+                </ScrollArea>
             </div>
         </div>
     );

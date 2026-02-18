@@ -1,4 +1,3 @@
-import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
@@ -21,14 +20,16 @@ import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
-import { postToSheet, uploadFile } from '@/lib/fetchers';
-import type { ReceivedSheet } from '@/types';
+import {
+    fetchStoreInRecords,
+    updateStoreInBillStatus,
+    uploadBillCopy,
+    type StoreInRecord,
+} from '@/services/storeInService';
 import { Truck } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
-import { formatDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
 
 interface StoreInPendingData {
@@ -69,62 +70,70 @@ interface StoreInPendingData {
 type RecieveItemsData = StoreInPendingData;
 
 export default () => {
-    const { storeInSheet, indentSheet, updateAll } = useSheets();
     const { user } = useAuth();
 
-
-    const [tableData, setTableData] = useState<StoreInPendingData[]>([]);
-    const [selectedIndent, setSelectedIndent] = useState<StoreInPendingData | null>(null);
+    const [allData, setAllData] = useState<StoreInRecord[]>([]);
+    const [tableData, setTableData] = useState<RecieveItemsData[]>([]);
+    const [selectedIndent, setSelectedIndent] = useState<RecieveItemsData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
+    const [dataLoading, setDataLoading] = useState(false);
 
-    // Add loading states
-    const [indentLoading, setIndentLoading] = useState(false);
-    const [receivedLoading, setReceivedLoading] = useState(false);
+    const fetchAllData = async () => {
+        setDataLoading(true);
+        try {
+            const records = await fetchStoreInRecords();
+            setAllData(records);
+        } catch (error) {
+            console.error('Failed to fetch store-in records:', error);
+            toast.error('Failed to load data');
+        } finally {
+            setDataLoading(false);
+        }
+    };
 
-    
     useEffect(() => {
-    // Pehle firm name se filter karo (case-insensitive)
-    const filteredByFirm = storeInSheet.filter(item => 
-        user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
-    );
-    
-    setTableData(
-        filteredByFirm
-            .filter((i) => i.planned11 !== '' && i.actual11 === '')
-            .map((i) => ({
-                liftNumber: i.liftNumber || '',
-                indentNo: i.indentNo || '',
-                billNo: String(i.billNo) || '',
-                vendorName: i.vendorName || '',
-                productName: i.productName || '',
-                qty: i.qty || 0,
-                typeOfBill: i.typeOfBill || '',
-                billAmount: i.billAmount || 0,
-                paymentType: i.paymentType || '',
-                advanceAmountIfAny: i.advanceAmountIfAny || '',
-                photoOfBill: i.photoOfBill || '',
-                transportationInclude: i.transportationInclude || '',
-                transporterName: i.transporterName || '',
-                amount: i.amount || 0,
-                // Add missing mapped properties
-                poDate: i.poDate || '',
-                plannedDate: i.planned11 || '', // ✅ FIXED: Get from Planned 11 column
-                poNumber: i.poNumber || '',
-                vendor: i.vendor || '',
-                indentNumber: i.indentNumber || '',
-                product: i.product || '',
-                uom: i.uom || '',
-                quantity: i.quantity || 0,
-                poCopy: i.poCopy || '',
+        fetchAllData();
+    }, []);
 
-                billStatus: i.billStatus || '',
-                leadTimeToLiftMaterial: i.leadTimeToLiftMaterial || 0,
-                discountAmount: i.discountAmount || 0,
-                rowIndex: i.rowIndex,
-                 firmNameMatch: i.firmNameMatch || '',
-            }))
-    );
-}, [storeInSheet, user.firmNameMatch]);
+    useEffect(() => {
+        const filteredByFirm = allData.filter(item =>
+            user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
+        );
+
+        setTableData(
+            filteredByFirm
+                .filter((i) => i.planned11 !== '' && i.actual11 === '')
+                .map((i) => ({
+                    liftNumber: i.liftNumber || '',
+                    indentNo: i.indentNo || '',
+                    billNo: String(i.billNo) || '',
+                    vendorName: i.vendorName || '',
+                    productName: i.productName || '',
+                    qty: i.qty || 0,
+                    typeOfBill: i.typeOfBill || '',
+                    billAmount: i.billAmount || 0,
+                    paymentType: i.paymentType || '',
+                    advanceAmountIfAny: String(i.advanceAmountIfAny) || '',
+                    photoOfBill: i.photoOfBill || '',
+                    transportationInclude: i.transportationInclude || '',
+                    transporterName: i.transporterName || '',
+                    amount: i.amount || 0,
+                    poDate: i.poDate || '',
+                    plannedDate: i.planned11 || '',
+                    poNumber: i.poNumber || '',
+                    vendor: i.vendor || '',
+                    indentNumber: i.indentNumber || '',
+                    product: i.product || '',
+                    uom: i.uom || '',
+                    quantity: i.qty || 0, // Using qty from mapping
+                    poCopy: i.poCopy || '',
+                    billStatus: i.billStatus || '',
+                    leadTimeToLiftMaterial: i.leadTimeToLiftMaterial || 0,
+                    discountAmount: i.discountAmount || 0,
+                    firmNameMatch: i.firmNameMatch || '',
+                }))
+        );
+    }, [allData, user.firmNameMatch]);
 
 
     useEffect(() => {
@@ -143,33 +152,33 @@ export default () => {
     };
 
     const schema = z.object({
-    status: z.enum(['ok']),
-    billImageStatus: z.instanceof(File).optional()
-        .refine((file) => {
-            if (!file) return true; // Optional field
-            const allowedTypes = [
-                'image/jpeg', 
-                'image/jpg', 
-                'image/png', 
-                'image/gif', 
-                'image/webp',
-                'application/pdf'
-            ];
-            return allowedTypes.includes(file.type);
-        }, 'File must be an image (JPEG, PNG, GIF, WebP) or PDF')
-        .refine((file) => {
-            if (!file) return true;
-            return file.size <= 5 * 1024 * 1024; // 5MB max
-        }, 'File size should be less than 5MB'),
-});
+        status: z.enum(['ok']),
+        billImageStatus: z.instanceof(File).optional()
+            .refine((file) => {
+                if (!file) return true; // Optional field
+                const allowedTypes = [
+                    'image/jpeg',
+                    'image/jpg',
+                    'image/png',
+                    'image/gif',
+                    'image/webp',
+                    'application/pdf'
+                ];
+                return allowedTypes.includes(file.type);
+            }, 'File must be an image (JPEG, PNG, GIF, WebP) or PDF')
+            .refine((file) => {
+                if (!file) return true;
+                return file.size <= 5 * 1024 * 1024; // 5MB max
+            }, 'File size should be less than 5MB'),
+    });
 
     const form = useForm({
-    resolver: zodResolver(schema),
-    defaultValues: {
-        status: undefined,
-        billImageStatus: undefined,
-    },
-});
+        resolver: zodResolver(schema),
+        defaultValues: {
+            status: undefined,
+            billImageStatus: undefined,
+        },
+    });
 
 
     const columns: ColumnDef<RecieveItemsData>[] = [
@@ -199,14 +208,14 @@ export default () => {
         { accessorKey: 'indentNo', header: 'Indent No.' },
         { accessorKey: 'poNumber', header: 'PO Number' },
         { accessorKey: 'vendorName', header: 'Vendor Name' },
-         { accessorKey: 'firmNameMatch', header: 'Firm Name' }, 
+        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'productName', header: 'Product Name' },
         { accessorKey: 'billStatus', header: 'Bill Status' },
-          {
-        accessorKey: 'plannedDate', // ✅ FIXED: Using correct field name
-        header: 'Planned Date',
-        cell: ({ row }) => formatDate(row.original.plannedDate) // ✅ FIXED: Using correct field name
-    },
+        {
+            accessorKey: 'plannedDate', // ✅ FIXED: Using correct field name
+            header: 'Planned Date',
+            cell: ({ row }) => formatDate(row.original.plannedDate) // ✅ FIXED: Using correct field name
+        },
         { accessorKey: 'billNo', header: 'Bill No.' },
         { accessorKey: 'qty', header: 'Qty' },
         { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift Material' },
@@ -267,98 +276,60 @@ export default () => {
 
 
     async function onSubmit(values: z.infer<typeof schema>) {
-    try {
-        console.log('🔄 Starting form submission...');
-        console.log('📝 Selected indent:', selectedIndent);
-        console.log('📋 Form values:', values);
+        try {
+            console.log('🔄 Starting form submission...');
+            console.log('📝 Selected indent:', selectedIndent);
+            console.log('📋 Form values:', values);
 
-        let billImageUrl = '';
-        
-        // Upload file if provided (both images and PDFs)
-        if (values.billImageStatus) {
-            console.log('📤 Uploading file...');
-            console.log('📄 File type:', values.billImageStatus.type);
-            console.log('📄 File name:', values.billImageStatus.name);
-            
-            try {
-                billImageUrl = await uploadFile({
-                    file: values.billImageStatus,
-                    folderId: import.meta.env.VITE_BILL_PHOTO_FOLDER || 'bill-documents', // ✅ Use appropriate folder
-                });
-                console.log('✅ File uploaded:', billImageUrl);
-                
-                // Show success message based on file type
-                if (values.billImageStatus.type === 'application/pdf') {
-                    toast.success('PDF document uploaded successfully');
-                } else {
-                    toast.success('Image uploaded successfully');
+            let billImageUrl = '';
+
+            // Upload file if provided
+            if (values.billImageStatus) {
+                console.log('📤 Uploading file...');
+                try {
+                    billImageUrl = await uploadBillCopy(
+                        values.billImageStatus,
+                        selectedIndent?.liftNumber || 'unknown'
+                    );
+                    console.log('✅ File uploaded:', billImageUrl);
+                    toast.success('Document uploaded successfully');
+                } catch (uploadError) {
+                    console.error('❌ File upload error:', uploadError);
+                    toast.error('Failed to upload file. Please try again.');
+                    return;
                 }
-            } catch (uploadError) {
-                console.error('❌ File upload error:', uploadError);
-                toast.error('Failed to upload file. Please try again.');
+            }
+
+            const currentDateTime = new Date().toISOString();
+
+            if (!selectedIndent?.liftNumber) {
+                toast.error('No record selected');
                 return;
             }
-        }
 
-        // Get current date and time in dd/mm/yyyy hh:mm:ss format
-        const currentDateTime = new Date()
-            .toLocaleString('en-GB', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false,
-            })
-            .replace(',', '');
+            console.log('📤 Updating record');
 
-        console.log('📅 Actual 11 date:', currentDateTime);
-
-        // Find the exact row in the original sheet data
-        const sheetRow = storeInSheet.find((s) => {
-            const indentNo = s.indentNo?.toString().trim();
-            const selectedIndentNo = selectedIndent?.indentNo?.toString().trim();
-            return indentNo === selectedIndentNo;
-        });
-
-        if (!sheetRow) {
-            console.error('❌ Could not find matching row in sheet data');
-            toast.error('Could not find matching record in sheet');
-            return;
-        }
-
-        console.log('✅ Found sheet row:', sheetRow);
-        console.log('📊 Row index:', sheetRow.rowIndex);
-
-        // Prepare update data with camelCase field names (matching backend expectations)
-        const mappedData = [
-            {
-                rowIndex: sheetRow.rowIndex,
+            await updateStoreInBillStatus(selectedIndent.liftNumber, {
                 actual11: currentDateTime,
                 billStatusNew: values.status,
                 billImageStatus: billImageUrl || '',
-            }
-        ];
+            });
 
-        console.log('📤 Mapped data to post:', mappedData);
+            console.log('✅ Update successful');
+            toast.success(`Bill status updated for ${selectedIndent?.indentNo}`);
+            setOpenDialog(false);
 
-        await postToSheet(mappedData, 'update', 'STORE IN');
+            // Refresh data
+            setTimeout(() => {
+                fetchAllData();
+                console.log('🔄 Data refreshed after update');
+            }, 1000);
 
-        console.log('✅ Update successful');
-        toast.success(`Bill status updated for ${selectedIndent?.indentNo}`);
-        setOpenDialog(false);
-        
-        setTimeout(() => {
-            updateAll();
-            console.log('🔄 Data refreshed after update');
-        }, 1500);
-        
-    } catch (err) {
-        console.error('❌ Error in onSubmit:', err);
-        toast.error('Failed to update. Please try again.');
+        } catch (err) {
+            console.error('❌ Error in onSubmit:', err);
+            toast.error('Failed to update. Please try again.');
+        }
     }
-}
 
 
 
@@ -405,7 +376,7 @@ export default () => {
                                 'transporterName',
                                 'amount'
                             ]}
-                            dataLoading={indentLoading}
+                            dataLoading={dataLoading}
                         />
                     </TabsContent>
 
@@ -458,64 +429,64 @@ export default () => {
                                         </div>
                                     </div>
                                 </div>
-                               <div className="grid md:grid-cols-2 gap-4">
-    <FormField
-        control={form.control}
-        name="status"
-        render={({ field }) => (
-            <FormItem>
-                <FormControl>
-                    <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                    >
-                        <FormLabel>Status</FormLabel>
-                        <FormControl>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Set status" />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            <SelectItem value="ok">ok</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </FormControl>
-            </FormItem>
-        )}
-    />
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="status"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl>
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        value={field.value}
+                                                    >
+                                                        <FormLabel>Status</FormLabel>
+                                                        <FormControl>
+                                                            <SelectTrigger className="w-full">
+                                                                <SelectValue placeholder="Set status" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="ok">ok</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
 
-    {form.watch('status') === 'ok' && (
-    <FormField
-        control={form.control}
-        name="billImageStatus"
-        render={({ field: { onChange, value, ...field } }) => (
-            <FormItem>
-                <FormLabel>Bill Image/Document</FormLabel>
-                <FormControl>
-                    <Input
-                        type="file"
-                        accept="image/*,.pdf,application/pdf" // ✅ Accept both images and PDFs
-                        onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) onChange(file);
-                        }}
-                        {...field}
-                    />
-                </FormControl>
-                {/* ✅ Add error message display */}
-                {form.formState.errors.billImageStatus && (
-                    <p className="text-sm text-red-500">
-                        {form.formState.errors.billImageStatus.message}
-                    </p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                    Upload image (JPEG, PNG, GIF, WebP) or PDF document (Max: 5MB)
-                </p>
-            </FormItem>
-        )}
-    />
-)}
-</div>
+                                    {form.watch('status') === 'ok' && (
+                                        <FormField
+                                            control={form.control}
+                                            name="billImageStatus"
+                                            render={({ field: { onChange, value, ...field } }) => (
+                                                <FormItem>
+                                                    <FormLabel>Bill Image/Document</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="file"
+                                                            accept="image/*,.pdf,application/pdf" // ✅ Accept both images and PDFs
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) onChange(file);
+                                                            }}
+                                                            {...field}
+                                                        />
+                                                    </FormControl>
+                                                    {/* ✅ Add error message display */}
+                                                    {form.formState.errors.billImageStatus && (
+                                                        <p className="text-sm text-red-500">
+                                                            {form.formState.errors.billImageStatus.message}
+                                                        </p>
+                                                    )}
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Upload image (JPEG, PNG, GIF, WebP) or PDF document (Max: 5MB)
+                                                    </p>
+                                                </FormItem>
+                                            )}
+                                        />
+                                    )}
+                                </div>
 
 
                                 <DialogFooter>

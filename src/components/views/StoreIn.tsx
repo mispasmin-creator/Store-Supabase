@@ -1,10 +1,10 @@
-import { useSheets } from '@/context/SheetsContext';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { supabase } from '@/lib/supabase';
 import {
     Dialog,
     DialogContent,
@@ -22,14 +22,20 @@ import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
-import { postToSheet, uploadFile } from '@/lib/fetchers';
-import type { ReceivedSheet } from '@/types';
-import { Truck ,Search} from 'lucide-react';
+import { Truck, Search } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
+import {
+    fetchStoreInRecords,
+    fetchLocationOptions,
+    updateStoreInReceiving,
+    uploadProductPhoto,
+    createPaymentEntry,
+    type StoreInRecord,
+} from '@/services/storeInService';
 
 interface StoreInPendingData {
     liftNumber: string;
@@ -161,11 +167,11 @@ const formatPlannedDate = (dateString: string) => {
         if (dateString.includes('/')) {
             return dateString;
         }
-        
+
         // If it's a date string that can be parsed
         const dateObj = new Date(dateString);
         if (isNaN(dateObj.getTime())) return dateString;
-        
+
         const day = String(dateObj.getDate()).padStart(2, '0');
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const year = String(dateObj.getFullYear()).slice(-2);
@@ -176,27 +182,53 @@ const formatPlannedDate = (dateString: string) => {
 };
 
 export default () => {
-    const { storeInSheet, indentSheet, updateAll, masterSheet: options } = useSheets(); // ✅ Get masterSheet from context
     const { user } = useAuth();
 
     const [tableData, setTableData] = useState<StoreInPendingData[]>([]);
     const [historyData, setHistoryData] = useState<StoreInHistoryData[]>([]);
     const [selectedIndent, setSelectedIndent] = useState<StoreInPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
-    const [searchTermLocation, setSearchTermLocation] = useState(''); // ✅ Add search state for location
+    const [searchTermLocation, setSearchTermLocation] = useState('');
     const [indentLoading, setIndentLoading] = useState(false);
     const [receivedLoading, setReceivedLoading] = useState(false);
+    const [storeInRecords, setStoreInRecords] = useState<StoreInRecord[]>([]);
+    const [locationOptions, setLocationOptions] = useState<string[]>(["store"]);
 
-    // Fetching table data
+    // Fetch all data from Supabase
     useEffect(() => {
-        const filteredByFirm = storeInSheet.filter((item: StoreInSheetItem) =>
+        const fetchAllData = async () => {
+            setIndentLoading(true);
+            setReceivedLoading(true);
+            try {
+                const [storeIns, locations] = await Promise.all([
+                    fetchStoreInRecords(),
+                    fetchLocationOptions(),
+                ]);
+
+                setStoreInRecords(storeIns);
+                setLocationOptions(locations);
+            } catch (error) {
+                console.error('Failed to fetch data:', error);
+                toast.error('Failed to load data');
+            } finally {
+                setIndentLoading(false);
+                setReceivedLoading(false);
+            }
+        };
+
+        fetchAllData();
+    }, []);
+
+    // Process pending table data
+    useEffect(() => {
+        const filteredByFirm = storeInRecords.filter((item) =>
             user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
         );
 
         setTableData(
             filteredByFirm
-                .filter((i: StoreInSheetItem) => i.planned6 !== '' && i.actual6 === '')
-                .map((i: StoreInSheetItem) => ({
+                .filter((i) => i.planned6 !== '' && i.actual6 === '' && i.billStatus === 'Bill Received')
+                .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNo: i.indentNo || '',
                     billNo: String(i.billNo) || '',
@@ -205,12 +237,12 @@ export default () => {
                     qty: i.qty || 0,
                     typeOfBill: i.typeOfBill || '',
                     billAmount: i.billAmount || 0,
+                    amount: i.amount || 0,
                     paymentType: i.paymentType || '',
                     advanceAmountIfAny: Number(i.advanceAmountIfAny) || 0,
                     photoOfBill: i.photoOfBill || '',
                     transportationInclude: i.transportationInclude || '',
                     transporterName: i.transporterName || '',
-                    amount: i.amount || 0,
                     poDate: i.poDate || '',
                     poNumber: i.poNumber || '',
                     vendor: i.vendor || '',
@@ -225,17 +257,18 @@ export default () => {
                     planned6Date: i.planned6 || '',
                 }))
         );
-    }, [storeInSheet, user.firmNameMatch]);
+    }, [storeInRecords, user.firmNameMatch]);
 
+    // Process history data
     useEffect(() => {
-        const filteredByFirm = storeInSheet.filter((item: StoreInSheetItem) =>
+        const filteredByFirm = storeInRecords.filter((item) =>
             user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
         );
 
         setHistoryData(
             filteredByFirm
-                .filter((i: StoreInSheetItem) => i.actual6 !== '')
-                .map((i: StoreInSheetItem) => ({
+                .filter((i) => i.actual6 !== '')
+                .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNo: i.indentNo || '',
                     billNo: String(i.billNo) || '',
@@ -255,7 +288,7 @@ export default () => {
                     photoOfProduct: i.photoOfProduct || '',
                     unitOfMeasurement: i.unitOfMeasurement || '',
                     damageOrder: i.damageOrder || '',
-                    quantityAsPerBill: i.quantityAsPerBill || 0,
+                    quantityAsPerBill: Number(i.quantityAsPerBill) || 0,
                     priceAsPerPo: i.priceAsPerPo || 0,
                     remark: i.remark || '',
                     poDate: i.poDate || '',
@@ -279,7 +312,7 @@ export default () => {
                     planned6Date: i.planned6 || '',
                 }))
         );
-    }, [storeInSheet, user.firmNameMatch]);
+    }, [storeInRecords, user.firmNameMatch]);
 
     const columns: ColumnDef<RecieveItemsData>[] = [
         ...(user.receiveItemView
@@ -312,11 +345,12 @@ export default () => {
         { accessorKey: 'firmNameMatch', header: 'Firm Name' },
         { accessorKey: 'billStatus', header: 'Bill Status' },
         { accessorKey: 'billNo', header: 'Bill No.' },
+        { accessorKey: 'amount', header: 'Amount' },
+        { accessorKey: 'billAmount', header: 'Bill Amount' },
+        { accessorKey: 'discountAmount', header: 'Discount Amount' },
         { accessorKey: 'qty', header: 'Qty' },
         { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift Material' },
         { accessorKey: 'typeOfBill', header: 'Type Of Bill' },
-        { accessorKey: 'billAmount', header: 'Bill Amount' },
-        { accessorKey: 'discountAmount', header: 'Discount Amount' },
         { accessorKey: 'paymentType', header: 'Payment Type' },
         { accessorKey: 'advanceAmountIfAny', header: 'Advance Amount If Any' },
         {
@@ -333,9 +367,8 @@ export default () => {
         },
         { accessorKey: 'transportationInclude', header: 'Transportation Include' },
         { accessorKey: 'transporterName', header: 'Transporter Name' },
-        { accessorKey: 'amount', header: 'Amount' },
-        { 
-            accessorKey: 'planned6Date', 
+        {
+            accessorKey: 'planned6Date',
             header: 'Planned Date',
             cell: ({ row }) => formatPlannedDate(row.original.planned6Date)
         },
@@ -408,8 +441,8 @@ export default () => {
         { accessorKey: 'quantityAsPerBill', header: 'Quantity As Per Bill' },
         { accessorKey: 'priceAsPerPo', header: 'Price As Per Po' },
         { accessorKey: 'remark', header: 'Remark' },
-        { 
-            accessorKey: 'planned6Date', 
+        {
+            accessorKey: 'planned6Date',
             header: 'Planned Date',
             cell: ({ row }) => formatPlannedDate(row.original.planned6Date)
         },
@@ -419,12 +452,12 @@ export default () => {
         status: z.enum(['Received']),
         qty: z.coerce.number().min(1, 'Quantity is required'),
         photoOfProduct: z.instanceof(File, {
-        message: "Photo of product is required"
-    }),
+            message: "Photo of product is required"
+        }),
         damageOrder: z.enum(['Yes', 'No']),
         quantityAsPerBill: z.enum(['Yes', 'No']),
         remark: z.string().optional(),
-        location: z.string().nonempty('Location is required'), // ✅ Add location field
+        location: z.string().optional(), // ✅ Location is now optional
 
 
     });
@@ -464,49 +497,87 @@ export default () => {
     async function onSubmit(values: FormValues) {
         try {
             let photoUrl = '';
-            
+
             if (values.photoOfProduct) {
-                photoUrl = await uploadFile({
-                    file: values.photoOfProduct,
-                    folderId: import.meta.env.VITE_PRODUCT_PHOTO_FOLDER
-                });
+                photoUrl = await uploadProductPhoto(
+                    values.photoOfProduct,
+                    selectedIndent?.indentNo || ''
+                );
                 console.log('✅ Photo uploaded:', photoUrl);
             }
 
             const currentDateTime = new Date().toISOString();
 
-            const filteredData = storeInSheet.filter(
-                (s: StoreInSheetItem) => s.liftNumber === selectedIndent?.liftNumber
-            );
-
-            if (filteredData.length === 0) {
-                console.error('❌ No matching record found');
-                console.log('Looking for liftNumber:', selectedIndent?.liftNumber);
-                console.log('Available liftNumbers:', storeInSheet.map(s => s.liftNumber));
-                toast.error('No matching record found in sheet');
+            if (!selectedIndent?.liftNumber) {
+                toast.error('No lift number found');
                 return;
             }
 
-            await postToSheet(
-                filteredData.map((prev: StoreInSheetItem) => ({
-                    rowIndex: prev.rowIndex || 0,
-                    actual6: currentDateTime,
-                    receivingStatus: values.status,
-                    receivedQuantity: values.qty,
-                    photoOfProduct: photoUrl,
-                    damageOrder: values.damageOrder,
-                    quantityAsPerBill: values.quantityAsPerBill,
-                    remark: values.remark,
-                    location: values.location, // ✅ Add location to submission
+            await updateStoreInReceiving(selectedIndent.liftNumber, {
+                actual6: currentDateTime,
+                receivingStatus: values.status,
+                receivedQuantity: values.qty,
+                photoOfProduct: photoUrl,
+                damageOrder: values.damageOrder || '',
+                quantityAsPerBill: values.quantityAsPerBill || '',
+                remark: values.remark || '',
+                location: values.location || '',
+            });
 
-                })),
-                'update',
-                'STORE IN'
-            );
+            // ✅ FETCH STORE IN RECORD TO CHECK TRANSPORTATION
+            try {
+                const { data: storeInRecord, error: storeInError } = await supabase
+                    .from('store_in')
+                    .select('*')
+                    .eq('lift_number', selectedIndent.liftNumber)
+                    .maybeSingle();
+
+                if (storeInError) console.warn('Error fetching store_in record:', storeInError);
+
+                // ✅ IF TRANSPORTATION IS NOT INCLUDED ("No"), CREATE PAYMENT ENTRY
+                // AND BILL TYPE IS NOT "common"
+                if (storeInRecord && storeInRecord.transportation_include !== 'Yes' && storeInRecord.type_of_bill !== 'common') {
+                    console.log('📝 Creating payment entry for Store In...');
+
+                    // Fetch indent data to get PO info
+                    const { data: indentData, error: indentError } = await supabase
+                        .from('indent')
+                        .select('po_number,approved_vendor_name,vendor_name,product_name')
+                        .eq('indent_number', selectedIndent.indentNo)
+                        .maybeSingle();
+
+                    if (indentError) console.warn('Error fetching indent data:', indentError);
+
+                    const poNumber = indentData?.po_number || selectedIndent.indentNo;
+                    const vendorName = indentData?.approved_vendor_name || indentData?.vendor_name || selectedIndent.vendorName;
+                    const productName = indentData?.product_name || selectedIndent.productName;
+
+                    // Create payment entry
+                    await createPaymentEntry({
+                        indent_number: selectedIndent.indentNo,
+                        vendor_name: vendorName,
+                        po_number: poNumber,
+                        bill_amount: storeInRecord.bill_amount || 0,
+                        photo_of_bill: storeInRecord.photo_of_bill || '',
+                        product_name: productName,
+                        firm_name_match: user.firmNameMatch,
+                    }, photoUrl);
+
+                    toast.success('✅ Payment entry created for HOD approval');
+                }
+            } catch (paymentErr) {
+                console.warn('⚠️ Error creating payment entry:', paymentErr);
+                // Don't block the main operation if payment creation fails
+            }
 
             toast.success(`Stored in successfully`);
             setOpenDialog(false);
-            setTimeout(() => updateAll(), 1000);
+
+            // Refresh data
+            setTimeout(async () => {
+                const storeIns = await fetchStoreInRecords();
+                setStoreInRecords(storeIns);
+            }, 1000);
         } catch (error) {
             console.error('Error in onSubmit:', error);
             toast.error('Failed to store in');
@@ -596,7 +667,7 @@ export default () => {
                                     </div>
                                 </div>
                                 <div className="grid md:grid-cols-2 gap-4">
-                                   <FormField
+                                    <FormField
                                         control={form.control}
                                         name="status"
                                         render={({ field }) => (
@@ -605,7 +676,7 @@ export default () => {
                                                 <FormControl>
                                                     <Input
                                                         type="text"
-                                                       
+
                                                         disabled={true}
                                                         readOnly
                                                         className="bg-gray-100 cursor-not-allowed"
@@ -704,58 +775,57 @@ export default () => {
                                         )}
                                     />
 
-                                     {/* ✅ ADD DYNAMIC LOCATION DROPDOWN FROM MASTER SHEET */}
-    <FormField
-        control={form.control}
-        name="location"
-        render={({ field }) => (
-            <FormItem>
-                <FormLabel>
-                    Location
-                    <span className="text-destructive">*</span>
-                </FormLabel>
-                <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                >
-                    <FormControl>
-                        <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select location" />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {/* 🔍 Search Box for Locations */}
-                        <div className="flex items-center border-b px-3 pb-3">
-                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                            <input
-                                placeholder="Search locations..."
-                                value={searchTermLocation}
-                                onChange={(e) => setSearchTermLocation(e.target.value)}
-                                onKeyDown={(e) => e.stopPropagation()}
-                                className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                            />
-                        </div>
-                        {/* ✅ Dynamic locations from Master sheet */}
-                        {(options?.locations || [])
-                            .filter((location) =>
-                                location.toLowerCase().includes(searchTermLocation.toLowerCase())
-                            )
-                            .map((location, i) => (
-                                <SelectItem key={i} value={location}>
-                                    {location}
-                                </SelectItem>
-                            ))}
-                        {/* Fallback if no locations */}
-                        {(options?.locations || []).length === 0 && (
-                            <SelectItem value="no-locations" disabled>
-                                No locations available
-                            </SelectItem>
-                        )}
-                    </SelectContent>
-                </Select>
-            </FormItem>
-        )}
-    />
+                                    {/* ✅ ADD DYNAMIC LOCATION DROPDOWN FROM MASTER SHEET */}
+                                    <FormField
+                                        control={form.control}
+                                        name="location"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>
+                                                    Location
+                                                </FormLabel>
+                                                <Select
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                >
+                                                    <FormControl>
+                                                        <SelectTrigger className="w-full">
+                                                            <SelectValue placeholder="Select location" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {/* 🔍 Search Box for Locations */}
+                                                        <div className="flex items-center border-b px-3 pb-3">
+                                                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                            <input
+                                                                placeholder="Search locations..."
+                                                                value={searchTermLocation}
+                                                                onChange={(e) => setSearchTermLocation(e.target.value)}
+                                                                onKeyDown={(e) => e.stopPropagation()}
+                                                                className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                            />
+                                                        </div>
+                                                        {/* ✅ Dynamic locations from Master sheet */}
+                                                        {locationOptions
+                                                            .filter((location: string) =>
+                                                                location.toLowerCase().includes(searchTermLocation.toLowerCase())
+                                                            )
+                                                            .map((location, i) => (
+                                                                <SelectItem key={i} value={location}>
+                                                                    {location}
+                                                                </SelectItem>
+                                                            ))}
+                                                        {/* Fallback if no locations */}
+                                                        {locationOptions.length === 0 && (
+                                                            <SelectItem value="no-locations" disabled>
+                                                                No locations available
+                                                            </SelectItem>
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )}
+                                    />
 
 
                                     <FormField

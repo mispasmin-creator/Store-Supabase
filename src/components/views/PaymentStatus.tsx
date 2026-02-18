@@ -1,13 +1,14 @@
 import { Package2, FileText, Building, DollarSign, Calendar, Upload, CheckCircle, AlertCircle } from 'lucide-react';
-import { useSheets } from '@/context/SheetsContext';
+import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
 import { useAuth } from '@/context/AuthContext';
+import { useSheets } from '@/context/SheetsContext';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { uploadFile, postToSheet } from '@/lib/fetchers';
+import { uploadFile } from '@/lib/fetchers';
 import {
     Dialog,
     DialogContent,
@@ -77,92 +78,186 @@ interface POMasterRecord {
 }
 
 export default function PIApprovals() {
-    const { poMasterLoading, poMasterSheet, paymentsSheet, updateAll } = useSheets();
+    const { poMasterSheet, paymentsSheet, storeInSheet, updateAll, allLoading: poMasterLoading } = useSheets();
     const { user } = useAuth();
     const [pendingData, setPendingData] = useState<PIPendingData[]>([]);
     const [selectedItem, setSelectedItem] = useState<PIPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
-    
+
     const [stats, setStats] = useState({
         total: 0,
         totalAmount: 0,
         pendingCount: 0
     });
 
+
+
     useEffect(() => {
         try {
-            const safePoMasterSheet: POMasterRecord[] = Array.isArray(poMasterSheet) ? poMasterSheet : [];
-            const safePaymentsSheet = Array.isArray(paymentsSheet) ? paymentsSheet : [];
-            
-            // ✅ FILTER 1: By firm
-            const filteredByFirm = safePoMasterSheet.filter((sheet: POMasterRecord) =>
-                user?.firmNameMatch?.toLowerCase() === "all" ||
-                sheet?.firmNameMatch === user?.firmNameMatch
+            // ✅ Use data from useSheets context
+            const safePoMasterSheet: any[] = Array.isArray(poMasterSheet) ? poMasterSheet : [];
+            const safePaymentsSheet: any[] = Array.isArray(paymentsSheet) ? paymentsSheet : [];
+            const safeStoreInSheet: any[] = Array.isArray(storeInSheet) ? storeInSheet : [];
+
+            // 1. Identify received PO numbers from store_in
+            const receivedPoNumbersSet = new Set(
+                safeStoreInSheet
+                    .filter(s => s.actual6 && s.actual6.toString().trim() !== '')
+                    .map(s => s.poNumber || s.po_number || '')
+                    .filter(Boolean)
             );
 
-            // ✅ FILTER 2: Get POs already in Payments sheet
-            const paidPONumbers = new Set(
-                safePaymentsSheet.map(payment => payment.poNumber)
-            );
+            // 2. Identify PO-based pending items
+            const poBasedPendingItems = safePoMasterSheet
+                .filter((record: any) => {
+                    // Firm filtering
+                    const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
+                        record.firmNameMatch === user.firmNameMatch;
+                    if (!firmMatch) return false;
 
-            // ✅ FILTER 3: Only PENDING status and not paid yet
-            const pendingItems = filteredByFirm
-                .filter((sheet: POMasterRecord) => {
-                    const poNumber = sheet?.poNumber || '';
-                    const status = sheet?.status?.toLowerCase() || '';
-                    
-                    return !paidPONumbers.has(poNumber) && 
-                          (status === 'pending' || status === '' || status === undefined);
+                    // Status filtering
+                    const status = (record.status || record.indent_status || '').toString().trim().toLowerCase();
+                    const isPending = status === 'pending' || status === '' || status === undefined;
+                    if (!isPending) return false;
+
+                    // Outstanding amount calculation
+                    const totalPo = Number(record.totalPoAmount || 0);
+
+                    // Sum payments for this PO
+                    const totalPaid = safePaymentsSheet
+                        .filter((p: any) => (p.poNumber || p.po_number || p.po_no) === (record.poNumber || record.po_number || record.po_no))
+                        .reduce((sum, p) => sum + Number(p.payAmount || p.pay_amount || 0), 0);
+
+                    const outstanding = totalPo - totalPaid;
+
+                    // Only show if received
+                    const isReceived = receivedPoNumbersSet.has(record.poNumber || record.po_number || record.po_no || '');
+                    if (!isReceived) return false;
+
+                    // ✅ Check if Bill Type is "common" in Store In
+                    // If so, do not show in HOD Approval (Process ends after Store In)
+                    const linkedStoreIn = safeStoreInSheet.find((s: any) =>
+                        (s.poNumber || s.po_number || '') === (record.poNumber || record.po_number || record.po_no || '')
+                    );
+
+                    if (linkedStoreIn?.typeOfBill) {
+                        if (linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                            return false;
+                        }
+                    }
+
+                    return outstanding > 0;
                 })
-                .map((sheet: POMasterRecord) => ({
-                    rowIndex: sheet?.rowIndex || 0,
-                    timestamp: sheet?.timestamp || '',
-                    partyName: sheet?.partyName || '',
-                    poNumber: sheet?.poNumber || '',
-                    internalCode: sheet?.internalCode || '',
-                    product: sheet?.product || '',
-                    description: sheet?.description || '',
-                    quantity: Number(sheet?.quantity || 0),
-                    unit: sheet?.unit || '',
-                    rate: Number(sheet?.rate || 0),
-                    gstPercent: Number(sheet?.gstPercent || 0),
-                    discountPercent: Number(sheet?.discountPercent || 0),
-                    amount: Number(sheet?.amount || 0),
-                    totalPoAmount: Number(sheet?.totalPoAmount || 0),
-                    deliveryDate: sheet?.deliveryDate || '',
-                    paymentTerms: sheet?.paymentTerms || '',
-                    numberOfDays: Number(sheet?.numberOfDays || 0),
-                    firmNameMatch: sheet?.firmNameMatch || '',
-                    totalPaidAmount: Number(sheet?.totalPaidAmount || 0),
-                    outstandingAmount: Number(sheet?.outstandingAmount || 0),
-                    status: sheet?.status || 'Pending',
-                    pdf: sheet?.pdf || '',
+                .map((record: any) => {
+                    const totalPo = Number(record.totalPoAmount || 0);
+                    const totalPaid = safePaymentsSheet
+                        .filter((p: any) => (p.poNumber || p.po_number || p.po_no) === (record.poNumber || record.po_number || record.po_no))
+                        .reduce((sum, p) => sum + Number(p.payAmount || p.pay_amount || 0), 0);
+
+                    return {
+                        rowIndex: record.id || record.rowIndex || 0,
+                        timestamp: record.timestamp || '',
+                        partyName: record.partyName || record.party_name || '',
+                        poNumber: record.poNumber || record.po_number || '',
+                        internalCode: record.internalCode || record.internal_code || '',
+                        product: record.product || '',
+                        description: record.description || record.product || '',
+                        quantity: Number(record.quantity || 0),
+                        unit: record.unit || '',
+                        rate: Number(record.rate || 0),
+                        gstPercent: Number(record.gstPercent || record.gst_percent || 0),
+                        discountPercent: Number(record.discountPercent || record.discount_percent || 0),
+                        amount: Number(record.amount || 0),
+                        totalPoAmount: totalPo,
+                        deliveryDate: record.deliveryDate || record.delivery_date || '',
+                        paymentTerms: record.paymentTerms || record.payment_terms || '',
+                        numberOfDays: record.numberOfDays || record.number_of_days || 0,
+                        firmNameMatch: record.firmNameMatch || '',
+                        totalPaidAmount: totalPaid,
+                        outstandingAmount: totalPo - totalPaid,
+                        status: record.status || 'Pending',
+                        pdf: record.pdf || '',
+                    };
+                });
+
+            // 3. Identify Payment-based pending items (Direct entries like Store In or Freight)
+            const paymentBasedItems = safePaymentsSheet
+                .filter((payment: any) => {
+                    const status = String(payment?.status || '').toLowerCase();
+                    const firmMatch = !user || user.firmNameMatch?.toLowerCase() === "all" ||
+                        (payment?.firmNameMatch || payment?.firm_name) === user?.firmNameMatch;
+
+                    // Show payments that are pending and not yet scheduled
+                    const isPending = status === 'pending';
+                    const notScheduled = !payment?.planned || String(payment?.planned || '').trim() === '';
+
+                    // ✅ Link with StoreIn to check Bill Type
+                    // If Bill Type is "common", DO NOT show in HOD Approval
+                    const linkedStoreIn = safeStoreInSheet.find((s: any) =>
+                        (s.indentNo || s.indentNumber) === (payment?.internalCode || payment?.internal_code)
+                    );
+
+                    // Strictly show ONLY 'independent' if typeOfBill is present
+                    // This handles blocking 'common' bills as requested
+                    if (linkedStoreIn?.typeOfBill) {
+                        if (linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                            return false;
+                        }
+                    }
+
+                    return firmMatch && isPending && notScheduled;
+                })
+                .map((payment: any) => ({
+                    rowIndex: payment?.id || payment?.rowIndex || 0,
+                    timestamp: payment?.timestamp || '',
+                    partyName: payment?.partyName || payment?.party_name || '',
+                    poNumber: payment?.poNumber || payment?.po_number || '',
+                    internalCode: payment?.internalCode || payment?.internal_code || '',
+                    product: payment?.product || '',
+                    description: `${payment?.paymentForm || payment?.payment_form ? (payment.paymentForm || payment.payment_form).toUpperCase() + ' - ' : ''}${payment?.product || ''}`,
+                    quantity: 0,
+                    unit: '',
+                    rate: 0,
+                    gstPercent: 0,
+                    discountPercent: 0,
+                    amount: Number(payment?.payAmount || payment?.pay_amount || 0),
+                    totalPoAmount: Number(payment?.totalPoAmount || payment?.total_po_amount || payment?.payAmount || payment?.pay_amount || 0),
+                    deliveryDate: payment?.deliveryDate || payment?.delivery_date || '',
+                    paymentTerms: payment?.paymentTerms || payment?.payment_terms || '',
+                    numberOfDays: Number(payment?.numberOfDays || payment?.number_of_days || 0),
+                    firmNameMatch: payment?.firmNameMatch || payment?.firm_name || '',
+                    totalPaidAmount: Number(payment?.totalPaidAmount || payment?.total_paid_amount || 0),
+                    outstandingAmount: Number(payment?.outstandingAmount || payment?.outstanding_amount || payment?.payAmount || payment?.pay_amount || 0),
+                    status: payment?.status || 'Pending',
+                    pdf: payment?.pdf || payment?.file || '',
                 }));
 
-            // ✅ FILTER 4: Remove duplicates
-            const uniquePOMap = new Map<string, PIPendingData>();
-            pendingItems.forEach(item => {
-                if (!uniquePOMap.has(item.poNumber)) {
-                    uniquePOMap.set(item.poNumber, item);
-                }
-            });
+            // Combine both lists and remove duplicates by poNumber
+            const allPendingItems = [...poBasedPendingItems];
+            const poNumbersInList = new Set(poBasedPendingItems.map(item => item.poNumber));
 
-            const pending = Array.from(uniquePOMap.values());
-            setPendingData(pending);
-            
-            const totalAmount = pending.reduce((sum, item) => sum + item.totalPoAmount, 0);
+            for (const paymentItem of paymentBasedItems) {
+                if (!paymentItem.poNumber || !poNumbersInList.has(paymentItem.poNumber)) {
+                    allPendingItems.push(paymentItem);
+                }
+            }
+
+            setPendingData(allPendingItems);
+
+            const totalOutstanding = allPendingItems.reduce((sum, item) => sum + item.outstandingAmount, 0);
+
             setStats({
-                total: pending.length,
-                totalAmount,
-                pendingCount: pending.length
+                total: allPendingItems.length,
+                totalAmount: totalOutstanding,
+                pendingCount: allPendingItems.length
             });
 
         } catch (error) {
-            console.error('❌ Error in PI Approvals useEffect:', error);
+            console.error('❌ Error in HOD Approval logic:', error);
             setPendingData([]);
         }
-    }, [poMasterSheet, paymentsSheet, user?.firmNameMatch]);
+    }, [poMasterSheet, paymentsSheet, storeInSheet, user?.firmNameMatch]);
 
     const pendingColumns: ColumnDef<PIPendingData>[] = [
         {
@@ -244,15 +339,14 @@ export default function PIApprovals() {
                 const status = row.original.status?.toLowerCase() || '';
                 const isPending = status === 'pending';
                 const isComplete = status === 'complete' || status === 'completed';
-                
+
                 return (
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                        isComplete 
-                            ? 'bg-green-100 text-green-800 border border-green-300' 
-                            : isPending 
-                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                : 'bg-gray-100 text-gray-800 border border-gray-300'
-                    }`}>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${isComplete
+                        ? 'bg-green-100 text-green-800 border border-green-300'
+                        : isPending
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-gray-100 text-gray-800 border border-gray-300'
+                        }`}>
                         {isComplete && <CheckCircle className="mr-1 h-3 w-3" />}
                         {isPending && <AlertCircle className="mr-1 h-3 w-3" />}
                         {row.original.status || 'Pending'}
@@ -273,7 +367,7 @@ export default function PIApprovals() {
             cell: ({ row }) => {
                 const deliveryDate = row.original.deliveryDate;
                 if (!deliveryDate) return <span className="text-sm">-</span>;
-                
+
                 try {
                     const date = new Date(deliveryDate);
                     if (isNaN(date.getTime())) {
@@ -344,7 +438,7 @@ export default function PIApprovals() {
                 file: file,
                 folderId: import.meta.env.VITE_BILL_PHOTO_FOLDER
             });
-            
+
             form.setValue('file', driveLink);
             toast.success('File uploaded successfully to Google Drive');
         } catch (error) {
@@ -368,71 +462,91 @@ export default function PIApprovals() {
                 return;
             }
 
-            const currentDateTime = new Date()
-                .toLocaleString('en-GB', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false,
-                })
-                .replace(',', '');
+            const currentDateTime = new Date().toISOString();
+            const formattedDateTime = currentDateTime;
 
-            const uniqueNo = generateUniqueNo();
             const payAmount = Number(values.payAmount) || 0;
             const newTotalPaid = (selectedItem.totalPaidAmount || 0) + payAmount;
             const newOutstanding = (selectedItem.outstandingAmount || 0) - payAmount;
             const newStatus = newOutstanding <= 0 ? 'Complete' : 'Pending';
 
-            // ✅ Prepare data for PAYMENTS sheet
-            const paymentData = {
-                timestamp: currentDateTime,
-                uniqueNo: uniqueNo,
-                partyName: selectedItem.partyName,
-                poNumber: selectedItem.poNumber,
-                totalPoAmount: selectedItem.totalPoAmount,
-                internalCode: selectedItem.internalCode,
-                product: selectedItem.product,
-                deliveryDate: selectedItem.deliveryDate,
-                paymentTerms: selectedItem.paymentTerms,
-                numberOfDays: Number(selectedItem.numberOfDays || 0),
-                pdf: selectedItem.pdf || '',
-                payAmount: payAmount,
-                file: values.file || '',
-                remark: values.remark,
-                totalPaidAmount: newTotalPaid,
-                outstandingAmount: newOutstanding,
-                status: '',
-                planned: '',
-                actual: '',
-                delay: '',
-                
-            };
+            // ✅ CHECK IF THIS IS A PAYMENT-BASED ITEM (from payments table) OR PO-BASED ITEM
+            const isPaymentBased = selectedItem.rowIndex > 0 &&
+                Array.isArray(paymentsSheet) &&
+                paymentsSheet.some((p: any) => p.id === selectedItem.rowIndex);
 
-            // ✅ Post to PAYMENTS sheet
-            await postToSheet(
-                [paymentData],
-                'insert',
-                'Payments'
-            );
+            if (isPaymentBased) {
+                // ✅ FOR PAYMENT-BASED ITEMS: Update the existing payment record
+                const { error: updatePaymentError } = await supabase
+                    .from('payments')
+                    .update({
+                        planned: currentDateTime,
+                        status: 'Approved',
+                        status1: 'approved',
+                        pay_amount: payAmount,
+                        file: values.file || '',
+                        remark: values.remark || '',
+                    })
+                    .eq('id', selectedItem.rowIndex);
 
-            // ✅ Update PO MASTER sheet status and amounts
-            // const updatePoData = {
-            //     rowIndex: selectedItem.rowIndex,
-            //     totalPaidAmount: newTotalPaid,
-            //     outstandingAmount: newOutstanding,
-            //     status: newStatus,
-            // };
+                if (updatePaymentError) {
+                    throw updatePaymentError;
+                }
 
-            // await postToSheet(
-            //     [updatePoData],
-            //     'update',
-            //     'PO MASTER'
-            // );
+                toast.success(`✅ Payment approved for: ${selectedItem.partyName}`);
+            } else {
+                // ✅ FOR PO-BASED ITEMS: Create a new payment entry as before
+                const uniqueNo = generateUniqueNo();
 
-            toast.success(`Payment submitted for PO: ${selectedItem.poNumber}`);
+                const paymentData = {
+                    timestamp: formattedDateTime,
+                    unique_no: uniqueNo,
+                    party_name: selectedItem.partyName,
+                    po_number: selectedItem.poNumber,
+                    total_po_amount: selectedItem.totalPoAmount,
+                    internal_code: selectedItem.internalCode,
+                    product: selectedItem.product,
+                    delivery_date: selectedItem.deliveryDate,
+                    payment_terms: selectedItem.paymentTerms,
+                    number_of_days: Number(selectedItem.numberOfDays || 0),
+                    pdf: selectedItem.pdf || '',
+                    pay_amount: payAmount,
+                    file: values.file || '',
+                    remark: values.remark,
+                    total_paid_amount: newTotalPaid,
+                    outstanding_amount: newOutstanding,
+                    status: newStatus,
+                    planned: currentDateTime,
+                    actual: '',
+                    firm_name: user?.firmNameMatch || '',
+                };
+
+                // ✅ Insert to PAYMENTS table in Supabase
+                const { error: insertError } = await supabase
+                    .from('payments')
+                    .insert([paymentData]);
+
+                if (insertError) {
+                    throw insertError;
+                }
+
+                // ✅ Update PO MASTER table with new totals and status
+                const { error: updateError } = await supabase
+                    .from('po_master')
+                    .update({
+                        total_paid_amount: newTotalPaid,
+                        outstanding_amount: newOutstanding,
+                        status: newStatus,
+                    })
+                    .eq('id', selectedItem.rowIndex);
+
+                if (updateError) {
+                    throw updateError;
+                }
+
+                toast.success(`Payment submitted for PO: ${selectedItem.poNumber}`);
+            }
+
             setOpenDialog(false);
             setTimeout(() => updateAll(), 1000);
         } catch (error) {
@@ -474,7 +588,7 @@ export default function PIApprovals() {
                                 </div>
                             </CardContent>
                         </Card>
-                        
+
                         <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
                             <CardContent className="p-5">
                                 <div className="flex items-center justify-between">
@@ -488,7 +602,7 @@ export default function PIApprovals() {
                                 </div>
                             </CardContent>
                         </Card>
-                        
+
                         <Card className="bg-white shadow border-0 hover:shadow-md transition-shadow">
                             <CardContent className="p-5">
                                 <div className="flex items-center justify-between">
@@ -498,9 +612,8 @@ export default function PIApprovals() {
                                             {stats.pendingCount > 0 ? 'Pending' : 'Completed'}
                                         </p>
                                     </div>
-                                    <div className={`h-10 w-10 flex items-center justify-center rounded-full ${
-                                        stats.pendingCount > 0 ? 'bg-amber-100' : 'bg-green-100'
-                                    }`}>
+                                    <div className={`h-10 w-10 flex items-center justify-center rounded-full ${stats.pendingCount > 0 ? 'bg-amber-100' : 'bg-green-100'
+                                        }`}>
                                         {stats.pendingCount > 0 ? (
                                             <AlertCircle className="h-6 w-6 text-amber-600" />
                                         ) : (
@@ -708,9 +821,9 @@ export default function PIApprovals() {
                                                                         <CheckCircle className="h-4 w-4" />
                                                                         File uploaded successfully
                                                                     </p>
-                                                                    <a 
-                                                                        href={field.value} 
-                                                                        target="_blank" 
+                                                                    <a
+                                                                        href={field.value}
+                                                                        target="_blank"
                                                                         rel="noopener noreferrer"
                                                                         className="text-sm text-blue-600 hover:underline flex items-center gap-1"
                                                                     >
@@ -730,8 +843,8 @@ export default function PIApprovals() {
 
                                     <DialogFooter className="gap-2">
                                         <DialogClose asChild>
-                                            <Button 
-                                                variant="outline" 
+                                            <Button
+                                                variant="outline"
                                                 type="button"
                                                 className="border-gray-300"
                                                 disabled={form.formState.isSubmitting || uploadingFile}
@@ -739,8 +852,8 @@ export default function PIApprovals() {
                                                 Cancel
                                             </Button>
                                         </DialogClose>
-                                        <Button 
-                                            type="submit" 
+                                        <Button
+                                            type="submit"
                                             className="bg-purple-600 hover:bg-purple-700 shadow-sm"
                                             disabled={form.formState.isSubmitting || uploadingFile}
                                         >
