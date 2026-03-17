@@ -369,6 +369,12 @@ const routes: RouteAttributes[] = [
                         }
                     }
 
+                    // ✅ Check Payment Terms
+                    const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim();
+                    if (paymentTerms !== "Party PI / Party Advance" && paymentTerms !== "Party PI") {
+                        return false;
+                    }
+
                     // Outstanding amount calculation
                     const totalPo = Number(record.totalPoAmount || 0);
                     const totalPaid = paymentsByPo[record.poNumber || ''] || 0;
@@ -401,6 +407,12 @@ const routes: RouteAttributes[] = [
                         if (linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
                             return false;
                         }
+                    }
+
+                    // ✅ Check Payment Terms
+                    const paymentTerms = (payment.paymentTerms || payment.payment_terms || '').toString().trim();
+                    if (paymentTerms !== "Party PI / Party Advance" && paymentTerms !== "Party PI") {
+                        return false;
                     }
 
                     return firmMatch && isPending && notScheduled;

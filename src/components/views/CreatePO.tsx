@@ -246,7 +246,7 @@ export default () => {
         deliveryDate: z.coerce.date(),
         deliveryDays: z.coerce.number().optional(),
         deliveryType: z.enum(['for', 'exfactory']).optional(),
-        paymentTerms: z.enum(['Party PI / Party Advance', 'Advance', 'After Delivery']),
+        paymentTerms: z.enum(['Party PI', 'Advance', 'After Delivery']),
         numberOfDays: z.coerce.number().optional(),
     });
 
@@ -1079,7 +1079,7 @@ export default () => {
                                                 </FormControl>
                                                 <SelectContent>
                                                     <SelectItem value="Advance">Advance</SelectItem>
-                                                    <SelectItem value="Party PI / Party Advance">Party PI / Party Advance</SelectItem>
+                                                    <SelectItem value="Party PI">Party PI</SelectItem>
                                                     <SelectItem value="After Delivery">After Delivery</SelectItem>
                                                 </SelectContent>
                                             </Select>

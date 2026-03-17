@@ -147,6 +147,12 @@ export default function PIApprovals() {
                         }
                     }
 
+                    // ✅ Check Payment Terms
+                    const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim();
+                    if (paymentTerms !== "Party PI / Party Advance" && paymentTerms !== "Party PI") {
+                        return false;
+                    }
+
                     return outstanding > 0;
                 })
                 .map((record: any) => {
@@ -204,6 +210,12 @@ export default function PIApprovals() {
                         if (linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
                             return false;
                         }
+                    }
+
+                    // ✅ Check Payment Terms
+                    const paymentTerms = (payment?.paymentTerms || payment?.payment_terms || '').toString().trim();
+                    if (paymentTerms !== "Party PI / Party Advance" && paymentTerms !== "Party PI") {
+                        return false;
                     }
 
                     return firmMatch && isPending && notScheduled;

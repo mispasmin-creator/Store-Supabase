@@ -37,6 +37,7 @@ interface PaymentsRecord {
     paymentForm?: string;
     firmNameMatch?: string;
     paymentDone?: boolean;
+    billImageStatus?: string;
 }
 
 interface PaymentHistoryRecord {
@@ -76,6 +77,7 @@ interface DisplayPayment {
     status1: string;
     paymentForm: string;
     firmNameMatch: string;
+    billImageStatus?: string;
 }
 
 interface DisplayPaymentHistory {
@@ -89,6 +91,10 @@ interface DisplayPaymentHistory {
     amountToBePaid: number;
     remarks: string;
     anyAttachments: string;
+    planned: string;
+    billImage: string;
+    poImage: string;
+    billImageStatus?: string;
 }
 
 interface UpdatePayload {
@@ -132,8 +138,21 @@ export default function MakePayment() {
                     .select('*')
                     .order('timestamp', { ascending: false });
 
+                const { data: storeInData, error: storeInError } = await supabase
+                    .from('store_in')
+                    .select('po_number, bill_image_status');
+
                 if (paymentsError) {
                     console.error('Error fetching payments:', paymentsError);
+                }
+
+                const storeInMap = new Map();
+                if (storeInData) {
+                    storeInData.forEach((item: any) => {
+                        if (item.po_number) {
+                            storeInMap.set(item.po_number, item.bill_image_status);
+                        }
+                    });
                 }
 
                 const allPaymentsData = Array.isArray(paymentsData) ? paymentsData : [];
@@ -164,6 +183,7 @@ export default function MakePayment() {
                     paymentForm: r.payment_form,
                     firmNameMatch: r.firm_name,
                     paymentDone: r.payment_done || false,
+                    billImageStatus: storeInMap.get(r.po_number) || '',
                 }));
 
                 setOriginalData(mappedPayments);
@@ -203,6 +223,7 @@ export default function MakePayment() {
                         status1: sheet?.status1 || '',
                         paymentForm: sheet?.paymentForm || '',
                         firmNameMatch: sheet?.firmNameMatch || '',
+                        billImageStatus: sheet?.billImageStatus || '',
                     }));
 
                 setPendingData(pendingItems);
@@ -221,6 +242,10 @@ export default function MakePayment() {
                         amountToBePaid: Number(sheet?.payAmount || 0),
                         remarks: sheet?.remark || '',
                         anyAttachments: sheet?.file || sheet?.pdf || '',
+                        planned: sheet?.planned || '',
+                        billImage: sheet?.file || '',
+                        poImage: sheet?.pdf || '',
+                        billImageStatus: sheet?.billImageStatus || '',
                     }));
 
                 setHistoryData(historyItems);
@@ -427,6 +452,15 @@ export default function MakePayment() {
             },
         },
         {
+            accessorKey: 'planned',
+            header: 'Planned Date',
+            cell: ({ row }) => (
+                <span className="text-sm font-medium text-blue-600">
+                    {formatDate(row.original.planned) || '-'}
+                </span>
+            )
+        },
+        {
             accessorKey: 'uniqueNo',
             header: 'Payment No.',
             cell: ({ row }) => (
@@ -515,15 +549,81 @@ export default function MakePayment() {
             }
         },
         {
-            accessorKey: 'planned',
-            header: 'Planned Date',
-            cell: ({ row }) => (
-                <span className="text-sm font-medium text-blue-600">
-                    {formatDate(row.original.planned) || '-'}
-                </span>
-            )
+            id: 'bill_image',
+            header: 'Bill Image',
+            cell: ({ row }) => {
+                const url = row.original.file;
+                const status = row.original.billImageStatus;
+                const hasAttachment = url?.trim() !== '';
+                const isStatusUrl = status && (status.startsWith('http') || status.includes('drive.google.com') || status.includes('supabase.co'));
+                
+                return (
+                    <div className="flex flex-col gap-1">
+                        {hasAttachment ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(url, '_blank')}
+                                className="text-emerald-600 hover:text-emerald-700 h-8 font-medium"
+                            >
+                                <ExternalLink className="mr-2 h-3 w-3" />
+                                View Bill
+                            </Button>
+                        ) : null}
+                        
+                        {status && (
+                            isStatusUrl ? (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(status, '_blank')}
+                                    className="text-blue-600 hover:text-blue-700 h-8 font-medium"
+                                >
+                                    <ExternalLink className="mr-2 h-3 w-3" />
+                                    Store Bill
+                                </Button>
+                            ) : (
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${
+                                    status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
+                                    ? 'bg-green-100 text-green-700 border border-green-200'
+                                    : status.toLowerCase() === 'pending'
+                                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                    : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                }`}>
+                                    {status}
+                                </span>
+                            )
+                        )}
+                        {!hasAttachment && !status && <span className="text-gray-400 text-sm">-</span>}
+                    </div>
+                );
+            }
         },
-
+        {
+            id: 'po_image',
+            header: 'PO Image',
+            cell: ({ row }) => {
+                const url = row.original.pdf;
+                const hasAttachment = url?.trim() !== '';
+                return (
+                    <div>
+                        {hasAttachment ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(url, '_blank')}
+                                className="text-purple-600 hover:text-purple-700 h-8 font-medium"
+                            >
+                                <ExternalLink className="mr-2 h-3 w-3" />
+                                View PO
+                            </Button>
+                        ) : (
+                            <span className="text-gray-400 text-sm">-</span>
+                        )}
+                    </div>
+                );
+            }
+        }
     ];
 
     const historyColumns: ColumnDef<DisplayPaymentHistory>[] = [
@@ -536,16 +636,15 @@ export default function MakePayment() {
                 </div>
             )
         },
-        //     {
-        //     accessorKey: 'apPaymentNumber',
-        //     header: 'AP Payment Number',
-        //     cell: ({ row }) => (
-        //         <div className="font-medium text-purple-700">
-        //             {row.original.apPaymentNumber || '-'}
-        //         </div>
-        //     )
-        // },
-
+        {
+            accessorKey: 'planned',
+            header: 'Planned Date',
+            cell: ({ row }) => (
+                <span className="text-sm text-gray-600">
+                    {formatDate(row.original.planned) || '-'}
+                </span>
+            )
+        },
         {
             accessorKey: 'uniqueNumber',
             header: 'Unique Number',
@@ -601,6 +700,82 @@ export default function MakePayment() {
             }
         },
         {
+            id: 'bill_image',
+            header: 'Bill Image',
+            cell: ({ row }) => {
+                const url = row.original.billImage;
+                const status = row.original.billImageStatus;
+                const hasAttachment = url?.trim() !== '';
+                const isStatusUrl = status && (status.startsWith('http') || status.includes('drive.google.com') || status.includes('supabase.co'));
+
+                return (
+                    <div className="flex flex-col gap-1">
+                        {hasAttachment ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(url, '_blank')}
+                                className="text-emerald-600 hover:text-emerald-700 h-8 font-medium"
+                            >
+                                <ExternalLink className="mr-2 h-3 w-3" />
+                                View Bill
+                            </Button>
+                        ) : null}
+
+                        {status && (
+                            isStatusUrl ? (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => window.open(status, '_blank')}
+                                    className="text-blue-600 hover:text-blue-700 h-8 font-medium"
+                                >
+                                    <ExternalLink className="mr-2 h-3 w-3" />
+                                    Store Bill
+                                </Button>
+                            ) : (
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${
+                                    status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
+                                    ? 'bg-green-100 text-green-700 border border-green-200'
+                                    : status.toLowerCase() === 'pending'
+                                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                    : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                }`}>
+                                    {status}
+                                </span>
+                            )
+                        )}
+                        {!hasAttachment && !status && <span className="text-gray-400 text-sm">-</span>}
+                    </div>
+                );
+            }
+        },
+        {
+            id: 'po_image',
+            header: 'PO Image',
+            cell: ({ row }) => {
+                const url = row.original.poImage;
+                const hasAttachment = url?.trim() !== '';
+                return (
+                    <div>
+                        {hasAttachment ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(url, '_blank')}
+                                className="text-purple-600 hover:text-purple-700 h-8 font-medium"
+                            >
+                                <ExternalLink className="mr-2 h-3 w-3" />
+                                View PO
+                            </Button>
+                        ) : (
+                            <span className="text-gray-400 text-sm">-</span>
+                        )}
+                    </div>
+                );
+            }
+        },
+        {
             accessorKey: 'remarks',
             header: 'Remarks',
             cell: ({ row }) => (
@@ -608,30 +783,6 @@ export default function MakePayment() {
                     {row.original.remarks || '-'}
                 </span>
             )
-        },
-        {
-            accessorKey: 'anyAttachments',
-            header: 'Attachments',
-            cell: ({ row }) => {
-                const hasAttachments = row.original.anyAttachments?.trim() !== '';
-                return (
-                    <div>
-                        {hasAttachments ? (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.open(row.original.anyAttachments, '_blank')}
-                                className="text-blue-600 hover:text-blue-700"
-                            >
-                                <ExternalLink className="mr-1 h-3 w-3" />
-                                View
-                            </Button>
-                        ) : (
-                            <span className="text-gray-400">-</span>
-                        )}
-                    </div>
-                );
-            }
         },
     ];
 
