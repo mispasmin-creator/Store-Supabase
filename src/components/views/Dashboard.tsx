@@ -158,6 +158,17 @@ export default function Dashboard() {
         // Calculate Purchases (Store In - Received items)
         const filterStoreIn = (item: StoreInRecord) => {
             let valid = true;
+
+            // Date filtering
+            if (startDate && item.timestamp) {
+                const itemDate = new Date(item.timestamp);
+                valid = valid && itemDate >= startDate;
+            }
+            if (endDate && item.timestamp) {
+                const itemDate = new Date(item.timestamp);
+                valid = valid && itemDate <= endDate;
+            }
+
             if (filteredVendors.length > 0 && item.vendorName) {
                 valid = valid && filteredVendors.includes(item.vendorName);
             }
@@ -179,6 +190,17 @@ export default function Dashboard() {
         // Using Issue Service for "Issued" stats
         const filterIssue = (item: IssueRecord) => {
             let valid = true;
+
+            // Date filtering
+            if (startDate && item.actual1) {
+                const itemDate = new Date(item.actual1);
+                valid = valid && itemDate >= startDate;
+            }
+            if (endDate && item.actual1) {
+                const itemDate = new Date(item.actual1);
+                valid = valid && itemDate <= endDate;
+            }
+
             // Issue record might not have vendor name in the same way, but has product name
             if (filteredProducts.length > 0 && item.product_name) {
                 valid = valid && filteredProducts.includes(item.product_name);
@@ -193,17 +215,19 @@ export default function Dashboard() {
         );
         setOut({ count: issued.length, quantity: totalIssuedQuantity });
 
-        // Calculate Top Products by frequency and quantity (based on Approved Indents)
+        // Calculate Top Products by frequency and quantity (based on Store In records)
         const productMap: Record<string, { frequency: number; quantity: number }> = {};
-        approvedIndents.forEach((item) => {
-            if (item.product_name) {
-                if (!productMap[item.product_name]) {
-                    productMap[item.product_name] = { frequency: 0, quantity: 0 };
+        storeIns
+            .filter(filterStoreIn)
+            .forEach((item) => {
+                if (item.productName) {
+                    if (!productMap[item.productName]) {
+                        productMap[item.productName] = { frequency: 0, quantity: 0 };
+                    }
+                    productMap[item.productName].frequency += 1;
+                    productMap[item.productName].quantity += Number(item.qty || 0);
                 }
-                productMap[item.product_name].frequency += 1;
-                productMap[item.product_name].quantity += item.approved_quantity || 0;
-            }
-        });
+            });
 
         const topProducts = Object.entries(productMap)
             .map(([name, data]) => ({
@@ -216,18 +240,20 @@ export default function Dashboard() {
 
         setChartData(topProducts);
 
-        // Calculate Top Vendors (based on Approved Indents)
+        // Calculate Top Vendors (based on Store In records)
         const vendorMap: Record<string, { orders: number; quantity: number }> = {};
-        approvedIndents.forEach((item) => {
-            const vendorName = String(item.vendor_name || '');
-            if (vendorName) {
-                if (!vendorMap[vendorName]) {
-                    vendorMap[vendorName] = { orders: 0, quantity: 0 };
+        storeIns
+            .filter(filterStoreIn)
+            .forEach((item) => {
+                const vendorName = String(item.vendorName || '');
+                if (vendorName) {
+                    if (!vendorMap[vendorName]) {
+                        vendorMap[vendorName] = { orders: 0, quantity: 0 };
+                    }
+                    vendorMap[vendorName].orders += 1;
+                    vendorMap[vendorName].quantity += Number(item.qty || 0);
                 }
-                vendorMap[vendorName].orders += 1;
-                vendorMap[vendorName].quantity += item.approved_quantity || 0;
-            }
-        });
+            });
 
         const topVendors = Object.entries(vendorMap)
             .map(([name, data]) => ({

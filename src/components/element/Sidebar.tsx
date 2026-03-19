@@ -144,11 +144,11 @@ export default ({ items }: SidebarProps) => {
                                     // ✅ SMART NOTIFICATION HANDLER: Works for both old and new functions
                                     try {
                                         // First try with raw data (for old functions)
-                                        notificationCount = item.notifications(sheetData);
+                                        notificationCount = item.notifications(sheetData, user);
 
                                         // If it returns 0 but we have data, try with array-wrapped data (for new functions)
                                         if (notificationCount === 0 && sheetData.length > 0) {
-                                            const wrappedCount = item.notifications([sheetData]);
+                                            const wrappedCount = item.notifications([sheetData], user);
                                             if (wrappedCount > 0) {
                                                 notificationCount = wrappedCount;
                                             }

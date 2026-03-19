@@ -217,6 +217,8 @@ export default function PcReportTable() {
         };
 
         // Determine current stage
+        const isAuditDone = String(item.status1 || '').toLowerCase() === 'done';
+
         let currentStage: keyof typeof STAGES = 'AUDIT';
         let plannedDate = '';
         let isCompleted = false;
@@ -224,10 +226,12 @@ export default function PcReportTable() {
         if (hasValue(item.planned1) && !hasValue(item.actual1)) {
           currentStage = 'AUDIT';
           plannedDate = item.planned1;
-        } else if (hasValue(item.planned2) && !hasValue(item.actual2)) {
+        } 
+        // Skip Stage 2 and 3 if Audit is already Done
+        else if (!isAuditDone && hasValue(item.planned2) && !hasValue(item.actual2)) {
           currentStage = 'RECTIFY';
           plannedDate = item.planned2;
-        } else if (hasValue(item.planned3) && !hasValue(item.actual3)) {
+        } else if (!isAuditDone && hasValue(item.planned3) && !hasValue(item.actual3)) {
           currentStage = 'REAUDIT';
           plannedDate = item.planned3;
         } else if (hasValue(item.planned4) && !hasValue(item.actual4)) {
@@ -241,7 +245,13 @@ export default function PcReportTable() {
           isCompleted = true;
           plannedDate = item.planned5 || item.planned4 || item.planned3 || item.planned2 || item.planned1;
         } else {
-          return null;
+          // If Audit was Done, we might be ready for Stage 4 even if 2 and 3 were never touched
+          if (isAuditDone && hasValue(item.planned4) && !hasValue(item.actual4)) {
+            currentStage = 'TALLY_ENTRY';
+            plannedDate = item.planned4;
+          } else {
+            return null;
+          }
         }
 
         return {

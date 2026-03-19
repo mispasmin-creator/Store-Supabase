@@ -70,6 +70,10 @@ export interface StoreInRecord {
     actual11: string;
     billStatusNew: string;
     billImageStatus: string;
+    vehicleNo: string;
+    driverName: string;
+    driverMobileNo: string;
+    billRemark: string;
 }
 
 export interface LocationOption {
@@ -130,6 +134,10 @@ export async function fetchStoreInRecords() {
             billNumber: r.bill_number || '',
             unitOfMeasurement: r.unit_of_measurement || '',
             priceAsPerPo: Number(r.price_as_per_po) || 0,
+            vehicleNo: r.vehicle_no || '',
+            driverName: r.driver_name || '',
+            driverMobileNo: r.driver_mobile_no || '',
+            billRemark: r.bill_remark || '',
             // Stage 7 fields
             planned7: r.planned7 || '',
             actual7: r.actual7 || '',

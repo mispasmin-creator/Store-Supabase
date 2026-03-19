@@ -116,6 +116,7 @@ export type PaymentHistory = {
     amountToBePaid?: number;
     Remarks?: string;
     'Any Attachments'?: string;
+    firmNameMatch: string;
 };
 
 
@@ -311,6 +312,7 @@ export interface PaymentsSheet {
     status1: string;
     paymentForm: string;
     paymentDone?: boolean;
+    firmNameMatch: string;
     rowIndex?: number;
 }
 

@@ -151,12 +151,15 @@ const routes: RouteAttributes[] = [
         name: 'Approve Indent',
         icon: <ClipboardCheck size={20} />,
         element: <ApproveIndent />,
-        notifications: (sheets: any[]) =>
-            sheets.filter(
+        notifications: (sheets: any[], user: any) => {
+            const data = Array.isArray(sheets[0]) ? sheets[0] : sheets;
+            return data.filter(
                 (sheet: any) =>
-                    sheet.planned1 !== '' &&
-                    sheet.vendorType === ''
-            ).length,
+                    (!user || user.firmNameMatch.toLowerCase() === "all" || sheet.firmNameMatch === user.firmNameMatch) &&
+                    sheet.planned1 && sheet.planned1 !== '' &&
+                    (!sheet.actual1 || sheet.actual1 === '')
+            ).length;
+        },
     },
     {
         path: 'vendor-rate-update',
@@ -441,39 +444,43 @@ const routes: RouteAttributes[] = [
     },
 
 
-    // Then update the notification function:
     {
         path: 'Make-Payment',
         gateKey: 'makePayment',
         name: 'Make Payment',
         icon: <FilePlus2 size={20} />,
         element: <MakePayment />,
-        notifications: (sheets: any[]) => {
-            // ✅ SIMPLIFIED: Since we're only passing paymentsSheet now
-            const paymentsData = Array.isArray(sheets[0]) ? sheets[0] : [];
+        notifications: (sheets: any[], user: any) => {
+            const paymentsData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
+            if (paymentsData.length === 0) return 0;
 
-            if (paymentsData.length === 0) {
-                console.log('⚠️ No payments data available');
-                return 0;
-            }
+            const pendingItems = paymentsData.filter((payment: any) => {
+                const firmMatch = !user || user.firmNameMatch.toLowerCase() === "all" || 
+                    (payment.firmNameMatch || payment.firm_name) === user.firmNameMatch;
+                if (!firmMatch) return false;
 
-            console.log('📊 Total payments records:', paymentsData.length);
-
-            // ✅ Count from Payments sheet: Planned has value BUT Payment is not Done
-            const pendingCount = paymentsData.filter((payment: any) => {
                 const planned = String(payment?.planned || '').trim();
-                const isDone = payment?.paymentDone === true || payment?.payment_done === true;
+                const actual = String(payment?.actual || '').trim();
                 const status1 = String(payment?.status1 || '').toLowerCase();
-
+                
                 const hasPlanned = planned !== '';
-                const isNotDone = !isDone;
-                const isNotPendingApproval = status1 !== 'hod_approval_pending';
+                const noActual = actual === '';
+                const isNotHodPending = status1 !== 'hod_approval_pending';
 
-                return hasPlanned && isNotDone && isNotPendingApproval;
-            }).length;
+                return hasPlanned && noActual && isNotHodPending;
+            });
 
-            console.log('✅ Pending payments count:', pendingCount);
-            return pendingCount;
+            // Filter to keep ONLY the latest record per Indent and Product
+            const seen = new Set<string>();
+            let count = 0;
+            pendingItems.forEach((item: any) => {
+                const key = `${item.internal_code || item.internalCode || ''}-${item.product || ''}`;
+                if (!seen.has(key)) {
+                    seen.add(key);
+                    count++;
+                }
+            });
+            return count;
         },
     },
 

@@ -92,9 +92,31 @@ interface DisplayPaymentHistory {
     remarks: string;
     anyAttachments: string;
     planned: string;
+    paymentTerms: string;
     billImage: string;
     poImage: string;
     billImageStatus?: string;
+    // New fields from schema
+    liftNumber: string;
+    indentNo: string;
+    poNumber: string;
+    vendorName: string;
+    productName: string;
+    billNo: string;
+    qty: string;
+    typeOfBill: string;
+    billAmount: string;
+    discountAmount: string;
+    paymentType: string;
+    advanceAmountIfAny: string;
+    transportationInclude: string;
+    transporterName: string;
+    amount: string;
+    billRemark: string;
+    timestamp1: string;
+    vehicle_no: string;
+    driver_name: string;
+    driver_mobile_no: string;
 }
 
 interface UpdatePayload {
@@ -111,9 +133,9 @@ export default function MakePayment() {
     const [paymentHistorySheet, setPaymentHistorySheet] = useState<PaymentHistoryRecord[]>([]);
     const [reloadKey, setReloadKey] = useState(0);
     const updateAll = () => setReloadKey(k => k + 1);
-    const { user } = useAuth();
     const [pendingData, setPendingData] = useState<DisplayPayment[]>([]);
     const [historyData, setHistoryData] = useState<DisplayPaymentHistory[]>([]);
+    const [storeInRecords, setStoreInRecords] = useState<any[]>([]); // To store full metadata
     const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [originalData, setOriginalData] = useState<PaymentsRecord[]>([]);
@@ -140,7 +162,12 @@ export default function MakePayment() {
 
                 const { data: storeInData, error: storeInError } = await supabase
                     .from('store_in')
-                    .select('po_number, bill_image_status');
+                    .select('*'); // Get all columns for history insertion
+
+                const { data: historyDbData, error: historyDbError } = await supabase
+                    .from('payment_history')
+                    .select('*')
+                    .order('timestamp', { ascending: false });
 
                 if (paymentsError) {
                     console.error('Error fetching payments:', paymentsError);
@@ -148,6 +175,7 @@ export default function MakePayment() {
 
                 const storeInMap = new Map();
                 if (storeInData) {
+                    setStoreInRecords(storeInData);
                     storeInData.forEach((item: any) => {
                         if (item.po_number) {
                             storeInMap.set(item.po_number, item.bill_image_status);
@@ -189,63 +217,95 @@ export default function MakePayment() {
                 setOriginalData(mappedPayments);
                 setPaymentsSheet(mappedPayments);
 
-                // Filter Pending: Has planned date, no actual date, not completed, and not pending HOD approval
-                const pendingItems = mappedPayments
+                // Filter Pending: Has planned date and status is not 'Completed'
+                const pendingBasic = mappedPayments
                     .filter((sheet: PaymentsRecord) => {
                         const plannedValue = String(sheet?.planned || '').trim();
-                        const isNotDone = !sheet?.paymentDone;
                         const hasPlanned = plannedValue !== '';
-                        const status1 = String(sheet?.status1 || '').toLowerCase();
-                        const isNotPendingApproval = status1 !== 'hod_approval_pending';
-                        return hasPlanned && isNotDone && isNotPendingApproval;
-                    })
-                    .map((sheet: PaymentsRecord, index) => ({
-                        rowIndex: sheet?.rowIndex || index,
-                        uniqueNo: sheet?.uniqueNo || '',
-                        partyName: sheet?.partyName || '',
-                        poNumber: sheet?.poNumber || '',
-                        totalPoAmount: Number(sheet?.totalPoAmount || 0),
-                        internalCode: sheet?.internalCode || '',
-                        product: sheet?.product || '',
-                        deliveryDate: sheet?.deliveryDate || '',
-                        paymentTerms: sheet?.paymentTerms || '',
-                        numberOfDays: Number(sheet?.numberOfDays || 0),
-                        pdf: sheet?.pdf || '',
-                        payAmount: Number(sheet?.payAmount || 0),
-                        file: sheet?.file || '',
-                        remark: sheet?.remark || '',
-                        totalPaidAmount: Number(sheet?.totalPaidAmount || 0),
-                        outstandingAmount: Number(sheet?.outstandingAmount || 0),
-                        status: sheet?.status || 'Pending',
-                        planned: sheet?.planned || '',
-                        actual: sheet?.actual || '',
-                        delay: sheet?.delay || '',
-                        status1: sheet?.status1 || '',
-                        paymentForm: sheet?.paymentForm || '',
-                        firmNameMatch: sheet?.firmNameMatch || '',
-                        billImageStatus: sheet?.billImageStatus || '',
-                    }));
+                        const status = String(sheet?.status || '').toLowerCase();
+                        const isCompleted = status === 'completed';
+                        return hasPlanned && !isCompleted;
+                    });
+
+                // Filter to show only the latest record for each Indent Number and Product
+                const seenPending = new Set();
+                const latestPending = [];
+                for (const record of pendingBasic) {
+                    const key = `${record.internalCode}-${record.product}`;
+                    if (!seenPending.has(key)) {
+                        seenPending.add(key);
+                        latestPending.push(record);
+                    }
+                }
+
+                const pendingItems = latestPending.map((sheet: PaymentsRecord, index) => ({
+                    rowIndex: sheet?.rowIndex || index,
+                    uniqueNo: sheet?.uniqueNo || '',
+                    partyName: sheet?.partyName || '',
+                    poNumber: sheet?.poNumber || '',
+                    totalPoAmount: Number(sheet?.totalPoAmount || 0),
+                    internalCode: sheet?.internalCode || '',
+                    product: sheet?.product || '',
+                    deliveryDate: sheet?.deliveryDate || '',
+                    paymentTerms: sheet?.paymentTerms || '',
+                    numberOfDays: Number(sheet?.numberOfDays || 0),
+                    pdf: sheet?.pdf || '',
+                    payAmount: Number(sheet?.payAmount || 0),
+                    file: sheet?.file || '',
+                    remark: sheet?.remark || '',
+                    totalPaidAmount: Number(sheet?.totalPaidAmount || 0),
+                    outstandingAmount: Number(sheet?.outstandingAmount || 0),
+                    status: sheet?.status || 'Pending',
+                    planned: sheet?.planned || '',
+                    actual: sheet?.actual || '',
+                    delay: sheet?.delay || '',
+                    status1: sheet?.status1 || '',
+                    paymentForm: sheet?.paymentForm || '',
+                    firmNameMatch: sheet?.firmNameMatch || '',
+                    billImageStatus: sheet?.billImageStatus || '',
+                }));
 
                 setPendingData(pendingItems);
 
-                // Filter History: Mark as paymentDone
-                const historyItems = mappedPayments
-                    .filter((sheet: PaymentsRecord) => sheet?.paymentDone)
-                    .map((sheet: PaymentsRecord, index) => ({
-                        rowIndex: sheet?.rowIndex || index,
-                        timestamp: sheet?.actual || sheet?.timestamp || '',
-                        apPaymentNumber: '', // Not used anymore
-                        status: sheet?.status || 'Completed',
-                        uniqueNumber: sheet?.uniqueNo || '',
-                        fmsName: sheet?.firmNameMatch || '',
-                        payTo: sheet?.partyName || '',
-                        amountToBePaid: Number(sheet?.payAmount || 0),
-                        remarks: sheet?.remark || '',
-                        anyAttachments: sheet?.file || sheet?.pdf || '',
-                        planned: sheet?.planned || '',
-                        billImage: sheet?.file || '',
-                        poImage: sheet?.pdf || '',
-                        billImageStatus: sheet?.billImageStatus || '',
+                // 2. Fetch History directly from payment_history table
+                const historyItems = (historyDbData || [])
+                    .map((r: any, index: number) => ({
+                        rowIndex: r.id || index,
+                        timestamp: r.timestamp || '',
+                        apPaymentNumber: r.ap_payment_number || '',
+                        status: r.status || '',
+                        uniqueNumber: r.unique_number || '',
+                        fmsName: r.fms_name || '',
+                        payTo: r.pay_to || '',
+                        amountToBePaid: Number(r.amount_to_be_paid) || 0,
+                        remarks: r.remarks || '',
+                        anyAttachments: r.any_attachments || '',
+                        planned: '', // Not in payment_history schema
+                        paymentTerms: r.payment_type || '',
+                        billImage: r.photo_of_bill || r.any_attachments || '',
+                        poImage: r.any_attachments || '',
+                        billImageStatus: r.bill_status || '',
+                        // Mapping new fields
+                        liftNumber: r.lift_number || '',
+                        indentNo: r.indent_no || '',
+                        poNumber: r.po_number || '',
+                        vendorName: r.vendor_name || '',
+                        productName: r.product_name || '',
+                        billNo: r.bill_no || '',
+                        qty: r.qty || '',
+                        typeOfBill: r.type_of_bill || '',
+                        billAmount: r.bill_amount || '',
+                        discountAmount: r.discount_amount || '',
+                        paymentType: r.payment_type || '',
+                        advanceAmountIfAny: r.advance_amount_if_any || '',
+                        transportationInclude: r.transportation_include || '',
+                        transporterName: r.transporter_name || '',
+                        amount: r.amount || '',
+                        billRemark: r.bill_remark || '',
+                        timestamp1: r.timestamp1 || '',
+                        vehicle_no: r.vehicle_no || '',
+                        driver_name: r.driver_name || '',
+                        driver_mobile_no: r.driver_mobile_no || '',
                     }));
 
                 setHistoryData(historyItems);
@@ -381,6 +441,63 @@ export default function MakePayment() {
                 return;
             }
 
+            // --- INSERT INTO PAYMENT_HISTORY ---
+            const historyRows = selectedItems.map(item => {
+                // Try to find the matching store_in record to get more metadata
+                const storeIn = storeInRecords.find(si => 
+                    si.po_number === item.poNumber && 
+                    (si.indent_no === item.internalCode || si.indent_number === item.internalCode)
+                );
+
+                // Auto-generate AP Payment Number (e.g., AP-7707)
+                const apPaymentNumber = `AP-${Math.floor(1000 + Math.random() * 9000)}`;
+
+                return {
+                    timestamp: currentDate,
+                    ap_payment_number: apPaymentNumber,
+                    status: 'Paid',
+                    unique_number: item.uniqueNo,
+                    fms_name: item.firmNameMatch,
+                    pay_to: item.partyName,
+                    amount_to_be_paid: String(item.payAmount),
+                    remarks: item.remark || `Payment completed for ${item.uniqueNo}`,
+                    any_attachments: item.file || item.pdf || '',
+                    timestamp1: currentDate,
+                    indent_no: item.internalCode,
+                    po_number: item.poNumber,
+                    product_name: item.product,
+                    // Additional fields from store_in if found
+                    lift_number: storeIn?.liftNumber || '',
+                    bill_status: storeIn?.billStatus || '',
+                    bill_no: String(storeIn?.billNo || ''),
+                    qty: String(storeIn?.qty || ''),
+                    vendor_name: storeIn?.vendorName || item.partyName,
+                    type_of_bill: storeIn?.typeOfBill || '',
+                    bill_amount: String(storeIn?.billAmount || ''),
+                    discount_amount: String(storeIn?.discountAmount || ''),
+                    payment_type: storeIn?.paymentType || '',
+                    advance_amount_if_any: String(storeIn?.advanceAmountIfAny || ''),
+                    photo_of_bill: storeIn?.photoOfBill || item.file || '',
+                    transportation_include: storeIn?.transportationInclude || '',
+                    transporter_name: storeIn?.transporterName || '',
+                    amount: String(storeIn?.amount || ''),
+                    lead_time_to_lift_material: String(storeIn?.leadTimeToLiftMaterial || ''),
+                    vehicle_no: storeIn?.vehicleNo || '',
+                    driver_name: storeIn?.driverName || '',
+                    driver_mobile_no: storeIn?.driverMobileNo || '',
+                    bill_remark: storeIn?.billRemark || item.remark || '',
+                };
+            });
+
+            const { error: historyError } = await supabase
+                .from('payment_history')
+                .insert(historyRows);
+
+            if (historyError) {
+                console.warn('⚠️ Error inserting into payment_history:', historyError);
+                // We don't block the UI as the main payment update succeeded
+            }
+
             toast.success(`Successfully updated ${ids.length} payment(s)`);
 
             // Refresh data
@@ -486,6 +603,13 @@ export default function MakePayment() {
             )
         },
         {
+            accessorKey: 'paymentTerms',
+            header: 'Payment Terms',
+            cell: ({ row }) => (
+                <span className="text-sm italic text-gray-600">{row.original.paymentTerms || '-'}</span>
+            )
+        },
+        {
             accessorKey: 'internalCode',
             header: 'Indent No.',
             cell: ({ row }) => (
@@ -556,7 +680,7 @@ export default function MakePayment() {
                 const status = row.original.billImageStatus;
                 const hasAttachment = url?.trim() !== '';
                 const isStatusUrl = status && (status.startsWith('http') || status.includes('drive.google.com') || status.includes('supabase.co'));
-                
+
                 return (
                     <div className="flex flex-col gap-1">
                         {hasAttachment ? (
@@ -570,7 +694,7 @@ export default function MakePayment() {
                                 View Bill
                             </Button>
                         ) : null}
-                        
+
                         {status && (
                             isStatusUrl ? (
                                 <Button
@@ -583,13 +707,12 @@ export default function MakePayment() {
                                     Store Bill
                                 </Button>
                             ) : (
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${
-                                    status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
-                                    ? 'bg-green-100 text-green-700 border border-green-200'
-                                    : status.toLowerCase() === 'pending'
-                                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                    : 'bg-gray-100 text-gray-600 border border-gray-200'
-                                }`}>
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
+                                        ? 'bg-green-100 text-green-700 border border-green-200'
+                                        : status.toLowerCase() === 'pending'
+                                            ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                            : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                    }`}>
                                     {status}
                                 </span>
                             )
@@ -669,6 +792,15 @@ export default function MakePayment() {
             )
         },
         {
+            accessorKey: 'paymentTerms',
+            header: 'Payment Terms',
+            cell: ({ row }) => (
+                <span className="text-sm italic text-gray-600">
+                    {row.original.paymentTerms || '-'}
+                </span>
+            )
+        },
+        {
             accessorKey: 'amountToBePaid',
             header: 'Amount',
             cell: ({ row }) => (
@@ -734,13 +866,12 @@ export default function MakePayment() {
                                     Store Bill
                                 </Button>
                             ) : (
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${
-                                    status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
-                                    ? 'bg-green-100 text-green-700 border border-green-200'
-                                    : status.toLowerCase() === 'pending'
-                                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                    : 'bg-gray-100 text-gray-600 border border-gray-200'
-                                }`}>
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
+                                        ? 'bg-green-100 text-green-700 border border-green-200'
+                                        : status.toLowerCase() === 'pending'
+                                            ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                            : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                    }`}>
                                     {status}
                                 </span>
                             )
@@ -784,6 +915,28 @@ export default function MakePayment() {
                 </span>
             )
         },
+        { accessorKey: 'liftNumber', header: 'Lift Number' },
+        { accessorKey: 'indentNo', header: 'Indent No.' },
+        { accessorKey: 'poNumber', header: 'PO Number' },
+        { accessorKey: 'vendorName', header: 'Vendor Name' },
+        { accessorKey: 'productName', header: 'Product Name' },
+        { accessorKey: 'billStatus', header: 'Bill Status' },
+        { accessorKey: 'billNo', header: 'Bill No.' },
+        { accessorKey: 'qty', header: 'Qty' },
+        { accessorKey: 'typeOfBill', header: 'Type Of Bill' },
+        { accessorKey: 'billAmount', header: 'Bill Amount' },
+        { accessorKey: 'discountAmount', header: 'Discount Amount' },
+        { accessorKey: 'paymentType', header: 'Payment Type' },
+        { accessorKey: 'advanceAmountIfAny', header: 'Advance Amount If Any' },
+        { accessorKey: 'transportationInclude', header: 'Transportation' },
+        { accessorKey: 'transporterName', header: 'Transporter' },
+        { accessorKey: 'amount', header: 'Amount (Total)' },
+        { accessorKey: 'billRemark', header: 'Bill Remark' },
+        { accessorKey: 'apPaymentNumber', header: 'AP Payment No.' },
+        { accessorKey: 'timestamp1', header: 'Processed Date' },
+        { accessorKey: 'vehicle_no', header: 'Vehicle No.' },
+        { accessorKey: 'driver_name', header: 'Driver Name' },
+        { accessorKey: 'driver_mobile_no', header: 'Driver Mobile' },
     ];
 
     const handleRefresh = () => {

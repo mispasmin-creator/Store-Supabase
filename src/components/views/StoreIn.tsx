@@ -226,8 +226,22 @@ export default () => {
             user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
         );
 
+        // Filter to keep only the latest record per Indent and Product
+        // Since storeInRecords are already sorted by timestamp DESC, 
+        // the first one we see for each key is the latest.
+        const latestRecords: any[] = [];
+        const seen = new Set<string>();
+        
+        for (const item of filteredByFirm) {
+            const key = `${item.indentNo}-${item.productName}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                latestRecords.push(item);
+            }
+        }
+
         setTableData(
-            filteredByFirm
+            latestRecords
                 .filter((i) => i.planned6 !== '' && i.actual6 === '' && i.billStatus === 'Bill Received')
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',
@@ -267,8 +281,20 @@ export default () => {
             user.firmNameMatch.toLowerCase() === "all" || item.firmNameMatch === user.firmNameMatch
         );
 
+        // Filter to keep only the latest record per Indent and Product
+        const latestRecords: any[] = [];
+        const seen = new Set<string>();
+        
+        for (const item of filteredByFirm) {
+            const key = `${item.indentNo}-${item.productName}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                latestRecords.push(item);
+            }
+        }
+
         setHistoryData(
-            filteredByFirm
+            latestRecords
                 .filter((i) => i.actual6 !== '')
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',

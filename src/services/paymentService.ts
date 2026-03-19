@@ -42,6 +42,7 @@ export async function fetchPayments(): Promise<PaymentsSheet[]> {
             status1: p.status1 || '',
             paymentForm: p.payment_form || '',
             paymentDone: p.payment_done || false,
+            firmNameMatch: p.firm_name || '',
             id: p.id,
         })) as unknown as PaymentsSheet[];
     } catch (error) {
@@ -77,6 +78,7 @@ export async function fetchPaymentHistory(): Promise<PaymentHistory[]> {
             po_number: h.po_number || '',
             vendor_name: h.party_name || '',
             product_name: h.product || '',
+            firmNameMatch: h.firm_name || '',
         })) as unknown as PaymentHistory[];
     } catch (error) {
         console.error('Error fetching payment history from payments table:', error);
