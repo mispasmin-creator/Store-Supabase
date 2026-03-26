@@ -23,6 +23,8 @@ interface ApprovedPOData {
     firmNameMatch: string;
     poRequired: string;
     poRequiredStatus: 'Yes';
+    expectedReqDate: string;
+    expectedReqDateRaw: string | null;
 }
 
 export default function ApprovedPOs() {
@@ -34,7 +36,7 @@ export default function ApprovedPOs() {
     // Fetch pending PO data from Supabase
     const fetchPendingPOs = async () => {
         if (!supabaseEnabled) return;
-        
+
         try {
             setDataLoading(true);
 
@@ -73,9 +75,9 @@ export default function ApprovedPOs() {
             const filteredData = (indentData || []).filter((sheet) => {
                 const indentNumber = sheet.indent_number?.toString().trim();
                 const existsInPoMaster = indentNumber && poMasterInternalCodes.has(indentNumber);
-                
+
                 console.log(`Indent: ${indentNumber}, Exists in PO Master: ${existsInPoMaster}`);
-                
+
                 return !existsInPoMaster;
             });
 
@@ -84,7 +86,7 @@ export default function ApprovedPOs() {
                 .map((sheet) => {
                     let formattedDate = '';
                     let formattedPlannedDate = '';
-                    
+
                     try {
                         if (sheet.timestamp) {
                             formattedDate = formatDate(new Date(sheet.timestamp));
@@ -101,6 +103,16 @@ export default function ApprovedPOs() {
                         console.warn('Invalid planned date format:', sheet.planned4);
                     }
 
+                    let rawExpected = sheet.expected_req_date || sheet.delivery_date || null;
+                    let formattedExpectedDate = '';
+                    if (rawExpected) {
+                        try {
+                            formattedExpectedDate = formatDate(new Date(rawExpected));
+                        } catch (error) {
+                            console.warn('Invalid expected date format:', rawExpected);
+                        }
+                    }
+
                     return {
                         date: formattedDate,
                         plannedDate: formattedPlannedDate,
@@ -115,10 +127,20 @@ export default function ApprovedPOs() {
                         specifications: sheet.specifications || '',
                         poRequired: sheet.po_requred?.toString() || '',
                         poRequiredStatus: 'Yes' as const,
+                        expectedReqDateRaw: rawExpected,
+                        expectedReqDate: formattedExpectedDate,
                     };
                 })
-                // Sort by indentNo in descending order
-                .sort((a, b) => b.indentNo.localeCompare(a.indentNo));
+                // Sort by expected request date (upcoming first)
+                .sort((a, b) => {
+                    const dateA = a.expectedReqDateRaw ? new Date(a.expectedReqDateRaw).getTime() : Infinity;
+                    const dateB = b.expectedReqDateRaw ? new Date(b.expectedReqDateRaw).getTime() : Infinity;
+                    
+                    if (dateA === dateB) {
+                        return b.indentNo.localeCompare(a.indentNo);
+                    }
+                    return dateA - dateB;
+                });
 
             console.log('Final Approved Table Data:', mappedData);
             setApprovedTableData(mappedData);
@@ -152,6 +174,11 @@ export default function ApprovedPOs() {
                     </div>
                 );
             }
+        },
+        {
+            accessorKey: 'expectedReqDate',
+            header: 'Expected Date',
+            cell: ({ getValue }) => <div className="px-2">{getValue() as string || '-'}</div>
         },
         {
             accessorKey: 'indentNo',
@@ -226,13 +253,13 @@ export default function ApprovedPOs() {
 
     return (
         <div>
-            <Heading 
-                heading="Approved POs" 
-                subtext="View all approved purchase orders (PO Required: Yes)"
+            <Heading
+                heading="Pending POs to be created"
+                subtext="View all pending purchase orders"
             >
                 <CheckCircle size={50} className="text-green-600" />
             </Heading>
-            
+
             <DataTable
                 data={approvedTableData}
                 columns={approvedColumns}

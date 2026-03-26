@@ -23,7 +23,10 @@ export interface GetLiftIndentRecord {
     pendingQty: number;
     liftingStatus: string;
     cancelQty: number;
+    approvedRate: string;
     timestamp: string;
+    department?: string;
+    areaOfUse?: string;
 }
 
 export interface GetLiftStoreInRecord {
@@ -41,13 +44,13 @@ export interface VendorOption {
 
 export interface StoreInInsertData {
     timestamp: string;
-    liftNumber: string;
+    liftNumber?: string;
     indentNo: string;
     billNo: string;
     vendorName: string;
     productName: string;
     qty: number;
-    leadTimeToLiftMaterial: number;
+    leadTimeToLiftMaterial?: number;
     discountAmount: number;
     typeOfBill: string;
     billAmount: number;
@@ -70,6 +73,12 @@ export interface StoreInInsertData {
     driverMobileNo: string;
     billRemark: string;
     firmNameMatch: string;
+    rate: string;
+    department?: string;
+    areaOfUse?: string;
+    approvedVendorName?: string;
+    liftingStatus?: string;
+    notBillReceivedNo?: string;
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -102,6 +111,9 @@ export async function fetchIndentRecords() {
             pendingQty: Number(r.pending_qty) || 0,
             liftingStatus: r.lifting_status || '',
             cancelQty: Number(r.cancel_qty) || 0,
+            approvedRate: r.approved_rate || '',
+            department: r.department || '',
+            areaOfUse: r.area_of_use || '',
             timestamp: r.timestamp || '',
         }));
     } catch (error) {
@@ -124,6 +136,7 @@ export async function fetchStoreInRecords() {
         if (error) throw error;
 
         return (data || []).map((r: any) => ({
+            liftNumber: r.lift_number || '',
             indentNo: r.indent_no || '',
             firmNameMatch: r.firm_name_match || '',
             vendorName: r.vendor_name || '',
@@ -175,7 +188,7 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
         // ✅ FIXED: Only map columns that actually exist in the store_in table schema
         const mappedData = {
             timestamp: storeInData.timestamp,
-            lift_number: storeInData.liftNumber || '',
+            lift_number: null, // Always null for backend trigger generation
             indent_no: storeInData.indentNo,
             bill_no: storeInData.billNo,
             vendor_name: storeInData.vendorName,
@@ -200,6 +213,7 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             driver_mobile_no: storeInData.driverMobileNo,
             bill_remark: storeInData.billRemark,
             firm_name_match: storeInData.firmNameMatch,
+            rate: storeInData.rate || '',
             // Default empty values for optional fields that exist in schema
             planned6: null,
             actual6: null,
@@ -229,6 +243,12 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             purchase_date: new Date().toISOString(),
             material_date: new Date().toISOString(),
             party_name: storeInData.vendorName,
+            indented_for: storeInData.department || '',
+            area: storeInData.areaOfUse || '',
+            approved_party_name: storeInData.approvedVendorName || storeInData.vendorName || '',
+            total_rate: (Number(storeInData.rate) * Number(storeInData.qty)).toString(),
+            lifting_status: storeInData.liftingStatus || 'Active',
+            not_bill_received_no: storeInData.notBillReceivedNo || '',
         };
 
         console.log('📤 Inserting store-in record:', mappedData);
@@ -292,6 +312,22 @@ export async function updateCancelQuantity(indentNumber: string, cancelQty: numb
         return true;
     } catch (error) {
         console.error('Error updating cancel quantity:', error);
+        throw error;
+    }
+}
+
+export async function updateLiftingStatus(indentNumber: string, status: string) {
+    try {
+        const { error } = await supabase
+            .from('indent')
+            .update({ lifting_status: status })
+            .eq('indent_number', indentNumber);
+
+        if (error) throw error;
+
+        return true;
+    } catch (error) {
+        console.error('Error updating lifting status:', error);
         throw error;
     }
 }

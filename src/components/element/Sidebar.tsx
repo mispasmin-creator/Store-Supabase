@@ -39,28 +39,26 @@ export default ({ items }: SidebarProps) => {
         allLoading
     } = useSheets();
     const { user, logout } = useAuth();
-    console.log("user", user);
 
     const allItems = [...items];
 
     return (
-        <Sidebar side="left" variant="inset" collapsible="offcanvas">
-            <SidebarHeader className="p-3 border-b-1">
+        <Sidebar side="left" variant="inset" collapsible="icon">
+            <SidebarHeader className="p-4 border-b-1">
                 <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
                         <Logo />
-
-                        <div>
+                        <div className="group-data-[collapsible=icon]:hidden">
                             <h2 className="text-xl font-bold">Store App</h2>
                             <p className="text-sm">Management System</p>
                         </div>
                     </div>
-                    <Button variant="ghost" className="size-7" onClick={() => updateAll()} disabled={allLoading}>
+                    <Button variant="ghost" className="size-7 group-data-[collapsible=icon]:hidden" onClick={() => updateAll()} disabled={allLoading}>
                         <RotateCw />
                     </Button>
                 </div>
                 <SidebarSeparator />
-                <div className="flex justify-between items-center px-3 text-xs text-muted-foreground">
+                <div className="flex justify-between items-center px-3 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
                     <div>
                         <p>
                             Name: <span className="font-semibold">{user.name}</span>
@@ -75,7 +73,7 @@ export default ({ items }: SidebarProps) => {
                 </div>
             </SidebarHeader>
             <SidebarContent className="py-1 border-b-1">
-                <SidebarGroup>
+                <SidebarGroup className="p-4 transition-all duration-300">
                     <SidebarMenu>
                         {allItems
                             .filter((item) => {
@@ -162,17 +160,18 @@ export default ({ items }: SidebarProps) => {
                                 return (
                                     <SidebarMenuItem key={i}>
                                         <SidebarMenuButton
-                                            className="transition-colors duration-200 rounded-md py-5 flex justify-between font-medium text-secondary-foreground"
+                                            className="transition-all duration-200 rounded-md py-6 flex justify-between font-medium text-secondary-foreground items-center"
                                             onClick={() => navigate(item.path)}
                                             isActive={window.location.pathname.slice(1) === item.path}
+                                            tooltip={item.name}
                                         >
-                                            <div className="flex gap-2 items-center">
-                                                {item.icon}
-                                                {item.name}
+                                            <div className="flex gap-4 items-center min-w-0">
+                                                <div className="shrink-0 flex items-center justify-center w-6">{item.icon}</div>
+                                                <span className="group-data-[collapsible=icon]:hidden truncate">{item.name}</span>
                                             </div>
                                             {/* ✅ SHOW BADGE WITH CORRECT COUNT */}
                                             {notificationCount !== 0 && (
-                                                <span className="bg-destructive text-secondary w-[1.3rem] h-[1.3rem] rounded-full text-xs grid place-items-center text-center">
+                                                <span className="bg-destructive text-secondary w-5 h-5 rounded-full text-[10px] grid place-items-center text-center shrink-0 group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:-top-1 group-data-[collapsible=icon]:-right-1 shadow-sm">
                                                     {notificationCount > 99 ? '99+' : notificationCount}
                                                 </span>
                                             )}

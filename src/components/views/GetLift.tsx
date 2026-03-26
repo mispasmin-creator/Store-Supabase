@@ -21,7 +21,7 @@ import { Input } from '../ui/input';
 import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { ShoppingCart, X } from 'lucide-react';
+import { ShoppingCart, X, Truck, FileText, IndianRupee, CreditCard, User, Phone, CheckCircle2, Package, Info, Upload } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
@@ -33,6 +33,7 @@ import {
     updateCancelQuantity,
     uploadBillPhoto,
     updateActual5Timestamp,
+    updateLiftingStatus,
     type GetLiftIndentRecord,
     type GetLiftStoreInRecord,
 } from '@/services/getLiftService';
@@ -50,7 +51,12 @@ interface GetPurchaseData {
     receivedQty?: number;
     pendingPoQty?: number;
     plannedDate?: string;
+    approvedRate?: string;
     timestamp?: string;
+    department?: string;
+    areaOfUse?: string;
+    approvedVendorName?: string;
+    liftingStatus?: string;
 }
 
 interface HistoryData {
@@ -67,6 +73,10 @@ interface HistoryData {
     receivedQty?: number;
     pendingPoQty?: number;
     timestamp?: string;
+    department?: string;
+    areaOfUse?: string;
+    approvedVendorName?: string;
+    liftingStatus?: string;
 }
 
 interface AuthUser {
@@ -120,17 +130,8 @@ export default function GetPurchase() {
                 user?.firmNameMatch?.toLowerCase() === 'all' ||
                 sheet.firmNameMatch === user?.firmNameMatch
         );
-
         setTableData(
             filteredByFirm
-                .filter((sheet) => {
-                    // Show only Pending items with planned date but no actual date
-                    const hasPlanned5 = sheet.planned5 && sheet.planned5.toString().trim() !== '';
-                    const hasActual5 = sheet.actual5 && sheet.actual5.toString().trim() !== '';
-                    const isPending = sheet.liftingStatus === 'Pending' || sheet.liftingStatus === '';
-
-                    return isPending && hasPlanned5 && !hasActual5;
-                })
                 .map((sheet) => {
                     // Calculate received quantity from STORE IN records
                     const receivedQty = storeInRecords
@@ -145,28 +146,43 @@ export default function GetPurchase() {
                         );
 
                     // Use pendingPoQty from sheet if available, otherwise calculate
-                    const pendingPoQty =
-                        Number(sheet.pendingQty) ||
-                        (Number(sheet.totalQty) || Number(sheet.quantity) || 0) - receivedQty;
+                    const pendingPoQty = (Number(sheet.totalQty) || Number(sheet.quantity) || 0) - receivedQty;
 
+                    return { ...sheet, pendingPoQty, receivedQty };
+                })
+                .filter((item) => {
+                    // Show only Pending items with planned date but no actual date
+                    const hasPlanned5 = item.planned5 && item.planned5.toString().trim() !== '';
+                    const hasActual5 = item.actual5 && item.actual5.toString().trim() !== '';
+                    const isPending = item.liftingStatus === 'Pending' || item.liftingStatus === '' || item.liftingStatus === null;
+
+                    // ✅ Hide if no quantity left to lift
+                    return isPending && hasPlanned5 && !hasActual5 && item.pendingPoQty > 0;
+                })
+                .map((item) => {
                     return {
-                        indentNo: sheet.indentNumber?.toString() || '',
-                        firmNameMatch: sheet.firmNameMatch || '',
-                        vendorName: sheet.approvedVendorName || '',
-                        poNumber: sheet.poNumber || '',
-                        poDate: sheet.actual4 ? formatDate(parseCustomDate(sheet.actual4)) : '',
-                        deliveryDate: sheet.deliveryDate
-                            ? formatDate(parseCustomDate(sheet.deliveryDate))
+                        indentNo: item.indentNumber?.toString() || '',
+                        firmNameMatch: item.firmNameMatch || '',
+                        vendorName: item.approvedVendorName || '',
+                        poNumber: item.poNumber || '',
+                        poDate: item.actual4 ? formatDate(parseCustomDate(item.actual4)) : '',
+                        deliveryDate: item.deliveryDate
+                            ? formatDate(parseCustomDate(item.deliveryDate))
                             : '',
-                        plannedDate: sheet.planned5
-                            ? formatDate(parseCustomDate(sheet.planned5))
+                        plannedDate: item.planned5
+                            ? formatDate(parseCustomDate(item.planned5))
                             : 'Not Set',
-                        product: sheet.productName || '',
-                        quantity: Number(sheet.totalQty) || Number(sheet.quantity) || 0,
-                        pendingLiftQty: pendingPoQty,
-                        receivedQty: receivedQty,
-                        pendingPoQty: pendingPoQty,
-                        timestamp: sheet.timestamp || '',
+                        product: item.productName || '',
+                        quantity: Number(item.totalQty) || Number(item.quantity) || 0,
+                        pendingLiftQty: item.pendingPoQty,
+                        receivedQty: item.receivedQty,
+                        pendingPoQty: item.pendingPoQty,
+                        approvedRate: item.approvedRate || '',
+                        timestamp: item.timestamp || '',
+                        department: item.department || '',
+                        areaOfUse: item.areaOfUse || '',
+                        approvedVendorName: item.approvedVendorName || '',
+                        liftingStatus: item.liftingStatus || '',
                     };
                 })
         );
@@ -249,6 +265,10 @@ export default function GetPurchase() {
                         pendingPoQty: Math.max(0, pendingLift),
                         photoOfBill: sheet.photoOfBill || '',
                         timestamp: sheet.timestamp || '',
+                        department: indentRecord?.department || '',
+                        areaOfUse: indentRecord?.areaOfUse || '',
+                        approvedVendorName: indentRecord?.approvedVendorName || '',
+                        liftingStatus: indentRecord?.liftingStatus || '',
                     };
                 })
                 .sort((a, b) => b.indentNo.localeCompare(a.indentNo))
@@ -427,7 +447,6 @@ export default function GetPurchase() {
         billStatus: z.string().min(1, 'Bill status is required'),
         billNo: z.string().optional(),
         qty: z.coerce.number().optional(),
-        leadTime: z.string().optional(),
         typeOfBill: z.string().optional(),
         billAmount: z.coerce.number().optional(),
         discountAmount: z.coerce.number().optional(),
@@ -466,7 +485,6 @@ export default function GetPurchase() {
             billStatus: '',
             billNo: '',
             qty: 0,
-            leadTime: '',
             typeOfBill: '',
             billAmount: 0,
             discountAmount: 0,
@@ -542,7 +560,6 @@ export default function GetPurchase() {
                 billStatus: '',
                 billNo: '',
                 qty: selectedIndent.pendingLiftQty || 0,
-                leadTime: '',
                 typeOfBill: '',
                 billAmount: 0,
                 discountAmount: 0,
@@ -561,6 +578,21 @@ export default function GetPurchase() {
             setVendorSearch(''); // Reset vendor search
         }
     }, [selectedIndent, form]);
+
+    const typeOfBillWatcher = form.watch('typeOfBill');
+    const qtyWatcher = form.watch('qty');
+
+    useEffect(() => {
+        if ((typeOfBillWatcher === 'common' || typeOfBillWatcher === 'independent') && selectedIndent) {
+            const rateStr = selectedIndent.approvedRate || '0';
+            const numericRate = parseFloat(rateStr) || 0;
+            const calculatedAmount = (Number(qtyWatcher) || 0) * numericRate;
+
+            // Only auto-fill if the bill amount is either 0 or we are switching to 'common'
+            // This prevents overwriting manual edits in 'independent' mode unless qty/type changes
+            form.setValue('billAmount', calculatedAmount);
+        }
+    }, [typeOfBillWatcher, qtyWatcher, selectedIndent, form]);
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
@@ -615,13 +647,11 @@ export default function GetPurchase() {
 
                 const newStoreInRecord = {
                     timestamp: currentDateTime,
-                    liftNumber: '',
                     indentNo: selectedIndent?.indentNo || '',
                     billNo: values.billNo || '',
                     vendorName: values.vendorName || selectedIndent?.vendorName || '',
                     productName: selectedIndent?.product || '',
                     qty: Number(values.qty) || Number(selectedIndent?.quantity) || 0,
-                    leadTimeToLiftMaterial: Number(values.leadTime) || 0,
                     discountAmount: Number(values.discountAmount) || 0,
                     typeOfBill: values.typeOfBill || '',
                     billAmount: Number(values.billAmount) || 0,
@@ -644,12 +674,25 @@ export default function GetPurchase() {
                     driverMobileNo: values.driverMobileNo || '',
                     billRemark: values.billRemark || '',
                     firmNameMatch: selectedIndent?.firmNameMatch || user?.firmNameMatch || '',
+                    rate: selectedIndent?.approvedRate || '',
+                    department: selectedIndent?.department || '',
+                    areaOfUse: selectedIndent?.areaOfUse || '',
+                    approvedVendorName: selectedIndent?.approvedVendorName || '',
+                    liftingStatus: selectedIndent?.liftingStatus || '',
+                    notBillReceivedNo: values.billStatus === 'Bill Not Received' ? values.billNo : '',
                 };
 
                 console.log('📤 Data to insert:', newStoreInRecord);
 
                 await insertStoreInRecord(newStoreInRecord);
                 console.log('✅ Insert completed');
+
+                // ✅ Auto-complete status if quantity reaches 0
+                const remaining = (selectedIndent?.pendingLiftQty || 0) - (Number(values.qty) || 0);
+                if (remaining <= 0) {
+                    console.log(`✅ Auto-completing status for ${selectedIndent?.indentNo}`);
+                    await updateLiftingStatus(selectedIndent?.indentNo || '', 'Complete');
+                }
 
                 toast.success(`Created store record for ${selectedIndent?.indentNo}`);
             }
@@ -710,69 +753,52 @@ export default function GetPurchase() {
                 </Tabs>
 
                 {selectedIndent && (
-                    <DialogContent className="max-w-2xl">
+                    <DialogContent
+                        className="max-h-[95vh] overflow-y-auto"
+                        style={{ maxWidth: '80vw', width: '60vw' }}
+                    >
                         <Form {...form}>
                             <form
                                 onSubmit={form.handleSubmit(onSubmit, onError)}
-                                className="space-y-5"
+                                className="space-y-6"
                             >
                                 <DialogHeader className="space-y-1">
-                                    <DialogTitle>Update Purchase Details</DialogTitle>
+                                    <DialogTitle className="text-lg font-semibold">
+                                        Update Purchase Details
+                                    </DialogTitle>
                                     <DialogDescription>
-                                        Update purchase details for{' '}
+                                        Update purchase details for{" "}
                                         <span className="font-medium">
                                             {selectedIndent.indentNo}
                                         </span>
                                     </DialogDescription>
                                 </DialogHeader>
 
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 bg-muted py-2 px-5 rounded-md">
-                                    <div className="space-y-1">
-                                        <p className="font-medium">Indent Number</p>
-                                        <p className="text-sm font-light">
-                                            {selectedIndent.indentNo}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="font-medium">Product</p>
-                                        <p className="text-sm font-light">
-                                            {selectedIndent.product || '-'}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="font-medium">PO Number</p>
-                                        <p className="text-sm font-light">
-                                            {selectedIndent.poNumber}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="font-medium">Pending Lift Qty</p>
-                                        <p className="text-sm font-light">
-                                            {selectedIndent.pendingLiftQty || 0}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="font-medium">Received Qty</p>
-                                        <p className="text-sm font-light">
-                                            {selectedIndent.receivedQty || 0}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="font-medium">Pending PO Qty</p>
-                                        <p className="text-sm font-light">
-                                            {selectedIndent.pendingPoQty || 0}
-                                        </p>
-                                    </div>
+                                {/* Info Card */}
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-muted/50 p-4 rounded-xl border shadow-sm">
+                                    {[
+                                        ["Indent Number", selectedIndent.indentNo],
+                                        ["Product", selectedIndent.product || "-"],
+                                        ["PO Number", selectedIndent.poNumber],
+                                        ["Pending Lift Qty", selectedIndent.pendingLiftQty || 0],
+                                        ["Received Qty", selectedIndent.receivedQty || 0],
+                                        ["Pending PO Qty", selectedIndent.pendingPoQty || 0],
+                                    ].map(([label, value]) => (
+                                        <div key={label} className="space-y-1">
+                                            <p className="text-xs text-muted-foreground">{label}</p>
+                                            <p className="text-sm font-medium">{value}</p>
+                                        </div>
+                                    ))}
                                 </div>
 
-                                {/* Cancel Pending PO Quantity Section */}
+                                {/* Cancel Section */}
                                 {!showCancelQty ? (
-                                    <div className="flex justify-between items-center border rounded-lg p-4 bg-orange-50 border-orange-200">
+                                    <div className="flex justify-between items-center border rounded-xl p-4 bg-orange-50 border-orange-200 shadow-sm">
                                         <div>
                                             <h3 className="font-medium text-orange-800">
                                                 Cancel Pending PO Quantity
                                             </h3>
-                                            <p className="text-sm text-orange-600 mt-1">
+                                            <p className="text-xs text-orange-600">
                                                 Cancel quantity
                                             </p>
                                         </div>
@@ -786,8 +812,8 @@ export default function GetPurchase() {
                                         </Button>
                                     </div>
                                 ) : (
-                                    <div className="border rounded-lg p-4 bg-orange-50 border-orange-200">
-                                        <div className="flex justify-between items-center mb-3">
+                                    <div className="border rounded-xl p-4 bg-orange-50 border-orange-200 shadow-sm space-y-3">
+                                        <div className="flex justify-between items-center">
                                             <h3 className="font-medium text-orange-800">
                                                 Cancel Pending PO Quantity
                                             </h3>
@@ -797,21 +823,22 @@ export default function GetPurchase() {
                                                 size="sm"
                                                 onClick={() => {
                                                     setShowCancelQty(false);
-                                                    setCancelQtyValue('');
+                                                    setCancelQtyValue("");
                                                 }}
                                             >
                                                 <X size={16} />
                                             </Button>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+
+                                        <div className="grid md:grid-cols-2 gap-4 items-end">
                                             <div>
-                                                <FormLabel className="text-orange-700">
-                                                    Quantity to Cancel (Max:{' '}
+                                                <FormLabel className="text-orange-700 text-sm">
+                                                    Quantity to Cancel (Max:{" "}
                                                     {selectedIndent.pendingPoQty || 0})
                                                 </FormLabel>
                                                 <Input
                                                     type="number"
-                                                    placeholder="Enter quantity to cancel"
+                                                    placeholder="Enter quantity"
                                                     min="0"
                                                     max={selectedIndent.pendingPoQty}
                                                     value={cancelQtyValue}
@@ -820,10 +847,8 @@ export default function GetPurchase() {
                                                     }
                                                     className="border-orange-300 focus:border-orange-500"
                                                 />
-                                                {/* <p className="text-sm text-orange-600 mt-1">
-        This will only update the "Cancel Oty" column in INDENT sheet. Max: {selectedIndent.pendingPoQty || 0}
-    </p> */}
                                             </div>
+
                                             <Button
                                                 type="button"
                                                 variant="outline"
@@ -836,7 +861,7 @@ export default function GetPurchase() {
                                     </div>
                                 )}
 
-                                {/* Hidden cancel quantity field for form submission */}
+                                {/* Hidden */}
                                 <FormField
                                     control={form.control}
                                     name="cancelPendingQty"
@@ -849,452 +874,325 @@ export default function GetPurchase() {
                                     )}
                                 />
 
-                                <div className="grid gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name="billStatus"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Bill Status *</FormLabel>
-                                                <Select
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select bill status" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="Bill Received">
-                                                            Bill Received
-                                                        </SelectItem>
-                                                        <SelectItem value="Bill Not Received">
-                                                            Bill Not Received
-                                                        </SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </FormItem>
-                                        )}
-                                    />
-
-                                    {billStatus === 'Bill Received' && (
+                                {/* Main Form - Sections */}
+                                <div className="space-y-8">
+                                    {/* Section 1: Basic Receipt Info */}
+                                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         <FormField
                                             control={form.control}
-                                            name="billNo"
+                                            name="billStatus"
                                             render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel>Bill No. *</FormLabel>
+                                                    <FormLabel>Bill Status *</FormLabel>
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        value={field.value}
+                                                    >
+                                                        <FormControl>
+                                                            <SelectTrigger className="h-11">
+                                                                <SelectValue placeholder="Select status" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="Bill Received">Bill Received</SelectItem>
+                                                            <SelectItem value="Bill Not Received">Bill Not Received</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="typeOfBill"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Type Of Bill *</FormLabel>
+                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                        <FormControl>
+                                                            <SelectTrigger className="h-11">
+                                                                <SelectValue placeholder="Select type" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="independent">Independent</SelectItem>
+                                                            <SelectItem value="common">Common </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        {billStatus === "Bill Received" && (
+                                            <FormField
+                                                control={form.control}
+                                                name="billNo"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Bill Number *</FormLabel>
+                                                        <FormControl>
+                                                            <Input {...field} className="h-11" placeholder="Enter bill #" />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
+
+                                        <FormField
+                                            control={form.control}
+                                            name="qty"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Quantity to Lift *</FormLabel>
                                                     <FormControl>
-                                                        <Input
-                                                            placeholder="Enter bill number"
-                                                            {...field}
-                                                        />
+                                                        <Input type="number" {...field} className="h-11" />
                                                     </FormControl>
                                                 </FormItem>
                                             )}
                                         />
-                                    )}
+
+                                        <FormField
+                                            control={form.control}
+                                            name="vendorName"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Approved Vendor</FormLabel>
+                                                    <FormControl>
+                                                        <Input {...field} readOnly className="h-11 bg-muted cursor-not-allowed" />
+                                                    </FormControl>
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
 
                                     {billStatus && (
-                                        <>
-                                            {/* Replace the Qty field */}
-                                            <FormField
-                                                control={form.control}
-                                                name="qty"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Qty</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                placeholder="Enter quantity"
-                                                                {...field}
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="leadTime"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            Lead Time To Lift Material *
-                                                        </FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                placeholder="Enter lead time"
-                                                                {...field}
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="vendorName"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Vendor Name</FormLabel>
-                                                        <Select
-                                                            onValueChange={field.onChange}
-                                                            value={field.value}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger>
-                                                                    <SelectValue placeholder="Select vendor name" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <div className="p-2">
-                                                                    <Input
-                                                                        placeholder="Search vendor..."
-                                                                        value={vendorSearch}
-                                                                        onChange={(e) => setVendorSearch(e.target.value)}
-                                                                        className="mb-2"
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                    />
-                                                                </div>
-                                                                <div className="max-h-[250px] overflow-y-auto">
-                                                                    {vendorOptions
-                                                                        .filter((vendor) =>
-                                                                            vendor.toLowerCase().includes(vendorSearch.toLowerCase())
-                                                                        )
-                                                                        .map((vendor) => (
-                                                                            <SelectItem key={vendor} value={vendor}>
-                                                                                {vendor}
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                </div>
-                                                                {vendorOptions.filter(v =>
-                                                                    v.toLowerCase().includes(vendorSearch.toLowerCase())
-                                                                ).length === 0 && (
-                                                                        <div className="p-2 text-sm text-gray-500 text-center">
-                                                                            No vendor found
-                                                                        </div>
-                                                                    )}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="transportationInclude"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            Transportation Include
-                                                        </FormLabel>
-                                                        <Select
-                                                            onValueChange={field.onChange}
-                                                            value={field.value}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger>
-                                                                    <SelectValue placeholder="Select transportation" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <SelectItem value="Yes">
-                                                                    Yes
-                                                                </SelectItem>
-                                                                <SelectItem value="No">
-                                                                    No
-                                                                </SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="transporterName"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Transporter Name</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                placeholder="Enter transporter name"
-                                                                {...field}
-                                                                disabled={
-                                                                    form.watch(
-                                                                        'transportationInclude'
-                                                                    ) !== 'Yes'
-                                                                }
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="vehicleNo"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Vehicle No.</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                placeholder="Enter Vehicle No."
-                                                                {...field}
-                                                                disabled={
-                                                                    form.watch(
-                                                                        'transportationInclude'
-                                                                    ) !== 'Yes'
-                                                                }
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="driverName"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Driver Name</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                placeholder="Enter Driver name"
-                                                                {...field}
-                                                                disabled={
-                                                                    form.watch(
-                                                                        'transportationInclude'
-                                                                    ) !== 'Yes'
-                                                                }
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="driverMobileNo"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Driver Mobile No.</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                type="number"
-                                                                placeholder="Enter Driver Mobile No."
-                                                                {...field}
-                                                                disabled={
-                                                                    form.watch(
-                                                                        'transportationInclude'
-                                                                    ) !== 'Yes'
-                                                                }
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="amount"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Amount</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                placeholder="Enter amount"
-                                                                {...field}
-                                                                disabled={
-                                                                    form.watch(
-                                                                        'transportationInclude'
-                                                                    ) !== 'Yes'
-                                                                }
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="billRemark"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Bill Remark</FormLabel>
-                                                        <FormControl>
-                                                            <Input
-                                                                placeholder="Enter bill remark"
-                                                                {...field}
-                                                            />
-                                                        </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-
-                                            <FormField
-                                                control={form.control}
-                                                name="typeOfBill"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>Type Of Bill *</FormLabel>
-                                                        <Select
-                                                            onValueChange={field.onChange}
-                                                            value={field.value}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger>
-                                                                    <SelectValue placeholder="Select type of bill" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <SelectItem value="independent">
-                                                                    Independent
-                                                                </SelectItem>
-                                                                <SelectItem value="common">
-                                                                    Common
-                                                                </SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </FormItem>
-                                                )}
-                                            />
-
+                                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                            {/* Section 2: Logistics */}
                                             {typeOfBill === 'independent' && (
-                                                <>
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="billAmount"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Bill Amount</FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        placeholder="Enter bill amount"
-                                                                        {...field}
-                                                                    />
-                                                                </FormControl>
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                                <div className="space-y-4 border-t pt-6">
+                                                    <div className="flex items-center gap-2 text-primary font-semibold mb-2">
+                                                        <Truck size={18} />
+                                                        <span>Logistics & Transportation</span>
+                                                    </div>
+                                                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="transportationInclude"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Transportation Included?</FormLabel>
+                                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                                        <FormControl>
+                                                                            <SelectTrigger className="h-11">
+                                                                                <SelectValue placeholder="Select" />
+                                                                            </SelectTrigger>
+                                                                        </FormControl>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="Yes">Yes</SelectItem>
+                                                                            <SelectItem value="No">No</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </FormItem>
+                                                            )}
+                                                        />
 
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="discountAmount"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>
-                                                                    Discount Amount
-                                                                </FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        placeholder="Enter discount amount"
-                                                                        {...field}
-                                                                    />
-                                                                </FormControl>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="paymentType"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>Payment Type</FormLabel>
-                                                                <Select
-                                                                    onValueChange={field.onChange}
-                                                                    value={field.value}
-                                                                >
-                                                                    <FormControl>
-                                                                        <SelectTrigger>
-                                                                            <SelectValue placeholder="Select payment type" />
-                                                                        </SelectTrigger>
-                                                                    </FormControl>
-                                                                    <SelectContent>
-                                                                        <SelectItem value="Advance">
-                                                                            Advance
-                                                                        </SelectItem>
-                                                                        <SelectItem value="Credit">
-                                                                            Credit
-                                                                        </SelectItem>
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="advanceAmount"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>
-                                                                    Advance Amount If Any
-                                                                </FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        placeholder="Enter advance amount"
-                                                                        {...field}
-                                                                    />
-                                                                </FormControl>
-                                                            </FormItem>
-                                                        )}
-                                                    />
-                                                    <FormField
-                                                        control={form.control}
-                                                        name="photoOfBill"
-                                                        render={({ field }) => (
-                                                            <FormItem>
-                                                                <FormLabel>
-                                                                    Photo/Bill Document *
-                                                                </FormLabel>
-                                                                <FormControl>
-                                                                    <Input
-                                                                        type="file"
-                                                                        accept="image/*,.pdf,application/pdf"
-                                                                        onChange={(e) =>
-                                                                            field.onChange(
-                                                                                e.target.files?.[0]
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                </FormControl>
-                                                                {form.formState.errors
-                                                                    .photoOfBill && (
-                                                                        <p className="text-sm text-red-500">
-                                                                            {
-                                                                                form.formState.errors
-                                                                                    .photoOfBill.message
-                                                                            }
-                                                                        </p>
+                                                        {form.watch("transportationInclude") === "Yes" && (
+                                                            <>
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name="transporterName"
+                                                                    render={({ field }) => (
+                                                                        <FormItem>
+                                                                            <FormLabel>Transporter Name</FormLabel>
+                                                                            <FormControl>
+                                                                                <Input {...field} className="h-11" />
+                                                                            </FormControl>
+                                                                        </FormItem>
                                                                     )}
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    Upload image (JPEG, PNG, GIF,
-                                                                    WebP) or PDF document
-                                                                </p>
+                                                                />
+
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name="vehicleNo"
+                                                                    render={({ field }) => (
+                                                                        <FormItem>
+                                                                            <FormLabel>Vehicle No.</FormLabel>
+                                                                            <FormControl>
+                                                                                <Input {...field} className="h-11" />
+                                                                            </FormControl>
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name="driverName"
+                                                                    render={({ field }) => (
+                                                                        <FormItem>
+                                                                            <FormLabel>Driver Name</FormLabel>
+                                                                            <FormControl>
+                                                                                <Input {...field} className="h-11" />
+                                                                            </FormControl>
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name="driverMobileNo"
+                                                                    render={({ field }) => (
+                                                                        <FormItem>
+                                                                            <FormLabel>Driver Mobile</FormLabel>
+                                                                            <FormControl>
+                                                                                <Input {...field} className="h-11" />
+                                                                            </FormControl>
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name="amount"
+                                                                    render={({ field }) => (
+                                                                        <FormItem>
+                                                                            <FormLabel>Freight Amount</FormLabel>
+                                                                            <FormControl>
+                                                                                <Input type="number" {...field} className="h-11" />
+                                                                            </FormControl>
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-4 border-t pt-6">
+                                                <div className="flex items-center gap-2 text-primary font-semibold mb-2">
+                                                    <CreditCard size={18} />
+                                                    <span>Financials & Billing</span>
+                                                </div>
+                                                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+
+                                                    {(typeOfBill === "independent" || typeOfBill === "common") && (
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="billAmount"
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Bill Amount {typeOfBill === 'common' && '(Auto)'}</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input type="number" {...field} className={`h-11 ${typeOfBill === 'common' ? 'bg-muted' : ''}`} disabled={typeOfBill === 'common'} />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    )}
+
+                                                    {typeOfBill === "independent" && (
+                                                        <>
+                                                            <FormField
+                                                                control={form.control}
+                                                                name="discountAmount"
+                                                                render={({ field }) => (
+                                                                    <FormItem>
+                                                                        <FormLabel>Discount</FormLabel>
+                                                                        <FormControl>
+                                                                            <Input type="number" {...field} className="h-11" />
+                                                                        </FormControl>
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                            <FormField
+                                                                control={form.control}
+                                                                name="paymentType"
+                                                                render={({ field }) => (
+                                                                    <FormItem>
+                                                                        <FormLabel>Payment Type</FormLabel>
+                                                                        <Select onValueChange={field.onChange} value={field.value}>
+                                                                            <FormControl>
+                                                                                <SelectTrigger className="h-11">
+                                                                                    <SelectValue placeholder="Select" />
+                                                                                </SelectTrigger>
+                                                                            </FormControl>
+                                                                            <SelectContent>
+                                                                                <SelectItem value="Advance">Advance</SelectItem>
+                                                                                <SelectItem value="Credit">Credit</SelectItem>
+                                                                            </SelectContent>
+                                                                        </Select>
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                            <FormField
+                                                                control={form.control}
+                                                                name="advanceAmount"
+                                                                render={({ field }) => (
+                                                                    <FormItem>
+                                                                        <FormLabel>Advance Amount</FormLabel>
+                                                                        <FormControl>
+                                                                            <Input type="number" {...field} className="h-11" />
+                                                                        </FormControl>
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                <div className="grid md:grid-cols-2 gap-6 mt-4">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="billRemark"
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Bill Remark</FormLabel>
+                                                                <FormControl>
+                                                                    <Input {...field} className="h-11" placeholder="Add any comments..." />
+                                                                </FormControl>
                                                             </FormItem>
                                                         )}
                                                     />
-                                                </>
-                                            )}
-                                        </>
+
+                                                    {typeOfBill === "independent" && (
+                                                        <FormField
+                                                            control={form.control}
+                                                            name="photoOfBill"
+                                                            render={({ field: { value, onChange, ...field } }) => (
+                                                                <FormItem>
+                                                                    <FormLabel>Attachment (Photo/PDF) *</FormLabel>
+                                                                    <FormControl>
+                                                                        <Input
+                                                                            type="file"
+                                                                            accept="image/*,.pdf"
+                                                                            onChange={(e) => onChange(e.target.files?.[0])}
+                                                                            {...field}
+                                                                            className="h-11 file:bg-primary/10 file:text-primary file:border-0 file:rounded-md cursor-pointer"
+                                                                        />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
 
-                                <DialogFooter>
+                                <DialogFooter className="pt-2">
                                     <DialogClose asChild>
                                         <Button variant="outline">Close</Button>
                                     </DialogClose>
-                                    <Button type="submit" disabled={form.formState.isSubmitting}>
+
+                                    <Button
+                                        type="submit"
+                                        disabled={form.formState.isSubmitting}
+                                        className="min-w-[120px]"
+                                    >
                                         {form.formState.isSubmitting && (
-                                            <Loader
-                                                size={20}
-                                                color="white"
-                                                aria-label="Loading Spinner"
-                                            />
+                                            <Loader size={18} className="mr-2" />
                                         )}
                                         Update
                                     </Button>

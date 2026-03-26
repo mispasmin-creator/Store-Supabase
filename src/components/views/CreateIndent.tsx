@@ -32,6 +32,7 @@ export default () => {
 
     const schema = z.object({
         indenterName: z.string().nonempty(),
+        firmName: z.string().nonempty({ message: 'Select Firm Name' }),
         indentStatus: z.enum(['Critical', 'None Critical'], {
             required_error: 'Select indent status',
         }),
@@ -42,10 +43,10 @@ export default () => {
                     groupHead: z.string().nonempty(),
                     productName: z.string().nonempty(),
                     quantity: z.coerce.number().gt(0, 'Must be greater than 0'),
+                    minStockQty: z.coerce.number().optional(),
                     uom: z.string().nonempty(),
-                    firmName: z.string().nonempty(),
                     areaOfUse: z.string().nonempty(),
-                    numberOfDays: z.coerce.number().gt(0, 'Must be greater than 0'),
+                    expectedRequirementDate: z.string().nonempty('Date is required'),
                     attachment: z.instanceof(File).optional(),
                     specifications: z.string().optional(),
                 })
@@ -57,17 +58,18 @@ export default () => {
         resolver: zodResolver(schema),
         defaultValues: {
             indenterName: '',
+            firmName: '',
             indentStatus: undefined,
             products: [
                 {
                     attachment: undefined,
                     uom: '',
-                    firmName: '',
                     productName: '',
                     specifications: '',
                     quantity: 1,
+                    minStockQty: 0,
                     areaOfUse: '',
-                    numberOfDays: 1,
+                    expectedRequirementDate: '',
                     groupHead: '',
                     department: '',
                 },
@@ -167,11 +169,12 @@ export default () => {
                     group_head: product.groupHead,
                     product_name: product.productName,
                     quantity: product.quantity,
+                    min_stock_qty: product.minStockQty || 0,
                     uom: product.uom,
-                    firm_name: product.firmName,
+                    firm_name: data.firmName,
                     specifications: product.specifications || '',
                     indent_status: data.indentStatus,
-                    no_day: product.numberOfDays,
+                    expected_req_date: product.expectedRequirementDate,
                     attachment: attachmentUrl,
                     firm_name_match: user?.firmNameMatch || '',
                     status: 'Pending',
@@ -190,17 +193,18 @@ export default () => {
             // Reset form
             form.reset({
                 indenterName: '',
+                firmName: '',
                 indentStatus: undefined,
                 products: [
                     {
                         attachment: undefined,
                         uom: '',
-                        firmName: '',
                         productName: '',
                         specifications: '',
                         quantity: 1,
+                        minStockQty: 0,
                         areaOfUse: '',
-                        numberOfDays: 1,
+                        expectedRequirementDate: '',
                         groupHead: '',
                         department: '',
                     },
@@ -224,7 +228,69 @@ export default () => {
             </Heading>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6 p-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <FormField
+                            control={form.control}
+                            name="firmName"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>
+                                        Firm Name
+                                        <span className="text-destructive">*</span>
+                                    </FormLabel>
+                                    <Select
+                                        onValueChange={async (val) => {
+                                            field.onChange(val);
+                                            try {
+                                                const { data, error } = await supabase
+                                                    .from('master')
+                                                    .select('indenter_name')
+                                                    .eq('firm_name', val)
+                                                    .limit(1);
+                                                
+                                                if (data && data.length > 0) {
+                                                    form.setValue('indenterName', data[0].indenter_name || '');
+                                                } else {
+                                                    form.setValue('indenterName', '');
+                                                }
+                                            } catch (err) {
+                                                console.error('Error fetching indenter name:', err);
+                                            }
+                                        }}
+                                        value={field.value}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Select Firm Name" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <div className="flex items-center border-b px-3 pb-3">
+                                                <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                <input
+                                                    placeholder="Search Firm Name..."
+                                                    value={searchTermFirmName}
+                                                    onChange={(e) => setSearchTermFirmName(e.target.value)}
+                                                    onKeyDown={(e) => e.stopPropagation()}
+                                                    className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                />
+                                            </div>
+                                            {(options?.firms || [])
+                                                .filter((firm) =>
+                                                    firm
+                                                        .toLowerCase()
+                                                        .includes(searchTermFirmName.toLowerCase())
+                                                )
+                                                .map((firm, i) => (
+                                                    <SelectItem key={i} value={firm}>
+                                                        {firm}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                </FormItem>
+                            )}
+                        />
                         <FormField
                             control={form.control}
                             name="indenterName"
@@ -235,7 +301,10 @@ export default () => {
                                         <span className="text-destructive">*</span>
                                     </FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Enter indenter name" {...field} />
+                                        <Input
+                                            placeholder="Indenter name (auto-fills)"
+                                            {...field}
+                                        />
                                     </FormControl>
                                 </FormItem>
                             )}
@@ -279,10 +348,10 @@ export default () => {
                                         groupHead: '',
                                         productName: '',
                                         quantity: 1,
+                                        minStockQty: 0,
                                         uom: '',
-                                        firmName: '',
                                         areaOfUse: '',
-                                        numberOfDays: 1,
+                                        expectedRequirementDate: '',
                                         attachment: undefined,
                                         specifications: '',
                                     })
@@ -548,6 +617,25 @@ export default () => {
                                             />
                                             <FormField
                                                 control={form.control}
+                                                name={`products.${index}.minStockQty`}
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>
+                                                            Min Stock Qty
+                                                        </FormLabel>
+                                                        <FormControl>
+                                                            <Input
+                                                                type="number"
+                                                                {...field}
+                                                                placeholder="Enter min stock qty"
+                                                                disabled={!currentGroupHead}
+                                                            />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                            <FormField
+                                                control={form.control}
                                                 name={`products.${index}.uom`}
                                                 render={({ field }) => (
                                                     <FormItem>
@@ -598,68 +686,22 @@ export default () => {
                                             />
                                             <FormField
                                                 control={form.control}
-                                                name={`products.${index}.numberOfDays`}
+                                                name={`products.${index}.expectedRequirementDate`}
                                                 render={({ field }) => (
                                                     <FormItem>
                                                         <FormLabel>
-                                                            Numbers of Days
+                                                            Expected Requirement Date
                                                             <span className="text-destructive">
                                                                 *
                                                             </span>
                                                         </FormLabel>
                                                         <FormControl>
                                                             <Input
-                                                                type="number"
+                                                                type="date"
                                                                 {...field}
                                                                 disabled={!currentGroupHead}
                                                             />
                                                         </FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={form.control}
-                                                name={`products.${index}.firmName`}
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel>
-                                                            Firm Name
-                                                            <span className="text-destructive">*</span>
-                                                        </FormLabel>
-                                                        <Select
-                                                            onValueChange={field.onChange}
-                                                            value={field.value}
-                                                            disabled={!currentGroupHead}
-                                                        >
-                                                            <FormControl>
-                                                                <SelectTrigger className="w-full">
-                                                                    <SelectValue placeholder="Select Firm Name" />
-                                                                </SelectTrigger>
-                                                            </FormControl>
-                                                            <SelectContent>
-                                                                <div className="flex items-center border-b px-3 pb-3">
-                                                                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                                                                    <input
-                                                                        placeholder="Search Firm Name..."
-                                                                        value={searchTermFirmName}
-                                                                        onChange={(e) => setSearchTermFirmName(e.target.value)}
-                                                                        onKeyDown={(e) => e.stopPropagation()}
-                                                                        className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                                                                    />
-                                                                </div>
-                                                                {(options?.firms || [])
-                                                                    .filter((firm) =>
-                                                                        firm
-                                                                            .toLowerCase()
-                                                                            .includes(searchTermFirmName.toLowerCase())
-                                                                    )
-                                                                    .map((firm, i) => (
-                                                                        <SelectItem key={i} value={firm}>
-                                                                            {firm}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                            </SelectContent>
-                                                        </Select>
                                                     </FormItem>
                                                 )}
                                             />

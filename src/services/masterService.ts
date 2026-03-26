@@ -11,6 +11,7 @@ export interface MasterData {
         gstin: string;
         address: string;
         email: string;
+        paymentTerm: string;
     }[];
     vendorNames: string[];
     paymentTerms: string[];
@@ -61,6 +62,7 @@ export async function fetchMasterOptions(): Promise<MasterData> {
                 gstin: r.vendor_gstin || '',
                 address: r.vendor_address || '',
                 email: r.vendor_email || '',
+                paymentTerm: r.payment_term || '',
             }));
 
         // Deduplicate vendors by name

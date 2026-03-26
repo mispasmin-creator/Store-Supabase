@@ -62,7 +62,7 @@ export default () => {
     // Fetch pending three party approvals from Supabase
     const fetchPendingApprovals = async () => {
         if (!supabaseEnabled) return;
-        
+
         try {
             setDataLoading(true);
             let query = supabase
@@ -70,7 +70,7 @@ export default () => {
                 .select('*')
                 .not('planned3', 'is', null)
                 .is('actual3', null)
-                .eq('vendor_type', 'Three Party');
+                .in('vendor_type', ['Three Party', 'Regular']);
 
             if (user.firmNameMatch.toLowerCase() !== 'all') {
                 query = query.eq('firm_name', user.firmNameMatch);
@@ -82,7 +82,7 @@ export default () => {
 
             const rows = (data ?? []) as any[];
             setTableData(
-                rows.map((r) => ({
+                rows.map((r): RateApprovalData => ({
                     indentNo: r.indent_number || '',
                     firmNameMatch: r.firm_name_match || '',
                     indenter: r.indenter_name || '',
@@ -93,30 +93,30 @@ export default () => {
                     plannedDate: r.planned3 ? formatDate(new Date(r.planned3)) : 'Not Set',
                     vendors: [
                         [
-                            r.vendor_name1 || '', 
-                            r.rate1?.toString() || '0', 
+                            r.vendor_name1 || '',
+                            r.rate1?.toString() || '0',
                             r.payment_term1 || '',
                             r.select_rate_type1 || 'With Tax',
                             r.with_tax_or_not1 || 'Yes',
                             r.tax_value1?.toString() || '0'
                         ],
                         [
-                            r.vendor_name2 || '', 
-                            r.rate2?.toString() || '0', 
+                            r.vendor_name2 || '',
+                            r.rate2?.toString() || '0',
                             r.payment_term2 || '',
                             r.select_rate_type2 || 'With Tax',
                             r.with_tax_or_not2 || 'Yes',
                             r.tax_value2?.toString() || '0'
                         ],
                         [
-                            r.vendor_name3 || '', 
-                            r.rate3?.toString() || '0', 
+                            r.vendor_name3 || '',
+                            r.rate3?.toString() || '0',
                             r.payment_term3 || '',
                             r.select_rate_type3 || 'With Tax',
                             r.with_tax_or_not3 || 'Yes',
                             r.tax_value3?.toString() || '0'
                         ],
-                    ],
+                    ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string][],
                 }))
             );
         } catch (err) {
@@ -135,7 +135,7 @@ export default () => {
     // Fetch completed three party approvals from Supabase
     const fetchCompletedApprovals = async () => {
         if (!supabaseEnabled) return;
-        
+
         try {
             setDataLoading(true);
             let query = supabase
@@ -143,7 +143,7 @@ export default () => {
                 .select('*')
                 .not('planned3', 'is', null)
                 .not('actual3', 'is', null)
-                .eq('vendor_type', 'Three Party');
+                .in('vendor_type', ['Three Party', 'Regular']);
 
             if (user.firmNameMatch.toLowerCase() !== 'all') {
                 query = query.eq('firm_name', user.firmNameMatch);
@@ -211,18 +211,18 @@ export default () => {
         { accessorKey: 'department', header: 'Department' },
         { accessorKey: 'product', header: 'Product' },
         { accessorKey: 'date', header: 'Date' },
-         { 
-        accessorKey: 'plannedDate', 
-        header: 'Planned Date', // ✅ ADD THIS COLUMN
-        cell: ({ getValue }) => {
-            const plannedDate = getValue() as string;
-            return (
-                <div className={`${plannedDate === 'Not Set' ? 'text-muted-foreground italic' : ''}`}>
-                    {plannedDate}
-                </div>
-            );
-        }
-    },
+        {
+            accessorKey: 'plannedDate',
+            header: 'Planned Date', // ✅ ADD THIS COLUMN
+            cell: ({ getValue }) => {
+                const plannedDate = getValue() as string;
+                return (
+                    <div className={`${plannedDate === 'Not Set' ? 'text-muted-foreground italic' : ''}`}>
+                        {plannedDate}
+                    </div>
+                );
+            }
+        },
         {
             accessorKey: 'vendors',
             header: 'Vendors',
@@ -319,9 +319,11 @@ export default () => {
     async function onSubmit(values: z.infer<typeof schema>) {
         try {
             const selectedVendor = selectedIndent?.vendors[values.vendor];
-            
+
             const updates = {
                 actual3: new Date().toISOString(),
+                planned4: new Date().toISOString(),
+                po_requred: 'Yes', // Automatically set PO Required to Yes
                 approved_vendor_name: selectedVendor?.[0] || '',
                 approved_rate: selectedVendor?.[1] || '0',
                 approved_payment_term: selectedVendor?.[2] || '',
@@ -335,11 +337,11 @@ export default () => {
                 .eq('indent_number', selectedIndent?.indentNo);
 
             if (error) throw error;
-            
+
             toast.success(`Approved vendor for ${selectedIndent?.indentNo}`);
             setOpenDialog(false);
             form.reset();
-            
+
             // Refresh both tables
             fetchPendingApprovals();
             fetchCompletedApprovals();
@@ -378,7 +380,7 @@ export default () => {
             toast.success(`Updated rate of ${selectedHistory?.indentNo}`);
             setOpenDialog(false);
             historyUpdateForm.reset({ rate: 0 });
-            
+
             // Refresh history table
             fetchCompletedApprovals();
         } catch (err) {
@@ -397,8 +399,8 @@ export default () => {
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
                     <Heading
-                        heading="Three Party Rate Approval"
-                        subtext="Approve rates for three party vendors"
+                        heading="Store Head Approval"
+                        subtext="Approve rates the updated vendors"
                         tabs
                     >
                         <Users size={50} className="text-primary" />
@@ -407,7 +409,7 @@ export default () => {
                         <DataTable
                             data={tableData}
                             columns={columns}
-                            searchFields={['product', 'department', 'indenter' ,'firmNameMatch']}
+                            searchFields={['product', 'department', 'indenter', 'firmNameMatch']}
                             dataLoading={dataLoading}
                         />
                     </TabsContent>
@@ -415,7 +417,7 @@ export default () => {
                         <DataTable
                             data={historyData}
                             columns={historyColumns}
-                            searchFields={['product', 'department', 'indenter','firmNameMatch']}
+                            searchFields={['product', 'department', 'indenter', 'firmNameMatch']}
                             dataLoading={dataLoading}
                         />
                     </TabsContent>
@@ -483,10 +485,10 @@ export default () => {
                                                                                         <p className="text-xs text-muted-foreground">
                                                                                             Payment Term: {vendor[2]}
                                                                                         </p>
-                                                                                        
+
                                                                                         {vendor[3] === 'Basic Rate' && vendor[4] === 'No' ? (
                                                                                             <p className="text-xs text-orange-600 font-medium mt-1">
-                                                                                                Without Tax - GST: {vendor[5]}%
+                                                                                                Tax: {vendor[5]}%
                                                                                             </p>
                                                                                         ) : vendor[3] === 'With Tax' && vendor[4] === 'Yes' ? (
                                                                                             <p className="text-xs text-green-600 font-medium mt-1">

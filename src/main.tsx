@@ -33,7 +33,23 @@ import {
     Store,
     KeyRound,
     VideoIcon,
-    RotateCcw
+    RotateCcw,
+    PlusCircle,
+    CheckSquare,
+    UserCog,
+    ShieldCheck,
+    Clock,
+    FilePlus,
+    History,
+    ArrowUpCircle,
+    CheckCircle2,
+    FileX,
+    HandCoins,
+    RefreshCw,
+    CreditCard,
+    Send,
+    BarChart,
+    FileWarning,
 } from 'lucide-react';
 import type { UserPermissions } from './types/sheets';
 import Administration from './components/views/Administration';
@@ -141,15 +157,15 @@ const routes: RouteAttributes[] = [
         path: 'create-indent',
         gateKey: 'createIndent',
         name: 'Create Indent',
-        icon: <ClipboardList size={20} />,
+        icon: <PlusCircle size={20} />,
         element: <CreateIndent />,
         notifications: () => 0,
     },
     {
         path: 'approve-indent',
         gateKey: 'indentApprovalView',
-        name: 'Approve Indent',
-        icon: <ClipboardCheck size={20} />,
+        name: 'Department Indent Approval',
+        icon: <CheckSquare size={20} />,
         element: <ApproveIndent />,
         notifications: (sheets: any[], user: any) => {
             const data = Array.isArray(sheets[0]) ? sheets[0] : sheets;
@@ -165,7 +181,7 @@ const routes: RouteAttributes[] = [
         path: 'vendor-rate-update',
         gateKey: 'updateVendorView',
         name: 'Vendor Rate Update',
-        icon: <UserCheck size={20} />,
+        icon: <UserCog size={20} />,
         element: <VendorUpdate />,
         notifications: (sheets: any[]) =>
             sheets.filter((sheet: any) => sheet.planned2 !== '' && sheet.actual2 === '').length,
@@ -173,8 +189,8 @@ const routes: RouteAttributes[] = [
     {
         path: 'three-party-approval',
         gateKey: 'threePartyApprovalView',
-        name: 'Three Party Approval',
-        icon: <Users size={20} />,
+        name: 'Store Head Approval',
+        icon: <ShieldCheck size={20} />,
         element: <RateApproval />,
         notifications: (sheets: any[]) =>
             sheets.filter(
@@ -184,29 +200,29 @@ const routes: RouteAttributes[] = [
                     sheet.vendorType === 'Three Party'
             ).length,
     },
-    {
-        path: 'pending-pos',
-        gateKey: 'pendingIndentsView',
-        name: 'PO to Make/Not',
-        icon: <ListTodo size={20} />,
-        element: <PendingIndents />,
-        notifications: (sheets: any[]) =>
-            sheets.filter((sheet: any) =>
-                sheet.status === "Pending" &&
-                sheet.approvedVendorName &&
-                sheet.approvedVendorName.toString().trim() !== '' &&
-                (!sheet.poRequred ||
-                    sheet.poRequred.toString().trim() === '' ||
-                    sheet.poRequred.toString().trim() === 'undefined' ||
-                    sheet.poRequred === null)
-            ).length,
-    },
+    // {
+    //     path: 'pending-pos',
+    //     gateKey: 'pendingIndentsView',
+    //     name: 'PO to Make/Not',
+    //     icon: <ListTodo size={20} />,
+    //     element: <PendingIndents />,
+    //     notifications: (sheets: any[]) =>
+    //         sheets.filter((sheet: any) =>
+    //             sheet.status === "Pending" &&
+    //             sheet.approvedVendorName &&
+    //             sheet.approvedVendorName.toString().trim() !== '' &&
+    //             (!sheet.poRequred ||
+    //                 sheet.poRequred.toString().trim() === '' ||
+    //                 sheet.poRequred.toString().trim() === 'undefined' ||
+    //                 sheet.poRequred === null)
+    //         ).length,
+    // },
 
     {
         path: 'pending-poss',
         gateKey: 'pendingPo', // ✅ CHANGE: lowercase 'o'
-        name: 'Pending PO',
-        icon: <FilePlus2 size={20} />,
+        name: 'Pending PO to be Created',
+        icon: <Clock size={20} />,
         element: <PendingPo />,
         notifications: (sheets: any[]) => {
             // Count only items that are likely NOT in PO Master yet
@@ -227,7 +243,7 @@ const routes: RouteAttributes[] = [
         path: 'create-po',
         gateKey: 'createPo',
         name: 'Create PO',
-        icon: <FilePlus2 size={20} />,
+        icon: <FilePlus size={20} />,
         element: <CreatePO />,
         notifications: () => 0,
     },
@@ -236,7 +252,7 @@ const routes: RouteAttributes[] = [
         path: 'po-history',
         gateKey: 'ordersView',
         name: 'PO History',
-        icon: <Package2 size={20} />,
+        icon: <History size={20} />,
         element: <Order />, // Changed from <Order /> to <POHistory />
         notifications: (sheets: any[]) => {
             if (!Array.isArray(sheets) || sheets.length === 0) {
@@ -279,7 +295,7 @@ const routes: RouteAttributes[] = [
         path: 'get-lift',
         gateKey: 'ordersView',
         name: 'Lifting',
-        icon: <Package2 size={20} />,
+        icon: <ArrowUpCircle size={20} />,
         element: <GetLift />,
         notifications: (sheets: any[]) =>
             sheets.filter(
@@ -295,8 +311,8 @@ const routes: RouteAttributes[] = [
     {
         path: 'store-in',
         gateKey: 'storeIn',
-        name: 'Store In',
-        icon: <Truck size={20} />,
+        name: 'Quality Check',
+        icon: <CheckCircle2 size={20} />,
         element: <StoreIn />,
         notifications: (sheets: any[]) =>
             sheets.filter((sheet: any) =>
@@ -306,12 +322,11 @@ const routes: RouteAttributes[] = [
                 sheet.billStatus === 'Bill Received'
             ).length,
     },
-
     {
         path: 'Full-Kiting',
-        gateKey: 'fullKiting', // ✅ ADD THIS
+        gateKey: 'fullKiting',
         name: 'Freight Payment',
-        icon: <FilePlus2 size={20} />,
+        icon: <Truck size={20} />,
         element: <FullKiting />,
         notifications: (sheets: any[]) =>
             sheets.filter((sheet: any) =>
@@ -322,8 +337,8 @@ const routes: RouteAttributes[] = [
     },
     {
         path: 'Payment-Status',
-        name: 'HOD Approval',
-        icon: <RotateCcw size={20} />,
+        name: 'Process for Payment / Debit Note',
+        icon: <RefreshCw size={20} />,
         element: <PaymentStatus />,
         gateKey: 'paymentStatus',
         notifications: (sheetsData: any[]) => {
@@ -372,9 +387,11 @@ const routes: RouteAttributes[] = [
                         }
                     }
 
-                    // ✅ Check Payment Terms
+                    // ✅ Relaxed Payment Terms Check
                     const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim();
-                    if (paymentTerms !== "Party PI / Party Advance" && paymentTerms !== "Party PI") {
+                    const isPI = paymentTerms === "Partly PI / Party Advance" || paymentTerms === "Partly PI";
+                    
+                    if (!isReceived && !isPI) {
                         return false;
                     }
 
@@ -412,10 +429,14 @@ const routes: RouteAttributes[] = [
                         }
                     }
 
-                    // ✅ Check Payment Terms
+                    // ✅ Relaxed Payment Terms
                     const paymentTerms = (payment.paymentTerms || payment.payment_terms || '').toString().trim();
-                    if (paymentTerms !== "Party PI / Party Advance" && paymentTerms !== "Party PI") {
-                        return false;
+                    const paymentForm = (payment.paymentForm || payment.payment_form || '').toString().trim().toLowerCase();
+                    const isPI = paymentTerms === "Partly PI / Party Advance" || paymentTerms === "Partly PI";
+                    const isStoreIn = paymentForm === 'store_in';
+
+                    if (!isPI && !isStoreIn && paymentTerms !== '') {
+                        // Allow if pending
                     }
 
                     return firmMatch && isPending && notScheduled;
@@ -448,21 +469,21 @@ const routes: RouteAttributes[] = [
         path: 'Make-Payment',
         gateKey: 'makePayment',
         name: 'Make Payment',
-        icon: <FilePlus2 size={20} />,
+        icon: <CreditCard size={20} />,
         element: <MakePayment />,
         notifications: (sheets: any[], user: any) => {
             const paymentsData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
             if (paymentsData.length === 0) return 0;
 
             const pendingItems = paymentsData.filter((payment: any) => {
-                const firmMatch = !user || user.firmNameMatch.toLowerCase() === "all" || 
+                const firmMatch = !user || user.firmNameMatch.toLowerCase() === "all" ||
                     (payment.firmNameMatch || payment.firm_name) === user.firmNameMatch;
                 if (!firmMatch) return false;
 
                 const planned = String(payment?.planned || '').trim();
                 const actual = String(payment?.actual || '').trim();
                 const status1 = String(payment?.status1 || '').toLowerCase();
-                
+
                 const hasPlanned = planned !== '';
                 const noActual = actual === '';
                 const isNotHodPending = status1 !== 'hod_approval_pending';
@@ -485,20 +506,6 @@ const routes: RouteAttributes[] = [
     },
 
 
-    {
-        path: 'Quality-Check-In-Received-Item',
-        gateKey: 'insteadOfQualityCheckInReceivedItem',
-        name: 'Reject For GRN',
-        icon: <Users size={20} />,
-        element: <QuantityCheckInReceiveItem />,
-        notifications: (sheets: any[]) =>
-            sheets.filter((sheet: any) =>
-                sheet.planned7 &&
-                sheet.planned7.toString().trim() !== '' &&
-                (!sheet.actual7 || sheet.actual7.toString().trim() === '')
-            ).length,
-    },
-
 
     // {
     //     path: 'Exchange-Materials',
@@ -519,10 +526,23 @@ const routes: RouteAttributes[] = [
     // },
 
     {
+        path: 'Quality-Check-In-Received-Item',
+        gateKey: 'insteadOfQualityCheckInReceivedItem',
+        name: 'Reject For GRN',
+        icon: <FileX size={20} />,
+        element: <QuantityCheckInReceiveItem />,
+        notifications: (sheets: any[]) =>
+            sheets.filter((sheet: any) =>
+                sheet.planned7 &&
+                sheet.planned7.toString().trim() !== '' &&
+                (!sheet.actual7 || sheet.actual7.toString().trim() === '')
+            ).length,
+    },
+    {
         path: 'Send-Debit-Note',
         gateKey: 'sendDebitNote',
         name: 'Send Debit Note',
-        icon: <FilePlus2 size={20} />,
+        icon: <Send size={20} />,
         element: <SendDebitNote />,
         notifications: (sheets: any[]) =>
             sheets.filter((sheet: any) =>
@@ -536,7 +556,7 @@ const routes: RouteAttributes[] = [
         path: 'audit-data',
         gateKey: 'auditData',
         name: 'Audit Data',
-        icon: <Users size={20} />,
+        icon: <BarChart size={20} />,
         element: <AuditData />,
         notifications: (sheets: any[]) =>
             sheets.filter((sheet: any) =>
@@ -681,7 +701,7 @@ const routes: RouteAttributes[] = [
         path: 'Bill-Not-Received',
         gateKey: 'billNotReceived',
         name: 'Bill Not Received',
-        icon: <ClipboardList size={20} />,
+        icon: <FileWarning size={20} />,
         element: <BillNotReceived />,
         notifications: (sheets: any[]) => {
             // Count items where planned11 is set but actual11 is not

@@ -214,6 +214,7 @@ export type Vendor = {
     gstin: string;
     address: string;
     email: string;
+    paymentTerm: string;
 };
 
 

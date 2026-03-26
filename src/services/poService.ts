@@ -139,6 +139,9 @@ export async function fetchMasterData() {
         // Deduplicate vendors by name
         const uniqueVendors = Array.from(new Map(vendors.map(v => [v.vendorName, v])).values());
 
+        // Extract payment terms
+        const paymentTerms = Array.from(new Set(records.map(r => r.payment_term).filter(Boolean)));
+
         // Firm to Company Mapping
         const firmCompanyMap: Record<string, any> = {};
         records.forEach(r => {
@@ -165,6 +168,7 @@ export async function fetchMasterData() {
             companyPan: firstWithCompany.company_pan || '',
             companyAddress: firstWithCompany.company_address || '',
             billingAddress: firstWithCompany.billing_address || '',
+            paymentTerms,
         };
     } catch (error) {
         console.error('Error fetching master data:', error);
@@ -179,6 +183,7 @@ export async function fetchMasterData() {
             companyPan: '',
             companyAddress: '',
             billingAddress: '',
+            paymentTerms: [],
         };
     }
 }

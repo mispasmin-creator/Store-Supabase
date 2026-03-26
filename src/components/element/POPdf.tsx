@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 
 const styles = StyleSheet.create({
     page: {
@@ -19,6 +19,19 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         backgroundColor: "#cfe2f3",
         paddingVertical: "12px",
+        flexDirection: 'row',
+        paddingHorizontal: '20px',
+    },
+    headerText: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+    },
+    logo: {
+        width: 120,
+        height: 120,
+        objectFit: 'contain',
     },
     companyName: {
         fontSize: '1.2rem',
@@ -234,6 +247,7 @@ export interface POPdfProps {
     terms: string[];
     preparedBy: string;  // ✅ NEW: Add prepared by (username)
     approvedBy: string;  // ✅ NEW: Add approved by (fixed to "SAYNDAS")
+    logo?: string;
 }
 
 export default ({
@@ -262,6 +276,7 @@ export default ({
     terms,
     preparedBy,  // ✅ NEW
     approvedBy,  //
+    logo,
 }: POPdfProps) => {
     return (
         <Document>
@@ -269,9 +284,12 @@ export default ({
                 <View style={styles.mainContainer}>
                     <View>
                         <View style={styles.header}>
-                            <Text style={styles.companyName}>{companyName}</Text>
-                            <Text>{companyAddress}</Text>
-                            <Text>Phone: {companyPhone}</Text>
+                            {logo && <Image src={logo} style={styles.logo} />}
+                            <View style={styles.headerText}>
+                                <Text style={styles.companyName}>{companyName}</Text>
+                                <Text>{companyAddress}</Text>
+                                <Text>Phone: {companyPhone}</Text>
+                            </View>
                         </View>
                         <View style={styles.divider} />
                     </View>
@@ -305,9 +323,9 @@ export default ({
                                 <Text style={styles.detailValue}>{orderDate}</Text>
                             </View>
                             <View style={styles.detailRow}>
-                             <Text style={styles.detailLabel}>Delivery Date:</Text>
-                             <Text style={styles.detailValue}>{deliveryDate}</Text>
-                                </View>
+                                <Text style={styles.detailLabel}>Delivery Date:</Text>
+                                <Text style={styles.detailValue}>{deliveryDate}</Text>
+                            </View>
                             <View style={styles.detailRow}>
                                 <Text style={styles.detailLabel}>Quotation No:</Text>
                                 <Text style={styles.detailValue}>{quotationNumber}</Text>
@@ -438,18 +456,18 @@ export default ({
                     <View style={styles.divider} />
 
                     <View style={styles.signatureContainer}>
-    <View style={styles.signatureSection}>
-        <Text style={styles.signatureLabel}>Prepared By</Text>
-        {/* ✅ NEW: Show logged-in username */}
-        <Text>{preparedBy}</Text>
-    </View>
-    <View style={styles.signatureSection}>
-        <Text style={styles.signatureLabel}>Approved By</Text>
-        {/* ✅ NEW: Show hardcoded "SAYNDAS" */}
-        <Text>{approvedBy}</Text>
-    </View>
-    <Text style={styles.companySignature}>For {companyName}</Text>
-</View>
+                        <View style={styles.signatureSection}>
+                            <Text style={styles.signatureLabel}>Prepared By</Text>
+                            {/* ✅ NEW: Show logged-in username */}
+                            <Text>{preparedBy}</Text>
+                        </View>
+                        <View style={styles.signatureSection}>
+                            <Text style={styles.signatureLabel}>Approved By</Text>
+                            {/* ✅ NEW: Show hardcoded "SAYNDAS" */}
+                            <Text>{approvedBy}</Text>
+                        </View>
+                        <Text style={styles.companySignature}>For {companyName}</Text>
+                    </View>
 
                 </View>
             </Page>

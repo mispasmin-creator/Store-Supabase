@@ -151,8 +151,6 @@ export default function FullKiting() {
     ];
 
     const schema = z.object({
-        fmsName: z.string().min(1, 'FMS Name is required'),
-        status: z.enum(['Yes', 'No'], { required_error: 'Status is required' }),
         vehicleNumber: z.string().min(1, 'Vehicle Number is required'),
         from: z.string().min(1, 'From is required'),
         to: z.string().min(1, 'To is required'),
@@ -166,8 +164,6 @@ export default function FullKiting() {
     const form = useForm({
         resolver: zodResolver(schema),
         defaultValues: {
-            fmsName: 'Store Fms',
-            status: undefined as unknown as "Yes" | "No",
             vehicleNumber: '',
             from: '',
             to: '',
@@ -180,10 +176,19 @@ export default function FullKiting() {
     });
 
     useEffect(() => {
-        if (!openDialog) {
+        if (openDialog && selectedIndent) {
             form.reset({
-                fmsName: 'Store Fms',
-                status: undefined,
+                vehicleNumber: '',
+                from: '',
+                to: '',
+                materialLoadDetails: '',
+                biltyNumber: '',
+                rateType: undefined,
+                amount: selectedIndent.amount?.toString() || '',
+                biltyImage: undefined,
+            });
+        } else if (!openDialog) {
+            form.reset({
                 vehicleNumber: '',
                 from: '',
                 to: '',
@@ -194,7 +199,7 @@ export default function FullKiting() {
                 biltyImage: undefined,
             });
         }
-    }, [openDialog, form]); // Removed form from dependencies to avoid loop, but let's keep it if strict mode complains.
+    }, [openDialog, selectedIndent, form]);
     // Actually form.reset is stable.
 
     async function onSubmit(values: z.infer<typeof schema>) {
@@ -211,7 +216,7 @@ export default function FullKiting() {
 
             await updateFullkittingRecord(selectedIndent.indentNumber, {
                 actual: currentDateTime,
-                status: values.status,
+                status: 'Yes',
                 vehicleNumber: values.vehicleNumber,
                 from: values.from,
                 to: values.to,
@@ -282,53 +287,6 @@ export default function FullKiting() {
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name="fmsName"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>FMS Name</FormLabel>
-                                                <Select
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                    defaultValue="Store Fms"
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Store Fms" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="Store Fms">Store Fms</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-
-                                    <FormField
-                                        control={form.control}
-                                        name="status"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Status</FormLabel>
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select Status" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="Yes">Yes</SelectItem>
-                                                        <SelectItem value="No">No</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
-
                                     {/* Vehicle Number */}
                                     <FormField
                                         control={form.control}
@@ -422,11 +380,11 @@ export default function FullKiting() {
                                         name="amount"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Amount</FormLabel>
+                                                <FormLabel>Freight Amount</FormLabel>
                                                 <FormControl>
                                                     <Input
                                                         type="number"
-                                                        placeholder="Enter amount"
+                                                        placeholder="Enter freight amount"
                                                         {...field}
                                                     />
                                                 </FormControl>

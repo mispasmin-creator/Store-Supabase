@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
-import { Truck, Search } from 'lucide-react';
+import { Truck } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
@@ -30,7 +30,6 @@ import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
 import {
     fetchStoreInRecords,
-    fetchLocationOptions,
     updateStoreInReceiving,
     uploadProductPhoto,
     createPaymentEntry,
@@ -58,6 +57,8 @@ interface StoreInPendingData {
     product: string;
     uom: string;
     qty: number;
+    priceAsPerPo: number;
+    remark: string;
     poCopy: string;
     billStatus: string;
     leadTimeToLiftMaterial: number;
@@ -96,8 +97,6 @@ interface StoreInHistoryData {
     product: string;
     orderQuantity: number;
     receivedDate: string;
-    warrantyStatus: string;
-    warrantyEndDate: string;
     billNumber: string;
     anyTransport: string;
     transportingAmount: number;
@@ -189,11 +188,9 @@ export default () => {
     const [historyData, setHistoryData] = useState<StoreInHistoryData[]>([]);
     const [selectedIndent, setSelectedIndent] = useState<StoreInPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
-    const [searchTermLocation, setSearchTermLocation] = useState('');
     const [indentLoading, setIndentLoading] = useState(false);
     const [receivedLoading, setReceivedLoading] = useState(false);
     const [storeInRecords, setStoreInRecords] = useState<StoreInRecord[]>([]);
-    const [locationOptions, setLocationOptions] = useState<string[]>(["store"]);
 
     // Fetch all data from Supabase
     useEffect(() => {
@@ -201,13 +198,11 @@ export default () => {
             setIndentLoading(true);
             setReceivedLoading(true);
             try {
-                const [storeIns, locations] = await Promise.all([
+                const [storeIns] = await Promise.all([
                     fetchStoreInRecords(),
-                    fetchLocationOptions(),
                 ]);
 
                 setStoreInRecords(storeIns);
-                setLocationOptions(locations);
             } catch (error) {
                 console.error('Failed to fetch data:', error);
                 toast.error('Failed to load data');
@@ -231,7 +226,7 @@ export default () => {
         // the first one we see for each key is the latest.
         const latestRecords: any[] = [];
         const seen = new Set<string>();
-        
+
         for (const item of filteredByFirm) {
             const key = `${item.indentNo}-${item.productName}`;
             if (!seen.has(key)) {
@@ -271,6 +266,8 @@ export default () => {
                     firmNameMatch: i.firmNameMatch || '',
                     planned6Date: i.planned6 || '',
                     timestamp: i.timestamp || '',
+                    priceAsPerPo: i.priceAsPerPo || 0,
+                    remark: i.remark || '',
                 }))
         );
     }, [storeInRecords, user.firmNameMatch]);
@@ -284,7 +281,7 @@ export default () => {
         // Filter to keep only the latest record per Indent and Product
         const latestRecords: any[] = [];
         const seen = new Set<string>();
-        
+
         for (const item of filteredByFirm) {
             const key = `${item.indentNo}-${item.productName}`;
             if (!seen.has(key)) {
@@ -326,8 +323,6 @@ export default () => {
                     product: i.productName || '',
                     orderQuantity: i.qty || 0,
                     receivedDate: i.timestamp ? formatDateTime(parseCustomDate(i.timestamp)) : '',
-                    warrantyStatus: '',
-                    warrantyEndDate: '',
                     billNumber: i.billNumber || String(i.billNo) || '',
                     anyTransport: i.transportationInclude || '',
                     transportingAmount: i.amount || 0,
@@ -341,6 +336,11 @@ export default () => {
                 }))
         );
     }, [storeInRecords, user.firmNameMatch]);
+
+    const textWrapCell = ({ getValue }: { getValue: () => any }) => {
+        const value = getValue();
+        return <div className="min-w-[150px] whitespace-normal break-words">{value?.toString() || '-'}</div>;
+    };
 
     const columns: ColumnDef<RecieveItemsData>[] = [
         ...(user.receiveItemView
@@ -370,110 +370,93 @@ export default () => {
             header: 'Timestamp',
             cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
         },
-        { accessorKey: 'liftNumber', header: 'Lift Number' },
-        { accessorKey: 'indentNo', header: 'Indent No.' },
-        { accessorKey: 'poNumber', header: 'PO Number' },
-        { accessorKey: 'vendorName', header: 'Vendor Name' },
-        { accessorKey: 'productName', header: 'Product Name' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
-        { accessorKey: 'billStatus', header: 'Bill Status' },
-        { accessorKey: 'billNo', header: 'Bill No.' },
-        { accessorKey: 'amount', header: 'Amount' },
-        { accessorKey: 'billAmount', header: 'Bill Amount' },
-        { accessorKey: 'discountAmount', header: 'Discount Amount' },
-        { accessorKey: 'qty', header: 'Qty' },
-        { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift Material' },
-        { accessorKey: 'typeOfBill', header: 'Type Of Bill' },
-        { accessorKey: 'paymentType', header: 'Payment Type' },
-        { accessorKey: 'advanceAmountIfAny', header: 'Advance Amount If Any' },
-        {
-            accessorKey: 'photoOfBill',
-            header: 'Photo Of Bill',
-            cell: ({ row }) => {
-                const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        View
-                    </a>
-                ) : null;
-            },
-        },
-        { accessorKey: 'transportationInclude', header: 'Transportation Include' },
-        { accessorKey: 'transporterName', header: 'Transporter Name' },
+        { accessorKey: 'liftNumber', header: 'Lift Number', cell: textWrapCell },
+        { accessorKey: 'indentNo', header: 'Indent No.', cell: textWrapCell },
         {
             accessorKey: 'planned6Date',
             header: 'Planned Date',
             cell: ({ row }) => formatPlannedDate(row.original.planned6Date)
         },
-    ];
-
-    const historyColumns: ColumnDef<HistoryData>[] = [
-        { accessorKey: 'timestamp', header: 'Timestamp' },
-        { accessorKey: 'liftNumber', header: 'Lift Number' },
-        { accessorKey: 'indentNo', header: 'Indent No.' },
-        { accessorKey: 'poNumber', header: 'PO Number' },
-        { accessorKey: 'firmNameMatch', header: 'Firm Name' },
-        { accessorKey: 'vendorName', header: 'Vendor Name' },
-        { accessorKey: 'productName', header: 'Product Name' },
-        { accessorKey: 'billStatus', header: 'Bill Status' },
-        { accessorKey: 'billNo', header: 'Bill No.' },
-        { accessorKey: 'qty', header: 'Qty' },
-        { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift Material' },
-        { accessorKey: 'typeOfBill', header: 'Type Of Bill' },
+        { accessorKey: 'poNumber', header: 'PO Number', cell: textWrapCell },
+        { accessorKey: 'vendorName', header: 'Vendor Name', cell: textWrapCell },
+        { accessorKey: 'productName', header: 'Product Name', cell: textWrapCell },
+        { accessorKey: 'firmNameMatch', header: 'Firm Name', cell: textWrapCell },
+        { accessorKey: 'billStatus', header: 'Bill Status', cell: textWrapCell },
+        { accessorKey: 'billNo', header: 'Bill No.', cell: textWrapCell },
         { accessorKey: 'billAmount', header: 'Bill Amount' },
         { accessorKey: 'discountAmount', header: 'Discount Amount' },
-        { accessorKey: 'paymentType', header: 'Payment Type' },
-        { accessorKey: 'advanceAmountIfAny', header: 'Advance Amount If Any' },
+        { accessorKey: 'qty', header: 'Qty' },
+        { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift' },
+        { accessorKey: 'typeOfBill', header: 'Type Of Bill', cell: textWrapCell },
+        { accessorKey: 'paymentType', header: 'Payment Type', cell: textWrapCell },
+        { accessorKey: 'advanceAmountIfAny', header: 'Advance' },
         {
             accessorKey: 'photoOfBill',
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
                 return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
+                    <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
                         View
                     </a>
                 ) : null;
             },
         },
-        { accessorKey: 'transportationInclude', header: 'Transportation Include' },
-        { accessorKey: 'transporterName', header: 'Transporter Name' },
-        { accessorKey: 'amount', header: 'Amount' },
-        { accessorKey: 'receiveStatus', header: 'Receiving Status' },
-        { accessorKey: 'receivedQuantity', header: 'Received Quantity' },
-        {
-            accessorKey: 'photoOfProduct',
-            header: 'Photo Of Product',
-            cell: ({ row }) => {
-                const photo = row.original.photoOfProduct;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        View
-                    </a>
-                ) : null;
-            },
-        },
-        { accessorKey: 'warrantyStatus', header: 'Warranty' },
-        { accessorKey: 'warrantyEndDate', header: 'End Date Warranty' },
-        { accessorKey: 'billReceived', header: 'Bill Received' },
-        { accessorKey: 'billNumber', header: 'Bill Number' },
+        { accessorKey: 'transportationInclude', header: 'Trans. Include', cell: textWrapCell },
+        { accessorKey: 'transporterName', header: 'Transporter', cell: textWrapCell },
+        { accessorKey: 'amount', header: 'Freight Amount' },
+    ];
+
+    const historyColumns: ColumnDef<HistoryData>[] = [
+        { accessorKey: 'timestamp', header: 'Timestamp' },
+        { accessorKey: 'liftNumber', header: 'Lift Number', cell: textWrapCell },
+        { accessorKey: 'indentNo', header: 'Indent No.', cell: textWrapCell },
+        { accessorKey: 'poNumber', header: 'PO Number', cell: textWrapCell },
+        { accessorKey: 'firmNameMatch', header: 'Firm Name', cell: textWrapCell },
+        { accessorKey: 'vendorName', header: 'Vendor Name', cell: textWrapCell },
+        { accessorKey: 'productName', header: 'Product Name', cell: textWrapCell },
+        { accessorKey: 'billStatus', header: 'Bill Status', cell: textWrapCell },
+        { accessorKey: 'billNo', header: 'Bill No.', cell: textWrapCell },
+        { accessorKey: 'qty', header: 'Qty' },
+        { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift', cell: textWrapCell },
+        { accessorKey: 'typeOfBill', header: 'Type Of Bill', cell: textWrapCell },
         { accessorKey: 'billAmount', header: 'Bill Amount' },
+        { accessorKey: 'discountAmount', header: 'Discount' },
+        { accessorKey: 'paymentType', header: 'Payment Type', cell: textWrapCell },
+        { accessorKey: 'advanceAmountIfAny', header: 'Advance' },
         {
-            accessorKey: 'billImage',
-            header: 'Bill Image',
+            accessorKey: 'photoOfBill',
+            header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
                 return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
+                    <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
                         View
                     </a>
                 ) : null;
             },
         },
-        { accessorKey: 'damageOrder', header: 'Damage Order' },
-        { accessorKey: 'quantityAsPerBill', header: 'Quantity As Per Bill' },
-        { accessorKey: 'priceAsPerPo', header: 'Price As Per Po' },
-        { accessorKey: 'remark', header: 'Remark' },
+        { accessorKey: 'transportationInclude', header: 'Trans. Include', cell: textWrapCell },
+        { accessorKey: 'transporterName', header: 'Transporter', cell: textWrapCell },
+        { accessorKey: 'amount', header: 'Freight Amount' },
+        { accessorKey: 'receiveStatus', header: 'Rec. Status', cell: textWrapCell },
+        { accessorKey: 'receivedQuantity', header: 'Rec. Qty' },
+        {
+            accessorKey: 'photoOfProduct',
+            header: 'Product Photo',
+            cell: ({ row }) => {
+                const photo = row.original.photoOfProduct;
+                return photo ? (
+                    <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                        View
+                    </a>
+                ) : null;
+            },
+        },
+        { accessorKey: 'damageOrder', header: 'Physical Check', cell: textWrapCell },
+        { accessorKey: 'quantityAsPerBill', header: 'Qty Per Bill' },
+        { accessorKey: 'priceAsPerPo', header: 'Rate as per PO' },
+        { accessorKey: 'remark', header: 'Remark', cell: textWrapCell },
         {
             accessorKey: 'planned6Date',
             header: 'Planned Date',
@@ -489,6 +472,7 @@ export default () => {
         }),
         damageOrder: z.enum(['Yes', 'No']),
         quantityAsPerBill: z.enum(['Yes', 'No']),
+        priceAsPerPoCheck: z.enum(['Yes', 'No']),
         remark: z.string().optional(),
         location: z.string().optional(), // ✅ Location is now optional
 
@@ -505,6 +489,7 @@ export default () => {
             photoOfProduct: undefined,
             damageOrder: undefined,
             quantityAsPerBill: undefined,
+            priceAsPerPoCheck: undefined,
             remark: '',
             location: '', // ✅ Location in default values
 
@@ -521,6 +506,7 @@ export default () => {
                 photoOfProduct: undefined,
                 damageOrder: undefined,
                 quantityAsPerBill: undefined,
+                priceAsPerPoCheck: undefined,
                 remark: '',
                 location: '', // ✅ Reset location field
             });
@@ -553,6 +539,7 @@ export default () => {
                 photoOfProduct: photoUrl,
                 damageOrder: values.damageOrder || '',
                 quantityAsPerBill: values.quantityAsPerBill || '',
+                priceAsPerPoCheck: values.priceAsPerPoCheck || '',
                 remark: values.remark || '',
                 location: values.location || '',
             });
@@ -627,7 +614,7 @@ export default () => {
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
                     <Heading
-                        heading="Receive Items"
+                        heading="Quality Check for Receive Items"
                         subtext="Receive items from purchase orders"
                         tabs
                     >
@@ -678,23 +665,39 @@ export default () => {
                                             </p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="font-medium">Item Name</p>
+                                            <p className="font-medium">Vendor</p>
+                                            <p className="text-sm font-light">
+                                                {selectedIndent.vendorName}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Product Name</p>
                                             <p className="text-sm font-light">
                                                 {selectedIndent.productName}
                                             </p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="font-medium text-nowrap">
-                                                Lifiting Quantity
-                                            </p>
+                                            <p className="font-medium">Bill No</p>
                                             <p className="text-sm font-light">
-                                                {selectedIndent.qty}
+                                                {selectedIndent.billNo}
                                             </p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="font-medium text-nowrap">UOM</p>
+                                            <p className="font-medium">Bill Amount</p>
                                             <p className="text-sm font-light">
-                                                {selectedIndent.uom}
+                                                ₹{selectedIndent.billAmount}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Lifting Quantity</p>
+                                            <p className="text-sm font-light">
+                                                {selectedIndent.qty} {selectedIndent.uom}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Remark</p>
+                                            <p className="text-sm font-light">
+                                                {selectedIndent.remark || '-'}
                                             </p>
                                         </div>
                                     </div>
@@ -765,7 +768,7 @@ export default () => {
                                         name="damageOrder"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Damage Order</FormLabel>
+                                                <FormLabel>Physical Check</FormLabel>
                                                 <FormControl>
                                                     <Select
                                                         onValueChange={field.onChange}
@@ -775,8 +778,8 @@ export default () => {
                                                             <SelectValue placeholder="Select" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="Yes">Yes</SelectItem>
-                                                            <SelectItem value="No">No</SelectItem>
+                                                            <SelectItem value="Yes">OK</SelectItem>
+                                                            <SelectItem value="No">Not OK</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                 </FormControl>
@@ -808,54 +811,40 @@ export default () => {
                                         )}
                                     />
 
+                                    <FormField
+                                        control={form.control}
+                                        name="priceAsPerPoCheck"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className=" font-semibold ">Price as per PO?</FormLabel>
+                                                <FormControl>
+                                                    <Select
+                                                        onValueChange={field.onChange}
+                                                        value={field.value}
+                                                    >
+                                                        <SelectTrigger className="w-full border-blue-200 focus:ring-blue-500">
+                                                            <SelectValue placeholder="Select" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="Yes">Yes</SelectItem>
+                                                            <SelectItem value="No">No</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+
                                     {/* ✅ ADD DYNAMIC LOCATION DROPDOWN FROM MASTER SHEET */}
                                     <FormField
                                         control={form.control}
                                         name="location"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>
-                                                    Location
-                                                </FormLabel>
-                                                <Select
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Select location" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        {/* 🔍 Search Box for Locations */}
-                                                        <div className="flex items-center border-b px-3 pb-3">
-                                                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                                                            <input
-                                                                placeholder="Search locations..."
-                                                                value={searchTermLocation}
-                                                                onChange={(e) => setSearchTermLocation(e.target.value)}
-                                                                onKeyDown={(e) => e.stopPropagation()}
-                                                                className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                                                            />
-                                                        </div>
-                                                        {/* ✅ Dynamic locations from Master sheet */}
-                                                        {locationOptions
-                                                            .filter((location: string) =>
-                                                                location.toLowerCase().includes(searchTermLocation.toLowerCase())
-                                                            )
-                                                            .map((location, i) => (
-                                                                <SelectItem key={i} value={location}>
-                                                                    {location}
-                                                                </SelectItem>
-                                                            ))}
-                                                        {/* Fallback if no locations */}
-                                                        {locationOptions.length === 0 && (
-                                                            <SelectItem value="no-locations" disabled>
-                                                                No locations available
-                                                            </SelectItem>
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
+                                                <FormLabel>Location</FormLabel>
+                                                <FormControl>
+                                                    <Input {...field} placeholder="Enter location" />
+                                                </FormControl>
                                             </FormItem>
                                         )}
                                     />

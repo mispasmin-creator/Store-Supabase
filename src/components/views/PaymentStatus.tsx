@@ -147,9 +147,13 @@ export default function PIApprovals() {
                         }
                     }
 
-                    // ✅ Check Payment Terms
+                    // ✅ Relaxed Payment Terms Check
+                    // Allow everything if it's already been received,
+                    // or if it matches the PI terms for pre-receipt payment.
                     const paymentTerms = (record.paymentTerms || record.payment_terms || '').toString().trim();
-                    if (paymentTerms !== "Party PI / Party Advance" && paymentTerms !== "Party PI") {
+                    const isPI = paymentTerms === "Partly PI / Party Advance" || paymentTerms === "Partly PI";
+                    
+                    if (!isReceived && !isPI) {
                         return false;
                     }
 
@@ -212,10 +216,16 @@ export default function PIApprovals() {
                         }
                     }
 
-                    // ✅ Check Payment Terms
+                    // ✅ Relaxed Payment Terms for paymentBasedItems
                     const paymentTerms = (payment?.paymentTerms || payment?.payment_terms || '').toString().trim();
-                    if (paymentTerms !== "Party PI / Party Advance" && paymentTerms !== "Party PI") {
-                        return false;
+                    const paymentForm = (payment?.paymentForm || payment?.payment_form || '').toString().trim().toLowerCase();
+                    const isPI = paymentTerms === "Partly PI / Party Advance" || paymentTerms === "Partly PI";
+                    const isStoreIn = paymentForm === 'store_in';
+
+                    if (!isPI && !isStoreIn && paymentTerms !== '') {
+                        // If it's not PI AND not StoreIn AND it HAS some other term, maybe filter out? 
+                        // But usually, if it's in payments table, it's there to be paid.
+                        // Let's allow if it's pending.
                     }
 
                     return firmMatch && isPending && notScheduled;
@@ -406,9 +416,6 @@ export default function PIApprovals() {
 
     // ✅ UPDATED SCHEMA - Only Pay Amount, File, Remarks
     const schema = z.object({
-        payAmount: z.string().min(1, 'Pay Amount is required').refine(val => !isNaN(Number(val)), {
-            message: 'Pay Amount must be a valid number'
-        }),
         file: z.string().optional(),
         remark: z.string().min(1, 'Remarks are required'),
     });
@@ -416,7 +423,6 @@ export default function PIApprovals() {
     const form = useForm({
         resolver: zodResolver(schema),
         defaultValues: {
-            payAmount: '',
             file: '',
             remark: '',
         },
@@ -477,7 +483,7 @@ export default function PIApprovals() {
             const currentDateTime = new Date().toISOString();
             const formattedDateTime = currentDateTime;
 
-            const payAmount = Number(values.payAmount) || 0;
+            const payAmount = Number(selectedItem.outstandingAmount) || 0;
             const newTotalPaid = (selectedItem.totalPaidAmount || 0) + payAmount;
             const newOutstanding = (selectedItem.outstandingAmount || 0) - payAmount;
             const newStatus = newOutstanding <= 0 ? 'Complete' : 'Pending';
@@ -582,8 +588,8 @@ export default function PIApprovals() {
                             <Package2 size={28} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">PI Payments</h1>
-                            <p className="text-gray-600">Process payments for pending purchase orders</p>
+                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Process for Payment / Debit Note</h1>
+                            <p className="text-gray-600">Approved GRN need to process payments for pending purchase orders</p>
                         </div>
                     </div>
 
@@ -756,28 +762,7 @@ export default function PIApprovals() {
 
                                     {/* ✅ UPDATED Form Fields - Only Pay Amount, File, Remarks */}
                                     <div className="space-y-4">
-                                        <FormField
-                                            control={form.control}
-                                            name="payAmount"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="font-medium flex items-center gap-2">
-                                                        <DollarSign className="h-4 w-4" />
-                                                        Pay Amount *
-                                                    </FormLabel>
-                                                    <FormControl>
-                                                        <Input
-                                                            type="number"
-                                                            step="0.01"
-                                                            placeholder="Enter payment amount"
-                                                            className="border-gray-300 focus:border-purple-500"
-                                                            {...field}
-                                                        />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
+
 
                                         <FormField
                                             control={form.control}

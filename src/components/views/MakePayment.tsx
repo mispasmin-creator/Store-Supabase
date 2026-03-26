@@ -148,6 +148,39 @@ export default function MakePayment() {
         historyCount: 0
     });
 
+    const parseDateHelper = (dateString: string): Date => {
+        if (!dateString) return new Date(0);
+        try {
+            // Try Standard Parsing
+            let date = new Date(dateString);
+            if (!isNaN(date.getTime())) return date;
+
+            // Try DD/MM/YYYY
+            const parts = dateString.split('/');
+            if (parts.length === 3) {
+                const day = parseInt(parts[0]);
+                const month = parseInt(parts[1]) - 1;
+                const year = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2]);
+                date = new Date(year, month, day);
+                if (!isNaN(date.getTime())) return date;
+            }
+
+            // Try YYYY-MM-DD
+            date = new Date(dateString.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
+            if (!isNaN(date.getTime())) return date;
+
+            return new Date(0);
+        } catch {
+            return new Date(0);
+        }
+    };
+
+    const formatDate = (dateString: string) => {
+        const date = parseDateHelper(dateString);
+        if (date.getTime() === 0) return dateString;
+        return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
+    };
+
     useEffect(() => {
         // fetch payments and payment_history from Supabase
         const fetchData = async () => {
@@ -265,7 +298,14 @@ export default function MakePayment() {
                     billImageStatus: sheet?.billImageStatus || '',
                 }));
 
-                setPendingData(pendingItems);
+                // Sort pending items by planned date descending
+                const sortedPending = [...pendingItems].sort((a, b) => {
+                    const dateA = parseDateHelper(a.planned).getTime();
+                    const dateB = parseDateHelper(b.planned).getTime();
+                    return dateB - dateA;
+                });
+
+                setPendingData(sortedPending);
 
                 // 2. Fetch History directly from payment_history table
                 const historyItems = (historyDbData || [])
@@ -332,37 +372,6 @@ export default function MakePayment() {
 
         fetchData();
     }, [reloadKey]);
-
-    const formatDate = (dateString: string) => {
-        if (!dateString) return '-';
-        try {
-            // Try multiple date formats
-            let date = new Date(dateString);
-
-            if (isNaN(date.getTime())) {
-                // Try DD/MM/YYYY
-                const parts = dateString.split('/');
-                if (parts.length === 3) {
-                    date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-                }
-            }
-
-            if (isNaN(date.getTime())) {
-                // Try YYYY-MM-DD
-                date = new Date(dateString.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
-            }
-
-            if (isNaN(date.getTime())) {
-                return dateString; // Return original if can't parse
-            }
-
-            return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
-        } catch (error) {
-            console.warn('Date formatting error:', error);
-            return dateString;
-        }
-    };
-
     const formatCurrentDate = (): string => {
         return new Date().toISOString();
     };
@@ -444,8 +453,8 @@ export default function MakePayment() {
             // --- INSERT INTO PAYMENT_HISTORY ---
             const historyRows = selectedItems.map(item => {
                 // Try to find the matching store_in record to get more metadata
-                const storeIn = storeInRecords.find(si => 
-                    si.po_number === item.poNumber && 
+                const storeIn = storeInRecords.find(si =>
+                    si.po_number === item.poNumber &&
                     (si.indent_no === item.internalCode || si.indent_number === item.internalCode)
                 );
 
@@ -710,10 +719,10 @@ export default function MakePayment() {
                                 </Button>
                             ) : (
                                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
-                                        ? 'bg-green-100 text-green-700 border border-green-200'
-                                        : status.toLowerCase() === 'pending'
-                                            ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                            : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                    ? 'bg-green-100 text-green-700 border border-green-200'
+                                    : status.toLowerCase() === 'pending'
+                                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                        : 'bg-gray-100 text-gray-600 border border-gray-200'
                                     }`}>
                                     {status}
                                 </span>
@@ -872,10 +881,10 @@ export default function MakePayment() {
                                 </Button>
                             ) : (
                                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block text-center uppercase ${status.toLowerCase() === 'received' || status.toLowerCase() === 'ok'
-                                        ? 'bg-green-100 text-green-700 border border-green-200'
-                                        : status.toLowerCase() === 'pending'
-                                            ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                                            : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                    ? 'bg-green-100 text-green-700 border border-green-200'
+                                    : status.toLowerCase() === 'pending'
+                                        ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                        : 'bg-gray-100 text-gray-600 border border-gray-200'
                                     }`}>
                                     {status}
                                 </span>

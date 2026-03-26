@@ -51,8 +51,9 @@ interface StoreInPendingData {
     amount: number;
     firmNameMatch: string;
     damageOrder?: string;
-    quantityAsPerBill?: number;
+    quantityAsPerBill?: string;
     priceAsPerPo?: number;
+    priceAsPerPoCheck?: string;
     remark?: string;
     planned7Date: string;
     timestamp: string;
@@ -77,8 +78,9 @@ interface StoreInHistoryData {
     reason: string;
     firmNameMatch: string;
     damageOrder?: string;
-    quantityAsPerBill?: number;
+    quantityAsPerBill?: string;
     priceAsPerPo?: number;
+    priceAsPerPoCheck?: string;
     remark?: string;
     planned7Date: string;
     timestamp: string;
@@ -172,8 +174,9 @@ export default () => {
                     transporterName: i.transporterName || '',
                     amount: i.amount || 0,
                     damageOrder: i.damageOrder || '',
-                    quantityAsPerBill: Number(i.quantityAsPerBill) || 0,
+                    quantityAsPerBill: i.quantityAsPerBill || '',
                     priceAsPerPo: i.priceAsPerPo || 0,
+                    priceAsPerPoCheck: i.priceAsPerPoCheck || '',
                     remark: i.remark || '',
                     firmNameMatch: i.firmNameMatch || '',
                     planned7Date: i.planned7 || '',
@@ -202,8 +205,9 @@ export default () => {
                     debitNote: i.sendDebitNote || '',
                     reason: i.reason || '',
                     damageOrder: i.damageOrder || '',
-                    quantityAsPerBill: Number(i.quantityAsPerBill) || 0,
+                    quantityAsPerBill: i.quantityAsPerBill || '',
                     priceAsPerPo: i.priceAsPerPo || 0,
+                    priceAsPerPoCheck: i.priceAsPerPoCheck || '',
                     remark: i.remark || '',
                     firmNameMatch: i.firmNameMatch || '',
                     planned7Date: i.planned7 || '',
@@ -334,9 +338,9 @@ export default () => {
         { accessorKey: 'transportationInclude', header: 'Transportation Include' },
         { accessorKey: 'transporterName', header: 'Transporter Name' },
         { accessorKey: 'amount', header: 'Amount' },
-        { accessorKey: 'damageOrder', header: 'Damage Order' },
+        { accessorKey: 'damageOrder', header: 'Physical Good ?' },
         { accessorKey: 'quantityAsPerBill', header: 'Quantity As Per Bill' },
-        { accessorKey: 'priceAsPerPo', header: 'Price As Per Po' },
+        { accessorKey: 'priceAsPerPoCheck', header: 'Price As Per Po' },
         { accessorKey: 'remark', header: 'Remark' },
         {
             accessorKey: 'planned7Date',
@@ -402,9 +406,9 @@ export default () => {
         },
         { accessorKey: 'debitNote', header: 'Debit Note' },
         { accessorKey: 'reason', header: 'Reason' },
-        { accessorKey: 'damageOrder', header: 'Damage Order' },
+        { accessorKey: 'damageOrder', header: 'Physical Good ?' },
         { accessorKey: 'quantityAsPerBill', header: 'Quantity As Per Bill' },
-        { accessorKey: 'priceAsPerPo', header: 'Price As Per Po' },
+        { accessorKey: 'priceAsPerPoCheck', header: 'Price As Per Po' },
         { accessorKey: 'remark', header: 'Remark' },
         {
             accessorKey: 'planned7Date',
@@ -518,6 +522,29 @@ export default () => {
                                             <p className="text-sm font-light">
                                                 {selectedItem.paymentType}
                                             </p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-muted-foreground/10">
+                                        <h4 className="text-sm font-bold mb-2 text-primary">Store-In Validation Results</h4>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            <div className="space-y-1">
+                                                <p className="text-xs font-medium text-muted-foreground">Physical Good?</p>
+                                                <Pill variant={selectedItem.damageOrder === 'No' ? 'default' : 'reject'}>
+                                                    {selectedItem.damageOrder === 'No' ? 'Good' : 'Damaged/No'}
+                                                </Pill>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-xs font-medium text-muted-foreground">Qty Match?</p>
+                                                <Pill variant={selectedItem.quantityAsPerBill === 'Yes' ? 'default' : 'reject'}>
+                                                    {selectedItem.quantityAsPerBill || 'N/A'}
+                                                </Pill>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-xs font-medium text-muted-foreground">Price Match?</p>
+                                                <Pill variant={selectedItem.priceAsPerPoCheck === 'Yes' ? 'default' : 'reject'}>
+                                                    {selectedItem.priceAsPerPoCheck || 'N/A'}
+                                                </Pill>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

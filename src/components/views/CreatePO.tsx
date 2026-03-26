@@ -36,12 +36,7 @@ import { fetchIndents, fetchPoMaster, fetchMasterData, insertPoRecords, updateIn
 
 function generatePoNumber(poNumbers: string[]): string {
     const prefix = 'STORE-PO-25-26-';
-
-    console.log("🔍 All PO numbers received:", poNumbers);
-
-
     if (!poNumbers || poNumbers.length === 0) {
-        console.log("⚠️ No existing PO numbers, starting from 1");
         return `${prefix}1`;
     }
 
@@ -55,7 +50,6 @@ function generatePoNumber(poNumbers: string[]): string {
             if (poStr.startsWith(prefix)) {
                 const numberStr = poStr.replace(prefix, '').trim();
                 const num = parseInt(numberStr, 10);
-                console.log(`📝 PO: ${poStr} → Number: ${num}`);
                 return isNaN(num) ? 0 : num;
             }
 
@@ -63,13 +57,9 @@ function generatePoNumber(poNumbers: string[]): string {
         })
         .filter(n => n > 0);
 
-    console.log("📊 Valid numbers found:", existingNumbers);
-
     // Find highest number and add 1
     const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
     const nextNumber = maxNumber + 1;
-
-    console.log(`✅ Max: ${maxNumber}, Next: ${nextNumber}, New PO: ${prefix}${nextNumber}`);
 
     return `${prefix}${nextNumber}`;
 }
@@ -86,27 +76,22 @@ function incrementPoRevision(poNumber: string, allPOs: any[]): string {
     // Also include the current PO number we're revising
     allPoNumbers.push(poNumber);
 
-    console.log("🔍 All PO numbers for revision check:", allPoNumbers);
-
     // Extract numbers from all PO numbers with the same prefix
     const existingNumbers = allPoNumbers
         .filter(po => po.startsWith(prefix))
         .map(po => {
             const numberStr = po.replace(prefix, '').trim();
             const num = parseInt(numberStr, 10);
-            console.log(`📝 PO: ${po} → Number: ${num}`);
             return isNaN(num) ? 0 : num;
         })
         .filter(n => n > 0);
 
-    console.log("📊 Valid numbers found for revision:", existingNumbers);
 
     // Find highest number and add 1
     const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
     const nextNumber = maxNumber + 1;
 
     const newPoNumber = `${prefix}${nextNumber}`;
-    console.log(`✅ Next PO number for revision: ${newPoNumber}`);
 
     return newPoNumber;
 }
@@ -157,6 +142,7 @@ interface MasterDetails {
         destinationAddress?: string;
     }>;
     companyName?: string;
+    paymentTerms?: string[];
     companyPhone?: string;
     companyGstin?: string;
     companyPan?: string;
@@ -179,8 +165,8 @@ export default () => {
     const [mode, setMode] = useState<'create' | 'revise'>('create');
     const [isEditingDestination, setIsEditingDestination] = useState(false);
     const [destinationAddress, setDestinationAddress] = useState('');
-    const [firmCompanyName, setFirmCompanyName] = useState('');
-    const [firmCompanyAddress, setFirmCompanyAddress] = useState('');
+    const [firmCompanyName, setFirmCompanyName] = useState('Passary Mineral Madhya Pvt.Ltd');
+    const [firmCompanyAddress, setFirmCompanyAddress] = useState('Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState<POPdfProps | null>(null);
 
@@ -246,7 +232,7 @@ export default () => {
         deliveryDate: z.coerce.date(),
         deliveryDays: z.coerce.number().optional(),
         deliveryType: z.enum(['for', 'exfactory']).optional(),
-        paymentTerms: z.enum(['Party PI', 'Advance', 'After Delivery']),
+        paymentTerms: z.string().nonempty(),
         numberOfDays: z.coerce.number().optional(),
     });
 
@@ -300,7 +286,6 @@ export default () => {
     useEffect(() => {
         if (!vendor || !details || !(details as MasterDetails).vendors || mode !== 'create') return;
 
-        console.log("🔍 Vendor changed:", vendor);
 
         const normalize = (str: any) => {
             // ✅ FIX: Handle cases where str might not be a string
@@ -314,7 +299,6 @@ export default () => {
         );
 
         if (selectedVendor) {
-            console.log("✅ Matched vendor:", selectedVendor);
             form.setValue('supplierAddress', selectedVendor.address || '', { shouldValidate: true });
             form.setValue('gstin', selectedVendor.gstin || '', { shouldValidate: true });
             form.setValue('companyEmail', selectedVendor.vendorEmail || '', { shouldValidate: true });
@@ -337,9 +321,6 @@ export default () => {
                 i.actual4 === '' &&
                 normalizedVendorName === normalizedSelectedVendor;
         });
-
-        console.log("📦 Matching indents found:", matchingIndents.length);
-
         const firmName = matchingIndents[0]?.firmName?.trim();
         if (firmName && (details as MasterDetails).firmCompanyMap) {
             const firmKey = Object.keys((details as MasterDetails).firmCompanyMap!).find(
@@ -354,11 +335,9 @@ export default () => {
                 setDestinationAddress(
                     companyDetails.destinationAddress || (details as MasterDetails).destinationAddress || ''
                 );
-                console.log("✅ Firm/company details loaded:", companyDetails);
             } else {
-                console.log("⚠️ Firm not found in firmCompanyMap:", firmName);
-                setFirmCompanyName((details as MasterDetails).companyName || '');
-                setFirmCompanyAddress((details as MasterDetails).companyAddress || '');
+                setFirmCompanyName((details as MasterDetails).companyName || 'Passary Mineral Madhya Pvt.Ltd');
+                setFirmCompanyAddress((details as MasterDetails).companyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
                 setDestinationAddress((details as MasterDetails).destinationAddress || '');
             }
         }
@@ -394,8 +373,6 @@ export default () => {
 
     // Mode change effect
     useEffect(() => {
-        console.log("🔄 Mode changed to:", mode, "PO Master Sheet count:", poMasterSheet.length);
-
         if (mode === 'revise') {
             form.reset({
                 poNumber: '',
@@ -420,11 +397,7 @@ export default () => {
         } else {
             if (poMasterSheet && poMasterSheet.length > 0) {
                 const poNumbers = poMasterSheet.map((p) => p.poNumber).filter(po => po && po.trim() !== '');
-                console.log("📋 Available PO numbers for generation:", poNumbers);
-
                 const newPoNumber = generatePoNumber(poNumbers);
-                console.log("🎯 Final generated PO number:", newPoNumber);
-
                 form.reset({
                     poNumber: newPoNumber,
                     poDate: new Date(),
@@ -446,7 +419,6 @@ export default () => {
                     description: '',
                 });
             } else {
-                console.log("📝 No PO data available, using default PO number");
                 form.reset({
                     poNumber: 'STORE-PO-25-26-1',
                     poDate: new Date(),
@@ -474,24 +446,14 @@ export default () => {
     // REVISE MODE - Load PO data when PO number is selected
     useEffect(() => {
         if (mode === 'revise' && poNumber && poNumber.trim() !== '') {
-            console.log("🔄 REVISE MODE: Loading PO data for:", poNumber);
-
             const poItems = poMasterSheet.filter((p) => p.poNumber === poNumber);
-            console.log("📦 Found PO items:", poItems.length);
-
             if (poItems.length > 0) {
                 const firstPoItem = poItems[0];
-                console.log("📄 First PO Item:", firstPoItem);
-
                 const vendor = (details as MasterDetails)?.vendors?.find((v) => {
                     const vendorName = v.vendorName?.toLowerCase()?.trim();
                     const partyName = firstPoItem.partyName?.toLowerCase()?.trim();
                     return vendorName === partyName;
                 });
-
-                console.log("🔍 Looking for vendor:", firstPoItem.partyName);
-                console.log("✅ Found vendor details:", vendor);
-
                 form.setValue('poDate', parseCustomDate(firstPoItem.timestamp));
                 form.setValue('supplierName', firstPoItem.partyName || '');
 
@@ -530,8 +492,6 @@ export default () => {
                     unit: poItem.unit || '',
                     rate: poItem.rate || 0,
                 }));
-
-                console.log("✅ Loaded indents:", poIndents);
                 form.setValue('indents', poIndents);
 
                 const terms = [];
@@ -543,8 +503,6 @@ export default () => {
                     }
                 }
                 form.setValue('terms', terms.length > 0 ? terms : ((details as MasterDetails)?.defaultTerms || []));
-
-                console.log("✅ PO data loaded successfully for revision");
             }
         }
     }, [poNumber, mode, poMasterSheet, details, form]);
@@ -557,6 +515,21 @@ export default () => {
     const handleDestinationCancel = () => {
         setDestinationAddress((details as MasterDetails)?.destinationAddress || '');
         setIsEditingDestination(false);
+    };
+
+    const getLogoBase64 = async (): Promise<string> => {
+        try {
+            const logoResponse = await fetch('/Passary.jpeg');
+            const logoBlob = await logoResponse.blob();
+            return await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(logoBlob);
+            });
+        } catch (error) {
+            console.error('Error fetching logo:', error);
+            return '';
+        }
     };
 
     async function generatePreviewData(): Promise<POPdfProps> {
@@ -572,12 +545,12 @@ export default () => {
         );
 
         return {
-            companyName: firmCompanyName || (details as MasterDetails)?.companyName || '',
-            companyPhone: (details as MasterDetails)?.companyPhone || '',
+            companyName: 'Passary Mineral Madhya Pvt.Ltd',
+            companyPhone: '+7223844007',
             companyGstin: (details as MasterDetails)?.companyGstin || '',
             companyPan: (details as MasterDetails)?.companyPan || '',
-            companyAddress: firmCompanyAddress || (details as MasterDetails)?.companyAddress || '',
-            billingAddress: firmCompanyAddress || (details as MasterDetails)?.billingAddress || '',
+            companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+            billingAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
             destinationAddress: destinationAddress || '',
             supplierName: values.supplierName,
             supplierAddress: values.supplierAddress,
@@ -628,6 +601,7 @@ export default () => {
             terms: values.terms,
             preparedBy: user.username || 'Unknown',
             approvedBy: 'Sayan Das',
+            logo: await getLogoBase64(),
         };
     }
 
@@ -654,22 +628,15 @@ export default () => {
                 }))
             );
 
-            // Convert logo image to base64 for PDF
-            const logoResponse = await fetch('/logo.png');
-            const logoBlob = await logoResponse.blob();
-            const logoBase64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(logoBlob);
-            });
+            const logoBase64 = await getLogoBase64();
 
             const pdfProps: POPdfProps = {
-                companyName: firmCompanyName || (details as MasterDetails)?.companyName || '',
-                companyPhone: (details as MasterDetails)?.companyPhone || '',
+                companyName: 'Passary Mineral Madhya Pvt.Ltd',
+                companyPhone: '+7223844007',
                 companyGstin: (details as MasterDetails)?.companyGstin || '',
                 companyPan: (details as MasterDetails)?.companyPan || '',
-                companyAddress: firmCompanyAddress || (details as MasterDetails)?.companyAddress || '',
-                billingAddress: firmCompanyAddress || (details as MasterDetails)?.billingAddress || '',
+                companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+                billingAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
                 destinationAddress: destinationAddress || (details as MasterDetails)?.destinationAddress || '',
                 supplierName: values.supplierName,
                 supplierAddress: values.supplierAddress,
@@ -721,6 +688,7 @@ export default () => {
                 terms: values.terms,
                 preparedBy: user.username || 'Unknown',
                 approvedBy: 'Sayan Das',
+                logo: logoBase64,
             };
 
             const blob = await pdf(<POPdf {...pdfProps} />).toBlob();
@@ -807,8 +775,9 @@ export default () => {
 
             // Update indents to mark PO as created (set actual4 and delivery_date)
             const indentNumbers = values.indents.map(v => v.indentNumber);
-            const deliveryDateFormatted = formatDateTime(values.deliveryDate);
-            await updateIndentsAfterPoCreation(indentNumbers, deliveryDateFormatted);
+            // Use ISO string for database compatibility to avoid "out of range" error
+            const databaseDeliveryDate = values.deliveryDate.toISOString();
+            await updateIndentsAfterPoCreation(indentNumbers, databaseDeliveryDate);
 
             toast.success(`Successfully ${mode}d purchase order`);
             form.reset();
@@ -821,13 +790,11 @@ export default () => {
             setIndentSheet(indents);
             setPoMasterSheet(poMaster);
         } catch (e) {
-            console.log(e);
             toast.error(`Failed to ${mode} purchase order`);
         }
     }
 
     function onError(e: any) {
-        console.log(e);
         toast.error('Please fill all required fields');
     }
 
@@ -859,18 +826,16 @@ export default () => {
                         <div className="space-y-4 p-4 w-full bg-white shadow-md rounded-sm">
                             {/* Header Section */}
                             <div className="flex items-center justify-center gap-4 bg-blue-50 p-2 h-25 rounded">
-                                <img src="/logo (1).png" alt="Company Logo" className="w-40 h-40 object-contain" />
+                                <img src="/Passary.jpeg" alt="Company Logo" className="w-40  object-contain" />
                                 <div className="text-center">
                                     <h1 className="text-2xl font-bold">
-                                        {firmCompanyName || <span className="text-gray-400">Select Supplier</span>}
+                                        {firmCompanyName || 'Passary Mineral Madhya Pvt.Ltd'}
                                     </h1>
                                     <div>
                                         <p className="text-sm">
-                                            {firmCompanyAddress || <span className="text-gray-400">No address</span>}
+                                            {firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}
                                         </p>
-                                        {(details as MasterDetails)?.companyPhone && (
-                                            <p className="text-sm">Phone No: +{(details as MasterDetails)?.companyPhone}</p>
-                                        )}
+                                        <p className="text-sm">Phone No: +7223844007</p>
                                     </div>
                                 </div>
                             </div>
@@ -1078,9 +1043,15 @@ export default () => {
                                                     </SelectTrigger>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    <SelectItem value="Advance">Advance</SelectItem>
-                                                    <SelectItem value="Party PI">Party PI</SelectItem>
-                                                    <SelectItem value="After Delivery">After Delivery</SelectItem>
+                                                    {(details as MasterDetails)?.paymentTerms?.map((term, idx) => (
+                                                        <SelectItem key={idx} value={term}>{term}</SelectItem>
+                                                    )) || (
+                                                        <>
+                                                            <SelectItem value="Advance">Advance</SelectItem>
+                                                            <SelectItem value="Partly PI">Partly PI</SelectItem>
+                                                            <SelectItem value="After Delivery">After Delivery</SelectItem>
+                                                        </>
+                                                    )}
                                                 </SelectContent>
                                             </Select>
                                         </FormItem>

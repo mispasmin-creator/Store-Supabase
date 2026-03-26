@@ -16,9 +16,10 @@ import {
 import { z } from 'zod';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Tabs, TabsContent } from '../ui/tabs';
@@ -70,6 +71,9 @@ export default () => {
     const [filteredTableData, setFilteredTableData] = useState<VendorUpdateData[]>([]);
     const [filteredHistoryData, setFilteredHistoryData] = useState<HistoryData[]>([]);
     const [openDialog, setOpenDialog] = useState(false);
+    const [dialogStep, setDialogStep] = useState(1);
+    const [amountToDetermineType, setAmountToDetermineType] = useState<number>(0);
+    const [computedVendorType, setComputedVendorType] = useState<'Regular' | 'Three Party'>('Regular');
     const [editingRow, setEditingRow] = useState<string | null>(null);
     const [editValues, setEditValues] = useState<Partial<HistoryData>>({});
     const [dataLoading, setDataLoading] = useState(false);
@@ -340,6 +344,9 @@ export default () => {
                                         variant="outline"
                                         onClick={() => {
                                             setSelectedIndent(indent);
+                                            setDialogStep(1);
+                                            setAmountToDetermineType(0);
+                                            setComputedVendorType(indent.vendorType);
                                         }}
                                     >
                                         Update
@@ -629,62 +636,45 @@ export default () => {
     // Creating Regular Vendor form
     const regularSchema = z.object({
         vendorName: z.string().min(1, "Vendor name is required"),
-        rateType: z.enum(['basic', 'withTax']),
         rate: z.coerce.number().gt(0, "Rate must be greater than 0"),
-        withTax: z.enum(['yes', 'no']).optional(),
-        gstPercent: z.coerce.number().optional(),
+        gstPercent: z.coerce.number().min(0, 'GST % is required'),
         paymentTerm: z.string().min(1, "Payment term is required"),
+        advancePercent: z.coerce.number().min(0).max(100).optional(),
     });
 
     type RegularFormValues = z.infer<typeof regularSchema>;
 
-    const regularForm = useForm<RegularFormValues>({
+    const regularForm = useForm<z.infer<typeof regularSchema>>({
         resolver: zodResolver(regularSchema),
         defaultValues: {
             vendorName: '',
-            rateType: 'basic',
             rate: 0,
-            withTax: 'no',
             gstPercent: 0,
             paymentTerm: '',
+            advancePercent: 0,
         },
     });
-    const watchRateType = regularForm.watch('rateType');
-    const watchWithTax = regularForm.watch('withTax');
 
     async function onSubmitRegular(values: z.infer<typeof regularSchema>) {
         try {
-            const rateTypeText = values.rateType === 'basic' ? 'Basic Rate' : 'With Tax';
-            let withTaxOrNot = '';
-            let taxValue = 0;
-            let finalRate = values.rate;
-
-            if (values.rateType === 'basic') {
-                if (values.withTax === 'yes') {
-                    withTaxOrNot = 'Yes';
-                    taxValue = 0;
-                } else if (values.withTax === 'no') {
-                    withTaxOrNot = 'No';
-                    taxValue = values.gstPercent || 0;
-                    finalRate = values.rate * (1 + taxValue / 100);
-                }
-            } else {
-                withTaxOrNot = 'Yes';
-                taxValue = 0;
-            }
+            const finalRate = values.rate * (1 + (values.gstPercent || 0) / 100);
 
             const updates = {
                 actual2: new Date().toISOString(),
-                planned3: new Date().toISOString(), // Set planned3 for three party approval workflow
+                planned3: new Date().toISOString(),
+                po_requred: 'Yes', // Automatically set PO Required to Yes
                 vendor_name1: values.vendorName,
-                select_rate_type1: rateTypeText,
                 rate1: values.rate.toString(),
-                with_tax_or_not1: withTaxOrNot,
-                tax_value1: taxValue.toString(),
+                select_rate_type1: 'Basic Rate',
+                with_tax_or_not1: 'No',
+                tax_value1: (values.gstPercent || 0).toString(),
                 payment_term1: values.paymentTerm,
+                advance_percent1: values.advancePercent?.toString(),
                 approved_vendor_name: values.vendorName,
                 approved_rate: finalRate.toString(),
                 approved_payment_term: values.paymentTerm,
+                approved_advance_percent: values.advancePercent?.toString(),
+                vendor_type: computedVendorType,
             };
 
             const { error } = await supabase
@@ -707,23 +697,54 @@ export default () => {
 
     // Creating Three Party Vendor form
     const threePartySchema = z.object({
-        comparisonSheet: z.instanceof(File).optional(),
+        vendors: z.array(z.object({
+            vendorName: z.string().optional(),
+            rate: z.coerce.number().optional(),
+            gstPercent: z.coerce.number().optional(),
+            paymentTerm: z.string().optional(),
+            advancePercent: z.coerce.number().optional(),
+            whatsappNumber: z.string().optional(),
+            emailId: z.string().optional(),
+        })).length(3).superRefine((vendors, ctx) => {
+            // Vendors 1 and 2 are mandatory
+            [0, 1].forEach(index => {
+                const v = vendors[index];
+                if (!v.vendorName?.trim()) {
+                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Vendor Name is required', path: [index, 'vendorName'] });
+                }
+                if (!v.rate || v.rate <= 0) {
+                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Rate must be > 0', path: [index, 'rate'] });
+                }
+                if (!v.paymentTerm) {
+                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Pay terms required', path: [index, 'paymentTerm'] });
+                }
+                if (!v.whatsappNumber || v.whatsappNumber.length < 10) {
+                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Min 10 digits', path: [index, 'whatsappNumber'] });
+                }
+                if (!v.emailId || !/^\S+@\S+\.\S+$/.test(v.emailId)) {
+                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid email', path: [index, 'emailId'] });
+                }
+            });
+
+            // Vendor 3 is optional, but if vendorName is entered, validate others
+            const v3 = vendors[2];
+            if (v3.vendorName?.trim()) {
+                if (!v3.rate || v3.rate <= 0) {
+                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Rate must be > 0', path: [2, 'rate'] });
+                }
+                if (!v3.paymentTerm) {
+                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Pay terms required', path: [2, 'paymentTerm'] });
+                }
+                if (v3.whatsappNumber && v3.whatsappNumber.length < 10) {
+                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Min 10 digits', path: [2, 'whatsappNumber'] });
+                }
+                if (v3.emailId && !/^\S+@\S+\.\S+$/.test(v3.emailId)) {
+                    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid email', path: [2, 'emailId'] });
+                }
+            }
+        }),
+        comparisonSheet: z.any().optional(),
         productCode: z.string().optional(),
-        vendors: z
-            .array(
-                z.object({
-                    vendorName: z.string().nonempty(),
-                    rateType: z.enum(['basic', 'withTax']),
-                    rate: z.coerce.number().gt(0),
-                    withTax: z.enum(['yes', 'no']).optional(),
-                    gstPercent: z.coerce.number().optional(),
-                    paymentTerm: z.string().nonempty(),
-                    whatsappNumber: z.string().nonempty(),
-                    emailId: z.string().email().nonempty(),
-                })
-            )
-            .max(3)
-            .min(3),
     });
 
     const threePartyForm = useForm<z.infer<typeof threePartySchema>>({
@@ -733,31 +754,28 @@ export default () => {
             vendors: [
                 {
                     vendorName: '',
-                    rateType: undefined,
                     rate: 0,
-                    withTax: 'no',
                     gstPercent: 0,
                     paymentTerm: '',
+                    advancePercent: 0,
                     whatsappNumber: '',
                     emailId: '',
                 },
                 {
                     vendorName: '',
-                    rateType: undefined,
                     rate: 0,
-                    withTax: 'no',
                     gstPercent: 0,
                     paymentTerm: '',
+                    advancePercent: 0,
                     whatsappNumber: '',
                     emailId: '',
                 },
                 {
                     vendorName: '',
-                    rateType: undefined,
                     rate: 0,
-                    withTax: 'no',
                     gstPercent: 0,
                     paymentTerm: '',
+                    advancePercent: 0,
                     whatsappNumber: '',
                     emailId: '',
                 },
@@ -770,6 +788,55 @@ export default () => {
         name: 'vendors',
     });
 
+    useEffect(() => {
+        if (amountToDetermineType > 0) {
+            regularForm.setValue('rate', amountToDetermineType);
+            // Three Party rates should be manually input as requested
+        }
+    }, [amountToDetermineType, regularForm]);
+
+    // Watch for vendor selection to fetch payment term
+    const watchVendorRegular = regularForm.watch('vendorName');
+    const watchVendor0 = threePartyForm.watch('vendors.0.vendorName');
+    const watchVendor1 = threePartyForm.watch('vendors.1.vendorName');
+    const watchVendor2 = threePartyForm.watch('vendors.2.vendorName');
+
+    useEffect(() => {
+        if (watchVendorRegular && options?.vendors) {
+            const vendor = options.vendors.find(v => v.vendorName === watchVendorRegular);
+            if (vendor?.paymentTerm) {
+                regularForm.setValue('paymentTerm', vendor.paymentTerm);
+            }
+        }
+    }, [watchVendorRegular, options?.vendors, regularForm]);
+
+    useEffect(() => {
+        if (watchVendor0 && options?.vendors) {
+            const vendor = options.vendors.find(v => v.vendorName === watchVendor0);
+            if (vendor?.paymentTerm) {
+                threePartyForm.setValue('vendors.0.paymentTerm', vendor.paymentTerm);
+            }
+        }
+    }, [watchVendor0, options?.vendors, threePartyForm]);
+
+    useEffect(() => {
+        if (watchVendor1 && options?.vendors) {
+            const vendor = options.vendors.find(v => v.vendorName === watchVendor1);
+            if (vendor?.paymentTerm) {
+                threePartyForm.setValue('vendors.1.paymentTerm', vendor.paymentTerm);
+            }
+        }
+    }, [watchVendor1, options?.vendors, threePartyForm]);
+
+    useEffect(() => {
+        if (watchVendor2 && options?.vendors) {
+            const vendor = options.vendors.find(v => v.vendorName === watchVendor2);
+            if (vendor?.paymentTerm) {
+                threePartyForm.setValue('vendors.2.paymentTerm', vendor.paymentTerm);
+            }
+        }
+    }, [watchVendor2, options?.vendors, threePartyForm]);
+
     async function onSubmitThreeParty(values: z.infer<typeof threePartySchema>) {
         try {
             let url: string = '';
@@ -778,29 +845,17 @@ export default () => {
                 url = await uploadFileToSupabase(values.comparisonSheet, selectedIndent?.indentNo || '');
             }
 
-            const processVendorData = (vendor: typeof values.vendors[0]) => {
-                const rateTypeText = vendor.rateType === 'basic' ? 'Basic Rate' : 'With Tax';
-                let withTaxOrNot = '';
-                let taxValue = 0;
-
-                if (vendor.rateType === 'basic') {
-                    if (vendor.withTax === 'yes') {
-                        withTaxOrNot = 'Yes';
-                        taxValue = 0;
-                    } else if (vendor.withTax === 'no') {
-                        withTaxOrNot = 'No';
-                        taxValue = vendor.gstPercent || 0;
-                    }
-                } else {
-                    withTaxOrNot = 'Yes';
-                    taxValue = 0;
-                }
+            const processVendorData = (vendor: any) => {
+                const rateTypeText = 'Basic Rate';
+                let withTaxOrNot = 'No';
+                let taxValue = vendor.gstPercent || 0;
 
                 return {
                     rateType: rateTypeText,
-                    rate: vendor.rate,
+                    rate: vendor.rate || 0,
                     withTaxOrNot,
                     taxValue,
+                    advancePercent: vendor.advancePercent?.toString() || '0',
                 };
             };
 
@@ -819,6 +874,7 @@ export default () => {
                 with_tax_or_not1: vendor1Data.withTaxOrNot,
                 tax_value1: vendor1Data.taxValue.toString(),
                 payment_term1: values.vendors[0].paymentTerm,
+                advance_percent1: vendor1Data.advancePercent,
                 whatsapp_number1: values.vendors[0].whatsappNumber,
                 email_id1: values.vendors[0].emailId,
 
@@ -829,6 +885,7 @@ export default () => {
                 with_tax_or_not2: vendor2Data.withTaxOrNot,
                 tax_value2: vendor2Data.taxValue.toString(),
                 payment_term2: values.vendors[1].paymentTerm,
+                advance_percent2: vendor2Data.advancePercent,
                 whatsapp_number2: values.vendors[1].whatsappNumber,
                 email_id2: values.vendors[1].emailId,
 
@@ -839,11 +896,13 @@ export default () => {
                 with_tax_or_not3: vendor3Data.withTaxOrNot,
                 tax_value3: vendor3Data.taxValue.toString(),
                 payment_term3: values.vendors[2].paymentTerm,
+                advance_percent3: vendor3Data.advancePercent,
                 whatsapp_number3: values.vendors[2].whatsappNumber,
                 email_id3: values.vendors[2].emailId,
 
                 comparison_sheet: url,
                 product_code: values.productCode || '',
+                vendor_type: computedVendorType,
             };
 
             const { error } = await supabase
@@ -1131,198 +1190,212 @@ export default () => {
                     </TabsContent>
                 </Tabs>
 
-                {/* Regular Vendor Dialog */}
-                {selectedIndent && selectedIndent.vendorType === 'Regular' && (
-                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                        <Form {...regularForm}>
-                            <form
-                                onSubmit={regularForm.handleSubmit(onSubmitRegular, onError)}
-                                className="grid gap-5"
-                            >
+                {/* Step 1 and Regular Vendor Step 2 */}
+                {selectedIndent && !(dialogStep === 2 && computedVendorType === 'Three Party') && (
+                    <DialogContent className={`${dialogStep === 2 ? 'max-w-5xl' : 'max-w-2xl'} max-h-[95vh] overflow-y-auto`}>
+                        {dialogStep === 1 ? (
+                            <div className="grid gap-5">
                                 <DialogHeader className="grid gap-2">
-                                    <DialogTitle>Update Regular Vendor</DialogTitle>
+                                    <DialogTitle>Step 1: Determine Vendor Type</DialogTitle>
                                     <DialogDescription>
-                                        Update vendor for indent{' '}
+                                        Type the amount of the item to decide the vendor type for indent{' '}
                                         <span className="font-medium">{selectedIndent.indentNo}</span>
                                     </DialogDescription>
                                 </DialogHeader>
-
                                 <div className="grid gap-4">
-                                    <FormField
-                                        control={regularForm.control}
-                                        name="vendorName"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Vendor Name</FormLabel>
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select vendor" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <div className="flex items-center border-b px-3 pb-3">
-                                                            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                                                            <input
-                                                                placeholder="Search vendors..."
-                                                                value={searchTermVendor}
-                                                                onChange={(e) => setSearchTermVendor(e.target.value)}
-                                                                onKeyDown={(e) => e.stopPropagation()}
-                                                                className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
-                                                            />
-                                                        </div>
-                                                        {options?.vendorNames
-                                                            ?.filter((v) =>
-                                                                v.toLowerCase().includes(searchTermVendor.toLowerCase())
-                                                            )
-                                                            .map((v, i) => (
-                                                                <SelectItem key={i} value={v}>
-                                                                    {v}
-                                                                </SelectItem>
-                                                            ))}
-                                                        {options?.vendorNames?.length === 0 && (
-                                                            <SelectItem value="no-vendors" disabled>
-                                                                No vendors available
-                                                            </SelectItem>
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
-                                            </FormItem>
-                                        )}
-                                    />
-
-                                    <FormField
-                                        control={regularForm.control}
-                                        name="rateType"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Rate Type</FormLabel>
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select rate type" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="basic">Basic Rate</SelectItem>
-                                                        <SelectItem value="withTax">With Tax</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </FormItem>
-                                        )}
-                                    />
-
-                                    <FormField
-                                        control={regularForm.control}
-                                        name="rate"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Rate</FormLabel>
-                                                <FormControl>
-                                                    <Input type="number" {...field} />
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-
-                                    {watchRateType === 'basic' && (
-                                        <>
+                                    <div className="grid gap-2">
+                                        <Label>Amount of Item</Label>
+                                        <Input
+                                            type="number"
+                                            value={amountToDetermineType || ''}
+                                            onChange={(e) => {
+                                                const val = Number(e.target.value);
+                                                setAmountToDetermineType(val);
+                                                setComputedVendorType(val >= 5000 ? 'Three Party' : 'Regular');
+                                            }}
+                                            placeholder="Enter amount"
+                                        />
+                                    </div>
+                                    <div className="p-3 bg-muted rounded-md text-sm">
+                                        Vendor Type: <Pill variant={computedVendorType === 'Regular' ? 'primary' : 'secondary'}>{computedVendorType}</Pill>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <DialogClose asChild>
+                                        <Button variant="outline">Close</Button>
+                                    </DialogClose>
+                                    <Button onClick={() => setDialogStep(2)}>
+                                        Next
+                                    </Button>
+                                </DialogFooter>
+                            </div>
+                        ) : computedVendorType === 'Regular' ? (
+                            <Form {...regularForm}>
+                                <form
+                                    onSubmit={regularForm.handleSubmit(onSubmitRegular, onError)}
+                                    className="grid gap-5"
+                                >
+                                    <DialogHeader className="grid gap-2">
+                                        <DialogTitle>Step 2: Update Regular Vendor</DialogTitle>
+                                        <DialogDescription>
+                                            Update vendor for indent{' '}
+                                            <span className="font-medium">{selectedIndent.indentNo}</span>
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    {/* Copy existing form fields... */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="md:col-span-2">
                                             <FormField
                                                 control={regularForm.control}
-                                                name="withTax"
+                                                name="vendorName"
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel>With Tax?</FormLabel>
+                                                        <FormLabel>Vendor Name</FormLabel>
                                                         <Select onValueChange={field.onChange} value={field.value}>
                                                             <FormControl>
                                                                 <SelectTrigger>
-                                                                    <SelectValue placeholder="Select" />
+                                                                    <SelectValue placeholder="Select vendor" />
                                                                 </SelectTrigger>
                                                             </FormControl>
                                                             <SelectContent>
-                                                                <SelectItem value="yes">Yes</SelectItem>
-                                                                <SelectItem value="no">No</SelectItem>
+                                                                <div className="flex items-center border-b px-3 pb-3">
+                                                                    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                    <input
+                                                                        placeholder="Search vendors..."
+                                                                        value={searchTermVendor}
+                                                                        onChange={(e) => setSearchTermVendor(e.target.value)}
+                                                                        onKeyDown={(e) => e.stopPropagation()}
+                                                                        className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                                    />
+                                                                </div>
+                                                                {options?.vendorNames
+                                                                    ?.filter((v) =>
+                                                                        v.toLowerCase().includes(searchTermVendor.toLowerCase())
+                                                                    )
+                                                                    .map((v, i) => (
+                                                                        <SelectItem key={i} value={v}>
+                                                                            {v}
+                                                                        </SelectItem>
+                                                                    ))}
                                                             </SelectContent>
                                                         </Select>
                                                     </FormItem>
                                                 )}
                                             />
+                                        </div>
 
-                                            {watchWithTax === 'no' && (
-                                                <FormField
-                                                    control={regularForm.control}
-                                                    name="gstPercent"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>GST %</FormLabel>
-                                                            <Select onValueChange={(val) => field.onChange(Number(val))} value={field.value?.toString()}>
-                                                                <FormControl>
-                                                                    <SelectTrigger>
-                                                                        <SelectValue placeholder="Select GST %" />
-                                                                    </SelectTrigger>
-                                                                </FormControl>
-                                                                <SelectContent>
-                                                                    <SelectItem value="0">0%</SelectItem>
-                                                                    <SelectItem value="5">5%</SelectItem>
-                                                                    <SelectItem value="12">12%</SelectItem>
-                                                                    <SelectItem value="18">18%</SelectItem>
-                                                                    <SelectItem value="28">28%</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                        <FormField
+                                            control={regularForm.control}
+                                            name="rate"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Basic Rate</FormLabel>
+                                                    <FormControl>
+                                                        <Input type="number" {...field} />
+                                                    </FormControl>
+                                                </FormItem>
                                             )}
-                                        </>
-                                    )}
+                                        />
 
-                                    <FormField
-                                        control={regularForm.control}
-                                        name="paymentTerm"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Payment Term</FormLabel>
-                                                <FormControl>
-                                                    <Input {...field} />
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-                                </div>
+                                        <FormField
+                                            control={regularForm.control}
+                                            name="gstPercent"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>GST %</FormLabel>
+                                                    <Select onValueChange={(val) => field.onChange(Number(val))} value={field.value?.toString()}>
+                                                        <FormControl>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select GST %" />
+                                                            </SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            <SelectItem value="0">0%</SelectItem>
+                                                            <SelectItem value="5">5%</SelectItem>
+                                                            <SelectItem value="12">12%</SelectItem>
+                                                            <SelectItem value="18">18%</SelectItem>
+                                                            <SelectItem value="28">28%</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </FormItem>
+                                            )}
+                                        />
 
-                                <DialogFooter>
-                                    <DialogClose asChild>
-                                        <Button variant="outline">Close</Button>
-                                    </DialogClose>
-                                    <Button type="submit" disabled={regularForm.formState.isSubmitting}>
-                                        {regularForm.formState.isSubmitting && (
-                                            <Loader size={20} color="white" aria-label="Loading Spinner" />
+                                        <div className="md:col-span-1">
+                                            <FormField
+                                                control={regularForm.control}
+                                                name="paymentTerm"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Payment Term</FormLabel>
+                                                        <Select onValueChange={field.onChange} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Select payment term" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                {options?.paymentTerms?.map((term, i) => (
+                                                                    <SelectItem key={i} value={term}>
+                                                                        {term}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
+
+                                        {regularForm.watch('paymentTerm') === 'Partly Advance/ Partly PI' && (
+                                            <FormField
+                                                control={regularForm.control}
+                                                name="advancePercent"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Advance %</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="number" placeholder="Enter % e.g. 50" {...field} min={0} max={100} />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
                                         )}
-                                        Update
-                                    </Button>
-                                </DialogFooter>
-                            </form>
-                        </Form>
+                                    </div>
+                                    <DialogFooter>
+                                        <Button variant="outline" onClick={() => setDialogStep(1)}>Back</Button>
+                                        <Button type="submit" disabled={regularForm.formState.isSubmitting}>
+                                            {regularForm.formState.isSubmitting && (
+                                                <Loader size={20} color="white" aria-label="Loading Spinner" />
+                                            )}
+                                            Update
+                                        </Button>
+                                    </DialogFooter>
+                                </form>
+                            </Form>
+                        ) : null}
                     </DialogContent>
                 )}
 
-                {/* Three Party Vendor Dialog */}
-                {selectedIndent && selectedIndent.vendorType === 'Three Party' && (
-                    <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                {/* Unique Three Party Vendor Step 2 */}
+                {selectedIndent && dialogStep === 2 && computedVendorType === 'Three Party' && (
+                    <DialogContent
+                        className="max-h-[95vh] overflow-y-auto"
+                        style={{ maxWidth: '98vw', width: '98vw' }}
+                    >
                         <Form {...threePartyForm}>
                             <form
                                 onSubmit={threePartyForm.handleSubmit(onSubmitThreeParty, onError)}
-                                className="grid gap-5"
+                                className="grid gap-6"
                             >
-                                <DialogHeader className="grid gap-2">
-                                    <DialogTitle>Update Three Party Vendors</DialogTitle>
+                                <DialogHeader>
+                                    <DialogTitle>Step 2: Update Three Party Vendors</DialogTitle>
                                     <DialogDescription>
-                                        Update vendors for indent{' '}
-                                        <span className="font-medium">{selectedIndent.indentNo}</span>
+                                        Update vendors for indent <span className="font-medium">{selectedIndent.indentNo}</span>
                                     </DialogDescription>
                                 </DialogHeader>
 
-                                <div className="grid gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-4">
                                     <FormField
                                         control={threePartyForm.control}
                                         name="productCode"
@@ -1330,12 +1403,11 @@ export default () => {
                                             <FormItem>
                                                 <FormLabel>Product Code (Optional)</FormLabel>
                                                 <FormControl>
-                                                    <Input {...field} />
+                                                    <Input {...field} placeholder="Enter product code" />
                                                 </FormControl>
                                             </FormItem>
                                         )}
                                     />
-
                                     <FormField
                                         control={threePartyForm.control}
                                         name="comparisonSheet"
@@ -1352,138 +1424,94 @@ export default () => {
                                             </FormItem>
                                         )}
                                     />
+                                </div>
 
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                     {fields.map((field, index) => (
-                                        <div key={field.id} className="border p-4 rounded-lg">
-                                            <h3 className="font-semibold mb-3">Vendor {index + 1}</h3>
-                                            <div className="grid gap-3">
+                                        <div key={field.id} className="border p-4 rounded-xl shadow-sm space-y-4">
+                                            <h3 className="font-bold border-b pb-2 text-blue-600">Vendor {index + 1} {index === 2 && "(Optional)"}</h3>
+
+                                            <div className="grid gap-4">
                                                 <FormField
                                                     control={threePartyForm.control}
                                                     name={`vendors.${index}.vendorName`}
                                                     render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Vendor Name</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                            <Select
+                                                                onValueChange={field.onChange}
+                                                                defaultValue={field.value}
+                                                            >
                                                                 <FormControl>
                                                                     <SelectTrigger>
                                                                         <SelectValue placeholder="Select vendor" />
                                                                     </SelectTrigger>
                                                                 </FormControl>
                                                                 <SelectContent>
-                                                                    <div className="flex items-center border-b px-3 pb-3">
-                                                                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                    <div className="flex items-center border-b px-3 pb-2 sticky top-0 bg-background z-10">
+                                                                        <Search className="mr-2 h-4 w-4 opacity-50" />
                                                                         <input
                                                                             placeholder="Search vendors..."
                                                                             value={searchTermVendor}
                                                                             onChange={(e) => setSearchTermVendor(e.target.value)}
-                                                                            onKeyDown={(e) => e.stopPropagation()}
-                                                                            className="flex h-10 w-full rounded-md border-0 bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground"
+                                                                            className="h-10 w-full border-0 bg-transparent text-sm outline-none"
                                                                         />
                                                                     </div>
                                                                     {options?.vendorNames
-                                                                        ?.filter((v) =>
-                                                                            v.toLowerCase().includes(searchTermVendor.toLowerCase())
-                                                                        )
+                                                                        ?.filter((v) => v.toLowerCase().includes(searchTermVendor.toLowerCase()))
                                                                         .map((v, i) => (
-                                                                            <SelectItem key={i} value={v}>
-                                                                                {v}
-                                                                            </SelectItem>
+                                                                            <SelectItem key={i} value={v}>{v}</SelectItem>
                                                                         ))}
-                                                                    {options?.vendorNames?.length === 0 && (
-                                                                        <SelectItem value="no-vendors" disabled>
-                                                                            No vendors available
-                                                                        </SelectItem>
-                                                                    )}
                                                                 </SelectContent>
                                                             </Select>
+                                                            <FormMessage />
                                                         </FormItem>
                                                     )}
                                                 />
 
-                                                <FormField
-                                                    control={threePartyForm.control}
-                                                    name={`vendors.${index}.rateType`}
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Rate Type</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={threePartyForm.control}
+                                                        name={`vendors.${index}.rate`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Basic Rate</FormLabel>
                                                                 <FormControl>
-                                                                    <SelectTrigger>
-                                                                        <SelectValue placeholder="Select rate type" />
-                                                                    </SelectTrigger>
+                                                                    <Input type="number" {...field} />
                                                                 </FormControl>
-                                                                <SelectContent>
-                                                                    <SelectItem value="basic">Basic Rate</SelectItem>
-                                                                    <SelectItem value="withTax">With Tax</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                <FormField
-                                                    control={threePartyForm.control}
-                                                    name={`vendors.${index}.rate`}
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Rate</FormLabel>
-                                                            <FormControl>
-                                                                <Input type="number" {...field} />
-                                                            </FormControl>
-                                                        </FormItem>
-                                                    )}
-                                                />
-
-                                                {threePartyForm.watch(`vendors.${index}.rateType`) === 'basic' && (
-                                                    <>
-                                                        <FormField
-                                                            control={threePartyForm.control}
-                                                            name={`vendors.${index}.withTax`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>With Tax?</FormLabel>
-                                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                                        <FormControl>
-                                                                            <SelectTrigger>
-                                                                                <SelectValue placeholder="Select" />
-                                                                            </SelectTrigger>
-                                                                        </FormControl>
-                                                                        <SelectContent>
-                                                                            <SelectItem value="yes">Yes</SelectItem>
-                                                                            <SelectItem value="no">No</SelectItem>
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                </FormItem>
-                                                            )}
-                                                        />
-
-                                                        {threePartyForm.watch(`vendors.${index}.withTax`) === 'no' && (
-                                                            <FormField
-                                                                control={threePartyForm.control}
-                                                                name={`vendors.${index}.gstPercent`}
-                                                                render={({ field }) => (
-                                                                    <FormItem>
-                                                                        <FormLabel>GST %</FormLabel>
-                                                                        <Select onValueChange={(val) => field.onChange(Number(val))} value={field.value?.toString()}>
-                                                                            <FormControl>
-                                                                                <SelectTrigger>
-                                                                                    <SelectValue placeholder="Select GST %" />
-                                                                                </SelectTrigger>
-                                                                            </FormControl>
-                                                                            <SelectContent>
-                                                                                <SelectItem value="0">0%</SelectItem>
-                                                                                <SelectItem value="5">5%</SelectItem>
-                                                                                <SelectItem value="12">12%</SelectItem>
-                                                                                <SelectItem value="18">18%</SelectItem>
-                                                                                <SelectItem value="28">28%</SelectItem>
-                                                                            </SelectContent>
-                                                                        </Select>
-                                                                    </FormItem>
-                                                                )}
-                                                            />
+                                                                <FormMessage />
+                                                            </FormItem>
                                                         )}
-                                                    </>
-                                                )}
+                                                    />
+
+                                                    <FormField
+                                                        control={threePartyForm.control}
+                                                        name={`vendors.${index}.gstPercent`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>GST %</FormLabel>
+                                                                <Select
+                                                                    onValueChange={(val) => field.onChange(Number(val))}
+                                                                    value={field.value?.toString()}
+                                                                >
+                                                                    <FormControl>
+                                                                        <SelectTrigger>
+                                                                            <SelectValue placeholder="Select GST %" />
+                                                                        </SelectTrigger>
+                                                                    </FormControl>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="0">0%</SelectItem>
+                                                                        <SelectItem value="5">5%</SelectItem>
+                                                                        <SelectItem value="12">12%</SelectItem>
+                                                                        <SelectItem value="18">18%</SelectItem>
+                                                                        <SelectItem value="28">28%</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
 
                                                 <FormField
                                                     control={threePartyForm.control}
@@ -1491,47 +1519,75 @@ export default () => {
                                                     render={({ field }) => (
                                                         <FormItem>
                                                             <FormLabel>Payment Term</FormLabel>
-                                                            <FormControl>
-                                                                <Input {...field} />
-                                                            </FormControl>
+                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                                <FormControl>
+                                                                    <SelectTrigger>
+                                                                        <SelectValue placeholder="Select payment term" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    {options?.paymentTerms?.map((term, i) => (
+                                                                        <SelectItem key={i} value={term}>{term}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                            <FormMessage />
                                                         </FormItem>
                                                     )}
                                                 />
 
-                                                <FormField
-                                                    control={threePartyForm.control}
-                                                    name={`vendors.${index}.whatsappNumber`}
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>WhatsApp Number</FormLabel>
-                                                            <FormControl>
-                                                                <Input {...field} />
-                                                            </FormControl>
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                                {threePartyForm.watch(`vendors.${index}.paymentTerm`) === 'Partly Advance/ Partly PI' && (
+                                                    <FormField
+                                                        control={threePartyForm.control}
+                                                        name={`vendors.${index}.advancePercent`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Advance %</FormLabel>
+                                                                <FormControl>
+                                                                    <Input type="number" placeholder="Enter % e.g. 50" {...field} />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                )}
 
-                                                <FormField
-                                                    control={threePartyForm.control}
-                                                    name={`vendors.${index}.emailId`}
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Email ID</FormLabel>
-                                                            <FormControl>
-                                                                <Input type="email" {...field} />
-                                                            </FormControl>
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={threePartyForm.control}
+                                                        name={`vendors.${index}.whatsappNumber`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>WhatsApp</FormLabel>
+                                                                <FormControl>
+                                                                    <Input {...field} placeholder="WhatsApp no." />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={threePartyForm.control}
+                                                        name={`vendors.${index}.emailId`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Email ID</FormLabel>
+                                                                <FormControl>
+                                                                    <Input type="email" {...field} placeholder="Email" />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
 
                                 <DialogFooter>
-                                    <DialogClose asChild>
-                                        <Button variant="outline">Close</Button>
-                                    </DialogClose>
+                                    <Button variant="outline" onClick={() => setDialogStep(1)}>Back</Button>
                                     <Button type="submit" disabled={threePartyForm.formState.isSubmitting}>
                                         {threePartyForm.formState.isSubmitting && (
                                             <Loader size={20} color="white" aria-label="Loading Spinner" />

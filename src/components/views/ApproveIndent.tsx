@@ -499,14 +499,34 @@ export default function ApproveIndent() {
 
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
-        defaultValues: { approvedQuantity: undefined, approval: undefined },
+        defaultValues: { approvedQuantity: undefined, approval: 'Regular' },
     });
 
     useEffect(() => {
         if (selectedIndent) {
             form.setValue("approvedQuantity", selectedIndent.quantity);
+            form.setValue("approval", 'Regular');
         }
-    }, [selectedIndent]);
+    }, [selectedIndent, form]);
+
+    const handleReject = async () => {
+        if (!selectedIndent) return;
+        try {
+            const currentDateTime = new Date().toISOString();
+            await updateIndentApproval(selectedIndent.indent_number, {
+                actual1: currentDateTime,
+                vendor_type: 'Reject',
+                approved_quantity: 0,
+            });
+            toast.success(`Rejected indent ${selectedIndent.indent_number}`);
+            setOpenDialog(false);
+            setSelectedIndent(null);
+            fetchData();
+        } catch (err) {
+            console.error('Error rejecting indent:', err);
+            toast.error('Failed to reject indent');
+        }
+    };
 
     async function onSubmit(values: z.infer<typeof schema>) {
         try {
@@ -543,7 +563,7 @@ export default function ApproveIndent() {
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
                     <Heading
-                        heading="Approve Indent"
+                        heading="Department Indent Approval"
                         subtext="Update Indent status to Approve or Reject them"
                         tabs
                     >
@@ -613,67 +633,48 @@ export default function ApproveIndent() {
                                 <div className="grid gap-3">
                                     <FormField
                                         control={form.control}
-                                        name="approval"
+                                        name="approvedQuantity"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Vendor Type</FormLabel>
-                                                <Select
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                >
-                                                    <FormControl>
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Select approval status" />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        <SelectItem value="Regular">
-                                                            Regular
-                                                        </SelectItem>
-                                                        <SelectItem value="Three Party">
-                                                            Three Party
-                                                        </SelectItem>
-                                                        <SelectItem value="Reject">
-                                                            Reject
-                                                        </SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                                <FormLabel>Approved Quantity</FormLabel>
+                                                <FormControl>
+                                                    <Input {...field} type="number" placeholder="Enter quantity to approve" />
+                                                </FormControl>
                                             </FormItem>
                                         )}
                                     />
-                                    {form.watch('approval') !== 'Reject' && (
-                                        <FormField
-                                            control={form.control}
-                                            name="approvedQuantity"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Approved Quantity</FormLabel>
-                                                    <FormControl>
-                                                        <Input {...field} type="number" />
-                                                    </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                    )}
                                 </div>
-                                <DialogFooter>
-                                    <DialogClose asChild>
-                                        <Button variant="outline">Close</Button>
-                                    </DialogClose>
+                                <DialogFooter className="flex justify-between items-center w-full">
+                                    <div className="flex gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="destructive"
+                                            onClick={handleReject}
+                                            className="bg-red-600 hover:bg-red-700"
+                                        >
+                                            Reject Indent
+                                        </Button>
+                                    </div>
 
-                                    <Button
-                                        type="submit"
-                                        disabled={form.formState.isSubmitting}
-                                    >
-                                        {form.formState.isSubmitting && (
-                                            <Loader
-                                                size={20}
-                                                color="white"
-                                                aria-label="Loading Spinner"
-                                            />
-                                        )}
-                                        Approve
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        <DialogClose asChild>
+                                            <Button variant="outline">Close</Button>
+                                        </DialogClose>
+
+                                        <Button
+                                            type="submit"
+                                            disabled={form.formState.isSubmitting}
+                                        >
+                                            {form.formState.isSubmitting && (
+                                                <Loader
+                                                    size={20}
+                                                    color="white"
+                                                    aria-label="Loading Spinner"
+                                                />
+                                            )}
+                                            Approve
+                                        </Button>
+                                    </div>
                                 </DialogFooter>
                             </form>
                         </Form>

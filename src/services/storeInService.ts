@@ -47,6 +47,7 @@ export interface StoreInRecord {
     billNumber: string;
     unitOfMeasurement: string;
     priceAsPerPo: number;
+    priceAsPerPoCheck: string;
     // Stage 7 fields
     planned7: string;
     actual7: string;
@@ -91,6 +92,7 @@ export async function fetchStoreInRecords() {
         const { data, error } = await supabase
             .from('store_in')
             .select('*')
+            .order('indent_no', { ascending: false })
             .order('timestamp', { ascending: false });
 
         if (error) throw error;
@@ -133,7 +135,8 @@ export async function fetchStoreInRecords() {
             timestamp: r.timestamp || '',
             billNumber: r.bill_number || '',
             unitOfMeasurement: r.unit_of_measurement || '',
-            priceAsPerPo: Number(r.price_as_per_po) || 0,
+            priceAsPerPo: Number(r.rate) || 0,
+            priceAsPerPoCheck: r.bill_received2 || '',
             vehicleNo: r.vehicle_no || '',
             driverName: r.driver_name || '',
             driverMobileNo: r.driver_mobile_no || '',
@@ -219,6 +222,7 @@ export async function updateStoreInReceiving(
         quantityAsPerBill: string;
         remark: string;
         location: string;
+        priceAsPerPoCheck: string;
     }
 ) {
     try {
@@ -233,10 +237,31 @@ export async function updateStoreInReceiving(
                 quantity_as_per_bill: updateData.quantityAsPerBill,
                 remark: updateData.remark,
                 location: updateData.location,
+                bill_received2: updateData.priceAsPerPoCheck, // ✅ Using existing spare column
             })
             .eq('lift_number', liftNumber);
 
         if (error) throw error;
+
+        // ✅ TRIGGER GRN (Planned 7) ONLY IF ANY CHECK FAILS (Rejection Workflow)
+        const anyCheckFailed =
+            updateData.damageOrder === 'No' || // Not OK
+            updateData.quantityAsPerBill === 'No' ||
+            updateData.priceAsPerPoCheck === 'No';
+
+        if (anyCheckFailed) {
+            console.log('⚠️ Some checks failed. Triggering Reject for GRN (Stage 7)...');
+            const { error: planned7Error } = await supabase
+                .from('store_in')
+                .update({
+                    planned7: updateData.actual6,
+                })
+                .eq('lift_number', liftNumber);
+
+            if (planned7Error) console.error('Error triggering Stage 7:', planned7Error);
+        } else {
+            console.log('✅ All checks passed. Skipping Stage 7.');
+        }
 
         return true;
     } catch (error) {
@@ -443,7 +468,7 @@ export async function createPaymentEntry(storeInData: {
                 ap_payment_number: null,
                 status: 'Created',
                 unique_number: uniqueNo,
-                fms_name: storeInData.firm_name_match,
+                fms_name: storeInData.firm_name_match, // Kept original fms_name as per existing code
                 pay_to: storeInData.vendor_name,
                 amount_to_be_paid: String(storeInData.bill_amount),
                 remarks: `Store In payment for ${storeInData.indent_number}`,

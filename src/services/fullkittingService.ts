@@ -43,6 +43,7 @@ export async function fetchFullkittingRecords(): Promise<FullkittingRecord[]> {
         const { data, error } = await supabase
             .from('fullkitting')
             .select('*')
+            .order('indent_number', { ascending: false })
             .order('timestamp', { ascending: false });
 
         if (error) throw error;
