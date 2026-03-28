@@ -23,7 +23,7 @@ import { Label } from '../ui/label';
 import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Tabs, TabsContent } from '../ui/tabs';
-import { UserCheck, PenSquare, X, Search } from 'lucide-react';
+import { UserCheck, PenSquare, X, Search, UserCog } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
@@ -990,8 +990,10 @@ export default () => {
                         heading="Vendor Rate Update"
                         subtext="Update vendors for Regular and Three Party indents"
                         tabs
+                        pendingCount={tableData.length}
+                        historyCount={historyData.length}
                     >
-                        <UserCheck size={50} className="text-primary" />
+                        <UserCog size={50} className="text-primary" />
                     </Heading>
                     <TabsContent value="pending">
                         {/* Compact Centered Filters for Pending Tab */}

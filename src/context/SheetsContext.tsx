@@ -15,9 +15,6 @@ import {
     type TallyEntryRecord
 } from '@/services/tallyEntryService';
 import {
-    fetchPcReportRecords
-} from '@/services/pcReportService';
-import {
     fetchFullkittingRecords,
     type FullkittingRecord
 } from '@/services/fullkittingService';
@@ -29,6 +26,7 @@ import {
     fetchIssueRecords,
     type IssueRecord
 } from '@/services/issueService';
+import { calculatePcReportCounts } from '@/lib/pcReportUtils';
 import {
     fetchInventoryRecords
 } from '@/services/inventoryService';
@@ -51,7 +49,7 @@ import type {
 } from '@/types';
 import type { PaymentsSheet } from '@/types/sheets';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
 
 interface SheetsState {
@@ -113,7 +111,6 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     const [masterSheet, setMasterSheet] = useState<MasterSheet>();
 
     const [tallyEntrySheet, setTallyEntrySheet] = useState<TallyEntrySheet[]>([]);
-    const [pcReportSheet, setPcReportSheet] = useState<PcReportSheet[]>([]);
     const [fullkittingSheet, setFullkittingSheet] = useState<FullkittingSheet[]>([]);
     const [fullkittingLoading, setFullkittingLoading] = useState(true);
 
@@ -136,6 +133,17 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     // ✅ ADD PAYMENT HISTORY STATE
     const [paymentHistorySheet, setPaymentHistorySheet] = useState<PaymentHistory[]>([]);
     const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
+
+    const pcReportSheet = useMemo(() => {
+        return calculatePcReportCounts(
+            indentSheet,
+            storeSheet,
+            issueSheet,
+            fullkittingSheet,
+            tallyEntrySheet,
+            paymentsSheet
+        );
+    }, [indentSheet, storeSheet, issueSheet, fullkittingSheet, tallyEntrySheet, paymentsSheet]);
 
     const sheets = storeSheet;
 
@@ -446,9 +454,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     function updatePcReportSheet() {
-        fetchPcReportRecords()
-            .then((res) => setPcReportSheet(res as PcReportSheet[]))
-            .catch((err) => console.error('Error fetching PC REPORT from Supabase:', err));
+        // Now calculated dynamically via useMemo
     }
 
     return (

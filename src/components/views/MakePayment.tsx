@@ -415,7 +415,10 @@ export default function MakePayment() {
         }
 
         setIsSubmitting(true);
-        const currentDate = formatCurrentDate();
+        const isoNow = new Date().toISOString();
+        const currentDateOnly = isoNow.split('T')[0];
+        const currentDateTime = isoNow;
+        const legacyFormatDate = formatCurrentDate(); // Keep for history remarks if needed
 
         try {
             // Get the selected items
@@ -436,7 +439,7 @@ export default function MakePayment() {
             const { error: updateError } = await supabase
                 .from('payments')
                 .update({
-                    actual: currentDate,
+                    actual: currentDateOnly,
                     status: 'Completed',
                     status1: 'ok',
                     payment_done: true
@@ -462,7 +465,7 @@ export default function MakePayment() {
                 const apPaymentNumber = `AP-${Math.floor(1000 + Math.random() * 9000)}`;
 
                 return {
-                    timestamp: currentDate,
+                    timestamp: isoNow,
                     ap_payment_number: apPaymentNumber,
                     status: 'Paid',
                     unique_number: item.uniqueNo,
@@ -471,7 +474,7 @@ export default function MakePayment() {
                     amount_to_be_paid: String(item.payAmount),
                     remarks: item.remark || `Payment completed for ${item.uniqueNo}`,
                     any_attachments: item.file || item.pdf || '',
-                    timestamp1: currentDate,
+                    timestamp1: isoNow,
                     planned: item.planned || '',
                     payment_terms: item.paymentTerms || '',
                     indent_no: item.internalCode,

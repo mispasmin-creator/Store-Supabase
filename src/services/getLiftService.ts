@@ -188,7 +188,6 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
         // ✅ FIXED: Only map columns that actually exist in the store_in table schema
         const mappedData = {
             timestamp: storeInData.timestamp,
-            lift_number: null, // Always null for backend trigger generation
             indent_no: storeInData.indentNo,
             bill_no: storeInData.billNo,
             vendor_name: storeInData.vendorName,
@@ -259,6 +258,11 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             .select();
 
         if (error) {
+            console.error('insert error', {
+                code: error?.code, message: error?.message,
+                details: error?.details,
+                hint: error?.hint,
+            });
             console.error('❌ Supabase insert error:', error);
             throw error;
         }

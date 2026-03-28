@@ -730,6 +730,8 @@ export default function GetPurchase() {
                         heading="Get Purchase"
                         subtext="Manage purchase bill details and status"
                         tabs
+                        pendingCount={tableData.length}
+                        historyCount={historyData.length}
                     >
                         <ShoppingCart size={50} className="text-primary" />
                     </Heading>

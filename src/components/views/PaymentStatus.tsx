@@ -50,6 +50,7 @@ interface PIPendingData {
     outstandingAmount: number;
     status: string;
     pdf?: string;
+    paymentForm?: string;
 }
 
 interface POMasterRecord {
@@ -481,6 +482,7 @@ export default function PIApprovals() {
             }
 
             const currentDateTime = new Date().toISOString();
+            const formattedDateOnly = currentDateTime.split('T')[0];
             const formattedDateTime = currentDateTime;
 
             const payAmount = Number(selectedItem.outstandingAmount) || 0;
@@ -498,7 +500,7 @@ export default function PIApprovals() {
                 const { error: updatePaymentError } = await supabase
                     .from('payments')
                     .update({
-                        planned: currentDateTime,
+                        planned: formattedDateOnly,
                         status: 'Approved',
                         status1: 'approved',
                         pay_amount: payAmount,
@@ -521,22 +523,24 @@ export default function PIApprovals() {
                     unique_no: uniqueNo,
                     party_name: selectedItem.partyName,
                     po_number: selectedItem.poNumber,
-                    total_po_amount: selectedItem.totalPoAmount,
+                    total_po_amount: String(selectedItem.totalPoAmount || ''),
                     internal_code: selectedItem.internalCode,
                     product: selectedItem.product,
                     delivery_date: selectedItem.deliveryDate,
                     payment_terms: selectedItem.paymentTerms,
-                    number_of_days: Number(selectedItem.numberOfDays || 0),
+                    number_of_days: String(selectedItem.numberOfDays || '0'),
                     pdf: selectedItem.pdf || '',
-                    pay_amount: payAmount,
+                    pay_amount: String(payAmount),
                     file: values.file || '',
                     remark: values.remark,
-                    total_paid_amount: newTotalPaid,
-                    outstanding_amount: newOutstanding,
+                    total_paid_amount: String(newTotalPaid),
+                    outstanding_amount: String(newOutstanding),
                     status: newStatus,
-                    planned: currentDateTime,
-                    actual: '',
+                    planned: formattedDateOnly,
+                    actual: null,
                     firm_name: user?.firmNameMatch || '',
+                    status1: 'pending',
+                    payment_form: selectedItem.paymentForm || 'po_based',
                 };
 
                 // ✅ Insert to PAYMENTS table in Supabase

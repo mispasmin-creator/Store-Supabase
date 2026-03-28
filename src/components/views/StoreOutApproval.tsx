@@ -300,7 +300,13 @@ export default () => {
     return (
         <Dialog open={openDialog} onOpenChange={setOpenDialog}>
             <Tabs defaultValue="pending">
-                <Heading heading="Store Out Approval" subtext="Approve store out requests" tabs>
+                <Heading 
+                    heading="Store Out Approval" 
+                    subtext="Approve store out requests" 
+                    tabs
+                    pendingCount={tableData.length}
+                    historyCount={historyData.length}
+                >
                     <PackageCheck size={50} className="text-primary" />
                 </Heading>
                 <TabsContent value="pending">

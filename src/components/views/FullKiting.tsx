@@ -248,7 +248,13 @@ export default function FullKiting() {
         <div>
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
-                    <Heading heading="Full Kitting" subtext="Manage full kitting details" tabs>
+                    <Heading 
+                        heading="Full Kitting" 
+                        subtext="Manage full kitting details" 
+                        tabs
+                        pendingCount={pendingData.length}
+                        historyCount={historyData.length}
+                    >
                         <Truck size={50} className="text-primary" />
                     </Heading>
 

@@ -348,6 +348,7 @@ export default () => {
                     <Heading
                         heading="Bill Status"
                         subtext="Receive items from purchase orders"
+                        pendingCount={tableData.length}
                     // tabs
                     >
                         <Truck size={50} className="text-primary" />

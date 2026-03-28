@@ -1,36 +1,19 @@
-import { Package2 } from 'lucide-react';
+import { PackageCheck } from 'lucide-react';
 import Heading from '../element/Heading';
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
 import type { PcReportSheet } from '@/types/sheets';
-import { useAuth } from '@/context/AuthContext';
-import { fetchPcReportRecords } from '@/services/pcReportService';
-import { toast } from 'sonner';
+import { useSheets } from '@/context/SheetsContext';
+import { calculatePcReportCounts } from '@/lib/pcReportUtils';
 
 export default function PcReportTable() {
-    const { user } = useAuth();
-    const [historyData, setHistoryData] = useState<PcReportSheet[]>([]);
-    const [dataLoading, setDataLoading] = useState(true);
+    const {
+        pcReportSheet,
+        allLoading
+    } = useSheets();
 
-    const fetchHistory = async () => {
-        setDataLoading(true);
-        try {
-            const records = await fetchPcReportRecords();
-            setHistoryData(records);
-        } catch (error) {
-            console.error('Failed to fetch PC report records:', error);
-            toast.error('Failed to load PC report data');
-        } finally {
-            setDataLoading(false);
-        }
-    };
 
-    useEffect(() => {
-        fetchHistory();
-    }, [user.firmNameMatch]);
-
-    // Columns for PcReportSheet
     const historyColumns: ColumnDef<PcReportSheet>[] = [
         { accessorKey: 'stage', header: 'Stage' },
         { accessorKey: 'totalPending', header: 'Total Pending' },
@@ -43,15 +26,15 @@ export default function PcReportTable() {
 
     return (
         <div>
-            <Heading heading="PC Report" subtext="View pending and completed stages report">
-                <Package2 size={50} className="text-primary" />
+            <Heading heading="PC Report" subtext="View real-time pending and completed stages report">
+                <PackageCheck size={50} className="text-primary" />
             </Heading>
 
             <DataTable
-                data={historyData}
+                data={pcReportSheet}
                 columns={historyColumns}
-                searchFields={['stage', 'totalPending', 'totalComplete']}
-                dataLoading={dataLoading}
+                searchFields={['stage']}
+                dataLoading={allLoading}
                 className="h-[80dvh]"
             />
         </div>

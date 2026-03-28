@@ -210,14 +210,15 @@ export default function IssueData() {
         <div>
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
-                    <Heading heading="Issue Data" subtext="Update Issue Data" tabs>
+                    <Heading 
+                        heading="Issue Data" 
+                        subtext="Update Issue Data" 
+                        tabs
+                        pendingCount={pendingData.length}
+                        historyCount={historyData.length}
+                    >
                         <ClipboardCheck size={50} className="text-primary" />
                     </Heading>
-
-                    <TabsList className="mb-4">
-                        <TabsTrigger value="pending">Pending ({pendingData.length})</TabsTrigger>
-                        <TabsTrigger value="history">History ({historyData.length})</TabsTrigger>
-                    </TabsList>
 
                     <TabsContent value="pending">
                         <DataTable

@@ -308,6 +308,8 @@ export default () => {
                         heading="Return Material To Party"
                         subtext="Process store items and manage returns"
                         tabs
+                        pendingCount={pendingData.length}
+                        historyCount={historyData.length}
                     >
                         <Truck size={50} className="text-primary" />
                     </Heading>

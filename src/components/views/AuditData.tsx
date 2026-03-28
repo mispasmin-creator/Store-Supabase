@@ -1,4 +1,4 @@
-import { Package2, Calculator, FileCheck, AlertTriangle, RotateCcw, ShieldCheck, CheckSquare } from 'lucide-react';
+import { Package2, Calculator, FileCheck, AlertTriangle, RotateCcw, ShieldCheck, CheckSquare, BarChart } from 'lucide-react';
 import Heading from '../element/Heading';
 import { useEffect, useState, useMemo } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
@@ -832,8 +832,8 @@ export default function PcReportTable() {
   return (
     <div>
       <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-        <Heading heading="Call Tracker" subtext="Track all stages of account processing">
-          <Package2 size={50} className="text-primary" />
+        <Heading heading="Audit Data" subtext="Track all stages of account processing">
+          <BarChart size={50} className="text-primary" />
         </Heading>
 
         {/* Stats Cards */}

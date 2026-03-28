@@ -430,6 +430,8 @@ export default () => {
                         heading="Reject For GRN"
                         subtext="Process store items and manage returns"
                         tabs
+                        pendingCount={pendingData.length}
+                        historyCount={historyData.length}
                     >
                         <Truck size={50} className="text-primary" />
                     </Heading>

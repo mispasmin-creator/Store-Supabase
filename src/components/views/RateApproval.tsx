@@ -402,6 +402,8 @@ export default () => {
                         heading="Store Head Approval"
                         subtext="Approve rates the updated vendors"
                         tabs
+                        pendingCount={tableData.length}
+                        historyCount={historyData.length}
                     >
                         <Users size={50} className="text-primary" />
                     </Heading>

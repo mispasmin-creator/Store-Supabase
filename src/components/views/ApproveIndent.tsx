@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { ClipboardCheck, PenSquare } from 'lucide-react';
+import { ClipboardCheck, PenSquare, CheckSquare } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
@@ -566,14 +566,11 @@ export default function ApproveIndent() {
                         heading="Department Indent Approval"
                         subtext="Update Indent status to Approve or Reject them"
                         tabs
+                        pendingCount={pendingData.length}
+                        historyCount={historyData.length}
                     >
-                        <ClipboardCheck size={50} className="text-primary" />
+                        <CheckSquare size={50} className="text-primary" />
                     </Heading>
-
-                    <TabsList className="mb-4">
-                        <TabsTrigger value="pending">Pending ({pendingData.length})</TabsTrigger>
-                        <TabsTrigger value="history">History ({historyData.length})</TabsTrigger>
-                    </TabsList>
 
                     <TabsContent value="pending">
                         <DataTable

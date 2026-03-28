@@ -396,6 +396,8 @@ const ExchangeMaterials = () => {
                         heading="Exchange Materials"
                         subtext="Process exchange materials and manage returns"
                         tabs
+                        pendingCount={pendingData.length}
+                        historyCount={historyData.length}
                     >
                         <RefreshCw size={50} className="text-primary" />
                     </Heading>

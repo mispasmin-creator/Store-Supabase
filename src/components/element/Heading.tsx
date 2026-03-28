@@ -7,9 +7,11 @@ interface HeaderProps {
     heading: string;
     subtext: string;
     tabs?: boolean;
+    pendingCount?: number;
+    historyCount?: number;
 }
 
-export default ({ children, heading, subtext, tabs = false }: HeaderProps) => {
+export default ({ children, heading, subtext, tabs = false, pendingCount, historyCount }: HeaderProps) => {
     return (
         <div className="bg-gradient-to-br from-blue-100 via-purple-50 to-blue-50 rounded-md">
             <div className="flex justify-between p-5">
@@ -24,8 +26,12 @@ export default ({ children, heading, subtext, tabs = false }: HeaderProps) => {
             </div>
             {tabs && (
                 <TabsList className="w-full rounded-none bg-transparent rounded-b-md">
-                    <TabsTrigger value="pending">Pending</TabsTrigger>
-                    <TabsTrigger value="history">History</TabsTrigger>
+                    <TabsTrigger value="pending" className="flex gap-2">
+                        Pending {pendingCount !== undefined && <span>({pendingCount})</span>}
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className="flex gap-2">
+                        History {historyCount !== undefined && <span>({historyCount})</span>}
+                    </TabsTrigger>
                 </TabsList>
             )}
         </div>

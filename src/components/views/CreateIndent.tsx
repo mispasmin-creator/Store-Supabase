@@ -14,7 +14,7 @@ import {
     SelectItem,
 } from '@/components/ui/select';
 import { ClipLoader as Loader } from 'react-spinners';
-import { ClipboardList, Trash, Search } from 'lucide-react';
+import { ClipboardList, Trash, Search, PlusCircle } from 'lucide-react';
 import { useSheets } from '@/context/SheetsContext';
 import Heading from '../element/Heading';
 import { useState } from 'react';
@@ -223,8 +223,8 @@ export default () => {
 
     return (
         <div>
-            <Heading heading="Indent Form" subtext="Create new Indent">
-                <ClipboardList size={50} className="text-primary" />
+            <Heading heading="Create Indent" subtext="Create new Indent">
+                <PlusCircle size={50} className="text-primary" />
             </Heading>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit, onError)} className="space-y-6 p-5">
@@ -247,7 +247,7 @@ export default () => {
                                                     .select('indenter_name')
                                                     .eq('firm_name', val)
                                                     .limit(1);
-                                                
+
                                                 if (data && data.length > 0) {
                                                     form.setValue('indenterName', data[0].indenter_name || '');
                                                 } else {

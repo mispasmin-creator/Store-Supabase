@@ -450,6 +450,8 @@ export default () => {
                         heading="Pending POs"
                         subtext="View pending purchase orders and history"
                         tabs
+                        pendingCount={pendingTableData.length}
+                        historyCount={historyTableData.length}
                     >
                         <ListTodo size={50} className="text-primary" />
                     </Heading>

@@ -300,14 +300,11 @@ export default function ReauditData() {
                         heading="Reauditing Data"
                         subtext="Process tally entries and manage status"
                         tabs
+                        pendingCount={pendingData.length}
+                        historyCount={historyData.length}
                     >
                         <Calculator size={50} className="text-primary" />
                     </Heading>
-
-                    <TabsList className="mb-4">
-                        <TabsTrigger value="pending">Pending ({pendingData.length})</TabsTrigger>
-                        <TabsTrigger value="history">History ({historyData.length})</TabsTrigger>
-                    </TabsList>
 
                     <TabsContent value="pending">
                         <DataTable

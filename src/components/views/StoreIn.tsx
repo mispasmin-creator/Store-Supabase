@@ -617,6 +617,8 @@ export default () => {
                         heading="Quality Check for Receive Items"
                         subtext="Receive items from purchase orders"
                         tabs
+                        pendingCount={tableData.length}
+                        historyCount={historyData.length}
                     >
                         <Truck size={50} className="text-primary" />
                     </Heading>

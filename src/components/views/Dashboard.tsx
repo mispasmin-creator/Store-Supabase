@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ChartContainer, ChartTooltip, type ChartConfig } from '../ui/chart';
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from 'recharts';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { format } from 'date-fns';
@@ -23,9 +23,8 @@ import { fetchIssueRecords, type IssueRecord } from '@/services/issueService';
 import { fetchMasterOptions } from '@/services/masterService';
 import { fetchPoMaster } from '@/services/poService';
 import { fetchInventoryRecords } from '@/services/inventoryService';
-import { fetchPcReportRecords } from '@/services/pcReportService';
-import type { PcReportSheet } from '@/types/sheets';
 import { Line, LineChart, Pie, PieChart, Cell, ResponsiveContainer, Tooltip, Area, AreaChart } from 'recharts';
+import { useSheets } from '@/context/SheetsContext';
 
 interface ChartDataItem {
     name: string;
@@ -33,60 +32,12 @@ interface ChartDataItem {
     frequency: number;
 }
 
-interface VendorDataItem {
-    name: string;
-    orders: number;
-    quantity: number;
-}
-
-interface StatsData {
-    count: number;
-    quantity: number;
-}
-
-interface AlertsData {
-    lowStock: number;
-    outOfStock: number;
-}
-
-interface TrendDataItem {
-    date: string;
-    indents: number;
-    purchases: number;
-    issues: number;
-}
-
-interface DeptDataItem {
-    name: string;
-    value: number;
-}
-
-interface StatusDataItem {
-    name: string;
-    value: number;
-}
-
-function CustomChartTooltipContent({
-    payload,
-    label,
-}: {
-    payload?: { payload: { quantity: number; frequency: number } }[];
-    label?: string;
-}) {
-    if (!payload?.length) return null;
-
-    const data = payload[0].payload;
-
-    return (
-        <div className="rounded-md border bg-white px-3 py-2 shadow-sm text-sm">
-            <p className="font-medium">{label}</p>
-            <p>Quantity: {data.quantity}</p>
-            <p>Frequency: {data.frequency}</p>
-        </div>
-    );
-}
-
 export default function Dashboard() {
+    const {
+        pcReportSheet,
+        allLoading: contextAllLoading
+    } = useSheets();
+
     const [indents, setIndents] = useState<IndentRecord[]>([]);
     const [storeIns, setStoreIns] = useState<StoreInRecord[]>([]);
     const [issues, setIssues] = useState<IssueRecord[]>([]);
@@ -104,7 +55,6 @@ export default function Dashboard() {
     const [trendData, setTrendData] = useState<TrendDataItem[]>([]);
     const [deptData, setDeptData] = useState<DeptDataItem[]>([]);
     const [statusData, setStatusData] = useState<StatusDataItem[]>([]);
-    const [pcData, setPcData] = useState<PcReportSheet[]>([]);
 
     const [startDate, setStartDate] = useState<Date>();
     const [endDate, setEndDate] = useState<Date>();
@@ -119,21 +69,19 @@ export default function Dashboard() {
         const loadData = async () => {
             try {
                 setIsLoading(true);
-                const [iData, sData, issueData, mData, poData, invData, pcReportData] = await Promise.all([
+                const [iData, sData, issueData, mData, poData, invData] = await Promise.all([
                     fetchIndentRecords(),
                     fetchStoreInRecords(),
                     fetchIssueRecords(),
                     fetchMasterOptions(),
                     fetchPoMaster(),
-                    fetchInventoryRecords(),
-                    fetchPcReportRecords()
+                    fetchInventoryRecords()
                 ]);
                 setIndents(iData);
                 setStoreIns(sData);
                 setIssues(issueData);
                 setAllVendors(mData.vendorNames);
                 setAllDepartments(mData.departments);
-                setPcData(pcReportData);
                 setPoMasterData(poData);
 
                 // Initial total PO calculations
@@ -365,7 +313,7 @@ export default function Dashboard() {
             </Heading>
 
             <div className="grid gap-3 m-3">
-                <div className="gap-3 grid grid-cols-2 md:grid-cols-4">
+                <div className="gap-3 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5">
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button
@@ -628,7 +576,7 @@ export default function Dashboard() {
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                                {pcData.slice(0, 14).map((pc, i) => (
+                                {pcReportSheet.slice(0, 14).map((pc, i) => (
                                     <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                                         <p className="text-[10px] uppercase font-bold text-slate-500 mb-1 truncate" title={pc.stage}>
                                             {pc.stage}
@@ -652,4 +600,38 @@ export default function Dashboard() {
             </div>
         </div>
     );
+}
+
+// Interfaces needed to keep the file valid
+interface VendorDataItem {
+    name: string;
+    orders: number;
+    quantity: number;
+}
+
+interface StatsData {
+    count: number;
+    quantity: number;
+}
+
+interface AlertsData {
+    lowStock: number;
+    outOfStock: number;
+}
+
+interface TrendDataItem {
+    date: string;
+    indents: number;
+    purchases: number;
+    issues: number;
+}
+
+interface DeptDataItem {
+    name: string;
+    value: number;
+}
+
+interface StatusDataItem {
+    name: string;
+    value: number;
 }
