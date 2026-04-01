@@ -14,7 +14,7 @@ export async function fetchPayments(): Promise<PaymentsSheet[]> {
         const { data, error } = await supabase
             .from('payments')
             .select('*')
-            .order('timestamp', { ascending: false });
+            .order('id', { ascending: false });
 
         if (error) throw error;
 
@@ -60,7 +60,7 @@ export async function fetchPaymentHistory(): Promise<PaymentHistory[]> {
             .from('payments')
             .select('*')
             .eq('payment_done', true)
-            .order('timestamp', { ascending: false });
+            .order('id', { ascending: false });
 
         if (error) throw error;
 

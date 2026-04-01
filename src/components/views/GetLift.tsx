@@ -13,9 +13,9 @@ import {
     DialogClose,
 } from '../ui/dialog';
 import { z } from 'zod';
-import { useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { PuffLoader as Loader } from 'react-spinners';
@@ -37,7 +37,6 @@ import {
     type GetLiftIndentRecord,
     type GetLiftStoreInRecord,
 } from '@/services/getLiftService';
-import { fetchPoMaster } from '@/services/poService';
 
 interface GetPurchaseData {
     indentNo: string;
@@ -58,6 +57,10 @@ interface GetPurchaseData {
     areaOfUse?: string;
     approvedVendorName?: string;
     liftingStatus?: string;
+    products?: string[];
+    indentNumbers?: string[];
+    expectedDate?: string;
+    originalItems?: any[];
 }
 
 interface HistoryData {
@@ -78,6 +81,9 @@ interface HistoryData {
     areaOfUse?: string;
     approvedVendorName?: string;
     liftingStatus?: string;
+    products?: string[];
+    indentNumbers?: string[];
+    originalItems?: any[];
 }
 
 interface AuthUser {
@@ -98,24 +104,21 @@ export default function GetPurchase() {
     const [loading, setLoading] = useState(false);
     const [indentRecords, setIndentRecords] = useState<GetLiftIndentRecord[]>([]);
     const [storeInRecords, setStoreInRecords] = useState<GetLiftStoreInRecord[]>([]);
-    const [poMasterData, setPoMasterData] = useState<any[]>([]);
 
     // Fetch all data from Supabase
     useEffect(() => {
         const fetchAllData = async () => {
             setLoading(true);
             try {
-                const [vendors, indents, storeIns, poMaster] = await Promise.all([
+                const [vendors, indents, storeIns] = await Promise.all([
                     fetchVendorOptions(),
                     fetchIndentRecords(),
                     fetchStoreInRecords(),
-                    fetchPoMaster(),
                 ]);
 
                 setVendorOptions(vendors);
                 setIndentRecords(indents);
                 setStoreInRecords(storeIns);
-                setPoMasterData(poMaster);
             } catch (error) {
                 console.error('Failed to fetch data:', error);
                 toast.error('Failed to load data');
@@ -134,67 +137,83 @@ export default function GetPurchase() {
                 user?.firmNameMatch?.toLowerCase() === 'all' ||
                 sheet.firmNameMatch === user?.firmNameMatch
         );
-        setTableData(
-            filteredByFirm
-                .map((sheet) => {
-                    // Calculate received quantity from STORE IN records
-                    const receivedQty = storeInRecords
-                        .filter(
-                            (store) =>
-                                store.indentNo === sheet.indentNumber?.toString()
-                        )
-                        .reduce(
-                            (sum, store) =>
-                                sum + (Number(store.receivedQuantity) || 0),
-                            0
-                        );
+        const processedData = filteredByFirm
+            .map((sheet) => {
+                // Calculate received quantity from STORE IN records
+                const receivedQty = storeInRecords
+                    .filter(
+                        (store) =>
+                            store.indentNo === sheet.indentNumber?.toString()
+                    )
+                    .reduce(
+                        (sum, store) =>
+                            sum + (Number(store.receivedQuantity) || 0),
+                        0
+                    );
 
-                    // Use pendingPoQty from sheet if available, otherwise calculate
-                    const pendingPoQty = (Number(sheet.approvedQuantity) || 0) - receivedQty;
+                // Use pendingPoQty from sheet if available, otherwise calculate
+                const pendingPoQty = (Number(sheet.approvedQuantity) || 0) - receivedQty;
 
-                    return { ...sheet, pendingPoQty, receivedQty };
-                })
-                .filter((item) => {
-                    // Show only Pending items with planned date but no actual date
-                    const hasPlanned5 = item.planned5 && item.planned5.toString().trim() !== '';
-                    const hasActual5 = item.actual5 && item.actual5.toString().trim() !== '';
-                    const isPending = item.liftingStatus === 'Pending' || item.liftingStatus === '' || item.liftingStatus === null;
+                return { ...sheet, pendingPoQty, receivedQty };
+            })
+            .filter((item) => {
+                // Show only Pending items with planned date but no actual date
+                const hasPlanned5 = item.planned5 && item.planned5.toString().trim() !== '';
+                const hasActual5 = item.actual5 && item.actual5.toString().trim() !== '';
+                const isPending = item.liftingStatus === 'Pending' || item.liftingStatus === '' || item.liftingStatus === null;
 
-                    // Check if PO is created in po_master
-                    const indentStr = item.indentNumber?.toString().trim();
-                    const isPoCreated = poMasterData.some(po => po.internalCode?.toString().trim() === indentStr);
+                // ✅ Hide if no quantity left to lift
+                return isPending && hasPlanned5 && !hasActual5 && item.pendingPoQty > 0;
+            });
 
-                    // ✅ Hide if no quantity left to lift
-                    return isPending && hasPlanned5 && !hasActual5 && item.pendingPoQty > 0 && isPoCreated;
-                })
-                .map((item) => {
-                    return {
-                        indentNo: item.indentNumber?.toString() || '',
-                        firmNameMatch: item.firmNameMatch || '',
-                        vendorName: item.approvedVendorName || '',
-                        poNumber: item.poNumber || '',
-                        poDate: item.actual4 ? formatDate(parseCustomDate(item.actual4)) : '',
-                        deliveryDate: item.deliveryDate
-                            ? formatDate(parseCustomDate(item.deliveryDate))
-                            : '',
-                        plannedDate: item.planned5
-                            ? formatDate(parseCustomDate(item.planned5))
-                            : 'Not Set',
-                        product: item.productName || '',
-                        quantity: Number(item.approvedQuantity) || 0,
-                        pendingLiftQty: item.pendingPoQty,
-                        receivedQty: item.receivedQty,
-                        pendingPoQty: item.pendingPoQty,
-                        approvedRate: item.approvedRate || '',
-                        timestamp: item.timestamp || '',
-                        department: item.department || '',
-                        areaOfUse: item.areaOfUse || '',
-                        approvedVendorName: item.approvedVendorName || '',
-                        liftingStatus: item.liftingStatus || '',
-                    };
-                })
-        );
-    }, [indentRecords, storeInRecords, poMasterData, user?.firmNameMatch]);
+        // Group by PO Number
+        const groupedMap = new Map<string, any>();
+
+        processedData.forEach((item) => {
+            const key = item.poNumber || `NO_PO_${item.indentNumber}`;
+            if (!groupedMap.has(key)) {
+                groupedMap.set(key, {
+                    indentNo: item.indentNumber?.toString() || '',
+                    firmNameMatch: item.firmNameMatch || '',
+                    vendorName: item.approvedVendorName || '',
+                    poNumber: item.poNumber || '',
+                    poDate: item.actual4 ? formatDate(parseCustomDate(item.actual4)) : '',
+                    deliveryDate: item.deliveryDate
+                        ? formatDate(parseCustomDate(item.deliveryDate))
+                        : '',
+                    plannedDate: item.planned5
+                        ? formatDate(parseCustomDate(item.planned5))
+                        : 'Not Set',
+                    product: item.productName || '',
+                    quantity: 0,
+                    pendingLiftQty: 0,
+                    receivedQty: 0,
+                    pendingPoQty: 0,
+                    approvedRate: item.approvedRate || '',
+                    timestamp: item.timestamp || '',
+                    department: item.department || '',
+                    areaOfUse: item.areaOfUse || '',
+                    approvedVendorName: item.approvedVendorName || '',
+                    liftingStatus: item.liftingStatus || '',
+                    indentNumbers: [],
+                    products: [],
+                    expectedDate: item.expectedDate ? formatDate(parseCustomDate(item.expectedDate)) : '',
+                    originalItems: []
+                });
+            }
+
+            const group = groupedMap.get(key);
+            group.quantity += Number(item.approvedQuantity) || 0;
+            group.pendingLiftQty += item.pendingPoQty;
+            group.receivedQty += item.receivedQty;
+            group.pendingPoQty += item.pendingPoQty;
+            group.indentNumbers.push(item.indentNumber);
+            group.products.push(item.productName);
+            group.originalItems.push(item);
+        });
+
+        setTableData(Array.from(groupedMap.values()));
+    }, [indentRecords, storeInRecords, user?.firmNameMatch]);
 
     // Process history data
     useEffect(() => {
@@ -317,14 +336,9 @@ export default function GetPurchase() {
             cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
         },
         {
-            accessorKey: 'indentNo',
-            header: 'Indent No.',
-            cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
-        },
-        {
-            accessorKey: 'firmNameMatch',
-            header: 'Firm Name',
-            cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
+            accessorKey: 'poNumber',
+            header: 'PO Number',
+            cell: ({ getValue }) => <div className="font-bold">{(getValue() as string) || '-'}</div>,
         },
         {
             accessorKey: 'vendorName',
@@ -332,9 +346,16 @@ export default function GetPurchase() {
             cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
         },
         {
-            accessorKey: 'poNumber',
-            header: 'PO Number',
-            cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
+            accessorKey: 'products',
+            header: 'Products',
+            cell: ({ row }) => {
+                const products = row.original.products || [];
+                return (
+                    <div className="max-w-[200px] truncate" title={products.join(', ')}>
+                        {products.length > 1 ? `${products[0]} (+${products.length - 1})` : products[0]}
+                    </div>
+                );
+            }
         },
         {
             accessorKey: 'poDate',
@@ -345,6 +366,11 @@ export default function GetPurchase() {
             accessorKey: 'deliveryDate',
             header: 'Delivery Date',
             cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
+        },
+        {
+            accessorKey: 'expectedDate',
+            header: 'Expected Date',
+            cell: ({ getValue }) => <div className="text-gray-900">{(getValue() as string) || '-'}</div>,
         },
         {
             accessorKey: 'plannedDate', // ✅ ADD THIS COLUMN
@@ -485,6 +511,48 @@ export default function GetPurchase() {
         driverMobileNo: z.string().optional(),
         amount: z.coerce.number().optional(),
         cancelPendingQty: z.coerce.number().optional(),
+        items: z.array(z.object({
+            indentNo: z.string(),
+            product: z.string(),
+            poNumber: z.string(),
+            quantity: z.number(),
+            pendingLiftQty: z.number(),
+            receivedQty: z.number(),
+            pendingPoQty: z.number(),
+            approvedRate: z.string(),
+            liftQty: z.coerce.number().min(0),
+        })).superRefine((items, ctx) => {
+            items.forEach((item, index) => {
+                const numericLiftQty = Number(item.liftQty) || 0;
+                if (numericLiftQty > item.pendingLiftQty) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: `Lift quantity (${numericLiftQty}) cannot exceed Pending quantity (${item.pendingLiftQty})`,
+                        path: [`${index}`, 'liftQty'],
+                    });
+                }
+            });
+        })
+    }).superRefine((data, ctx) => {
+        const billAmount = Number(data.billAmount) || 0;
+        const discountAmount = Number(data.discountAmount) || 0;
+        const advanceAmount = Number(data.advanceAmount) || 0;
+
+        if (discountAmount > billAmount) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Discount amount (${discountAmount}) cannot exceed total bill amount (${billAmount})`,
+                path: ['discountAmount'],
+            });
+        }
+
+        if (advanceAmount > billAmount) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Advance amount (${advanceAmount}) cannot exceed total bill amount (${billAmount})`,
+                path: ['advanceAmount'],
+            });
+        }
     });
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -493,21 +561,27 @@ export default function GetPurchase() {
             billStatus: '',
             billNo: '',
             qty: 0,
-            typeOfBill: '',
+            typeOfBill: 'independent',
             billAmount: 0,
             discountAmount: 0,
             paymentType: '',
             advanceAmount: 0,
             billRemark: '',
             vendorName: '',
-            transportationInclude: '',
+            transportationInclude: 'Yes',
             transporterName: '',
             vehicleNo: '',
             driverName: '',
             driverMobileNo: '',
             amount: 0,
             cancelPendingQty: 0,
+            items: [],
         },
+    });
+
+    const { fields, append, remove } = useFieldArray({
+        control: form.control,
+        name: "items"
     });
 
     const billStatus = form.watch('billStatus');
@@ -564,43 +638,69 @@ export default function GetPurchase() {
     // Add this useEffect to set form values when selectedIndent changes
     useEffect(() => {
         if (selectedIndent) {
+            // Find ALL individual items for this VENDOR across all pending POs
+            const allVendorGroups = tableData.filter(group => group.vendorName === selectedIndent.vendorName);
+            const allIndividualItems = allVendorGroups.flatMap(group => group.originalItems || []);
+
             form.reset({
                 billStatus: '',
                 billNo: '',
                 qty: selectedIndent.pendingLiftQty || 0,
-                typeOfBill: '',
+                typeOfBill: 'independent',
                 billAmount: 0,
                 discountAmount: 0,
                 paymentType: '',
                 advanceAmount: 0,
                 billRemark: '',
-                vendorName: selectedIndent.vendorName || '', // Auto-fill vendor name
-                transportationInclude: '',
+                vendorName: selectedIndent.vendorName || '',
+                transportationInclude: 'No',
                 transporterName: '',
                 vehicleNo: '',
                 driverName: '',
                 driverMobileNo: '',
                 amount: 0,
                 cancelPendingQty: 0,
+                items: allIndividualItems.map(item => ({
+                    indentNo: item.indentNumber?.toString() || '',
+                    product: item.productName || '',
+                    poNumber: item.poNumber || '',
+                    quantity: Number(item.approvedQuantity) || 0,
+                    pendingLiftQty: item.pendingPoQty || 0,
+                    receivedQty: item.receivedQty || 0,
+                    pendingPoQty: item.pendingPoQty || 0,
+                    approvedRate: item.approvedRate || '0',
+                    liftQty: item.pendingPoQty || 0,
+                })),
             });
-            setVendorSearch(''); // Reset vendor search
-        }
-    }, [selectedIndent, form]);
 
-    const typeOfBillWatcher = form.watch('typeOfBill');
-    const qtyWatcher = form.watch('qty');
+            // Immediately calculate and set initial bill amount
+            const initialTotal = allIndividualItems.reduce((sum, item) => {
+                const rate = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
+                const qty = item.pendingPoQty || 0;
+                return sum + (rate * qty);
+            }, 0);
+            form.setValue('billAmount', initialTotal);
+
+            setVendorSearch('');
+        }
+    }, [selectedIndent, form, tableData]);
+
+    const typeOfBillWatcher = useWatch({ control: form.control, name: 'typeOfBill' }) || 'independent';
+    const itemsWatcher = useWatch({ control: form.control, name: 'items' }) || [];
 
     useEffect(() => {
-        if ((typeOfBillWatcher === 'common' || typeOfBillWatcher === 'independent') && selectedIndent) {
-            const rateStr = selectedIndent.approvedRate || '0';
-            const numericRate = parseFloat(rateStr) || 0;
-            const calculatedAmount = (Number(qtyWatcher) || 0) * numericRate;
+        const total = (itemsWatcher || []).reduce((sum: number, item: any) => {
+            const qty = Number(item.liftQty) || 0;
+            const rate = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
+            return sum + (qty * rate);
+        }, 0);
 
-            // Only auto-fill if the bill amount is either 0 or we are switching to 'common'
-            // This prevents overwriting manual edits in 'independent' mode unless qty/type changes
-            form.setValue('billAmount', calculatedAmount);
-        }
-    }, [typeOfBillWatcher, qtyWatcher, selectedIndent, form]);
+        form.setValue('billAmount', total, {
+            shouldValidate: true,
+            shouldDirty: true,
+            shouldTouch: true
+        });
+    }, [itemsWatcher, form]);
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
@@ -629,19 +729,11 @@ export default function GetPurchase() {
                 }
             } // Continue with original bill submission logic only if bill status is provided
 
-            if (values.billStatus) {
+            if (values.billStatus && values.items) {
                 let photoUrl = '';
-                // In the onSubmit function, update the file upload section:
                 if (values.photoOfBill) {
-                    console.log('📤 Uploading file...');
-                    console.log('📄 File type:', values.photoOfBill.type);
-                    console.log('📄 File name:', values.photoOfBill.name);
-
                     try {
                         photoUrl = await uploadBillPhoto(values.photoOfBill, selectedIndent?.indentNo || '');
-                        console.log('✅ File uploaded:', photoUrl);
-
-                        // Show success message based on file type
                         if (values.photoOfBill.type === 'application/pdf') {
                             toast.success('PDF document uploaded successfully');
                         } else {
@@ -656,58 +748,57 @@ export default function GetPurchase() {
 
                 const currentDateTime = new Date().toISOString();
 
-                console.log('📅 Timestamp:', currentDateTime);
+                // Process each item in the product list
+                for (const item of values.items) {
+                    if (Number(item.liftQty) <= 0) continue;
 
-                const newStoreInRecord = {
-                    timestamp: currentDateTime,
-                    indentNo: selectedIndent?.indentNo || '',
-                    billNo: values.billNo || '',
-                    vendorName: values.vendorName || selectedIndent?.vendorName || '',
-                    productName: selectedIndent?.product || '',
-                    qty: Number(values.qty) || Number(selectedIndent?.quantity) || 0,
-                    discountAmount: Number(values.discountAmount) || 0,
-                    typeOfBill: values.typeOfBill || '',
-                    billAmount: Number(values.billAmount) || 0,
-                    paymentType: values.paymentType || '',
-                    advanceAmountIfAny: Number(values.advanceAmount) || 0,
-                    photoOfBill: photoUrl,
-                    transportationInclude: values.transportationInclude || '',
-                    transporterName: values.transporterName || '',
-                    amount: Number(values.amount) || 0,
-                    billStatus: values.billStatus === 'Bill Not Received' ? 'Not Received' : values.billStatus,
-                    quantityAsPerBill: Number(values.qty) || 0,
-                    poDate: selectedIndent?.poDate || '',
-                    poNumber: selectedIndent?.poNumber || '',
-                    vendor: values.vendorName || selectedIndent?.vendorName || '',
-                    indentNumber: selectedIndent?.indentNo || '',
-                    product: selectedIndent?.product || '',
-                    quantity: Number(values.qty) || Number(selectedIndent?.quantity) || 0,
-                    vehicleNo: values.vehicleNo || '',
-                    driverName: values.driverName || '',
-                    driverMobileNo: values.driverMobileNo || '',
-                    billRemark: values.billRemark || '',
-                    firmNameMatch: selectedIndent?.firmNameMatch || user?.firmNameMatch || '',
-                    rate: selectedIndent?.approvedRate || '',
-                    department: selectedIndent?.department || '',
-                    areaOfUse: selectedIndent?.areaOfUse || '',
-                    approvedVendorName: selectedIndent?.approvedVendorName || '',
-                    liftingStatus: selectedIndent?.liftingStatus || '',
-                    notBillReceivedNo: values.billStatus === 'Bill Not Received' ? values.billNo : '',
-                };
+                    const newStoreInRecord = {
+                        timestamp: currentDateTime,
+                        indentNo: item.indentNo,
+                        billNo: values.billNo || '',
+                        vendorName: values.vendorName || selectedIndent?.vendorName || '',
+                        productName: item.product || '',
+                        qty: Number(item.liftQty),
+                        discountAmount: Number(values.discountAmount) || 0,
+                        typeOfBill: values.typeOfBill || '',
+                        billAmount: Number(values.billAmount) || 0,
+                        paymentType: values.paymentType || '',
+                        advanceAmountIfAny: Number(values.advanceAmount) || 0,
+                        photoOfBill: photoUrl,
+                        transportationInclude: values.transportationInclude || '',
+                        transporterName: values.transporterName || '',
+                        amount: Number(values.amount) || 0,
+                        billStatus: values.billStatus === 'Bill Not Received' ? 'Not Received' : values.billStatus,
+                        quantityAsPerBill: Number(item.liftQty),
+                        poDate: selectedIndent?.poDate || '',
+                        poNumber: item.poNumber || '',
+                        vendor: values.vendorName || selectedIndent?.vendorName || '',
+                        indentNumber: item.indentNo,
+                        product: item.product || '',
+                        quantity: Number(item.liftQty),
+                        vehicleNo: values.vehicleNo || '',
+                        driverName: values.driverName || '',
+                        driverMobileNo: values.driverMobileNo || '',
+                        billRemark: values.billRemark || '',
+                        firmNameMatch: selectedIndent?.firmNameMatch || user?.firmNameMatch || '',
+                        rate: item.approvedRate || '',
+                        department: selectedIndent?.department || '',
+                        areaOfUse: selectedIndent?.areaOfUse || '',
+                        approvedVendorName: selectedIndent?.approvedVendorName || '',
+                        liftingStatus: selectedIndent?.liftingStatus || '',
+                        notBillReceivedNo: values.billStatus === 'Bill Not Received' ? values.billNo : '',
+                    };
 
-                console.log('📤 Data to insert:', newStoreInRecord);
+                    await insertStoreInRecord(newStoreInRecord);
 
-                await insertStoreInRecord(newStoreInRecord);
-                console.log('✅ Insert completed');
-
-                // ✅ Auto-complete status if quantity reaches 0
-                const remaining = (selectedIndent?.pendingLiftQty || 0) - (Number(values.qty) || 0);
-                if (remaining <= 0) {
-                    console.log(`✅ Auto-completing status for ${selectedIndent?.indentNo}`);
-                    await updateLiftingStatus(selectedIndent?.indentNo || '', 'Complete');
+                    // Auto-complete status check
+                    const remaining = (item.pendingLiftQty) - (Number(item.liftQty));
+                    if (remaining <= 0) {
+                        await updateLiftingStatus(item.indentNo, 'Complete');
+                    }
                 }
 
-                toast.success(`Created store record for ${selectedIndent?.indentNo}`);
+                toast.success(`Created store records for PO: ${selectedIndent?.poNumber}`);
             }
 
             setOpenDialog(false);
@@ -732,7 +823,15 @@ export default function GetPurchase() {
 
     function onError(e: any) {
         console.log(e);
-        toast.error('Please fill all required fields');
+        if (e.discountAmount) {
+            toast.error(e.discountAmount.message || 'Discount amount exceeds bill amount');
+            return;
+        }
+        if (e.advanceAmount) {
+            toast.error(e.advanceAmount.message || 'Advance amount exceeds bill amount');
+            return;
+        }
+        toast.error('Please fill all required fields correctly');
     }
 
     return (
@@ -778,32 +877,107 @@ export default function GetPurchase() {
                                 className="space-y-6"
                             >
                                 <DialogHeader className="space-y-1">
-                                    <DialogTitle className="text-lg font-semibold">
-                                        Update Purchase Details
+                                    <DialogTitle className="text-xl font-bold flex items-center justify-between w-full border-b pb-3 mb-2">
+                                        <div className="flex items-center gap-2 text-primary">
+                                            <ShoppingCart size={22} />
+                                            <span>Update Purchase Details</span>
+                                        </div>
                                     </DialogTitle>
-                                    <DialogDescription>
-                                        Update purchase details for{" "}
-                                        <span className="font-medium">
-                                            {selectedIndent.indentNo}
-                                        </span>
-                                    </DialogDescription>
                                 </DialogHeader>
 
-                                {/* Info Card */}
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 bg-muted/50 p-4 rounded-xl border shadow-sm">
                                     {[
                                         ["Indent Number", selectedIndent.indentNo],
-                                        ["Product", selectedIndent.product || "-"],
                                         ["PO Number", selectedIndent.poNumber],
-                                        ["Pending Lift Qty", selectedIndent.pendingLiftQty || 0],
-                                        ["Received Qty", selectedIndent.receivedQty || 0],
-                                        ["Pending PO Qty", selectedIndent.pendingPoQty || 0],
+                                        ["Approved Vendor Name", selectedIndent.vendorName || "-"],
                                     ].map(([label, value]) => (
                                         <div key={label} className="space-y-1">
                                             <p className="text-xs text-muted-foreground">{label}</p>
                                             <p className="text-sm font-medium">{value}</p>
                                         </div>
                                     ))}
+                                </div>
+
+                                {/* Product List Table */}
+                                <div className="border rounded-xl overflow-hidden shadow-sm">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-muted/50 border-b">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left font-semibold">Product</th>
+                                                <th className="px-4 py-3 text-right font-semibold">Rate</th>
+                                                <th className="px-4 py-3 text-right font-semibold">Pending Qty</th>
+                                                <th className="px-4 py-3 text-right font-semibold w-32">Lift Qty</th>
+                                                <th className="px-4 py-3 text-right font-semibold">Amount</th>
+                                                <th className="px-4 py-3 text-center font-semibold w-16">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                            {fields.map((field, index) => {
+                                                const rate = Number(field.approvedRate) || 0;
+                                                const liftQty = Number(itemsWatcher?.[index]?.liftQty) || 0;
+                                                const amount = rate * liftQty;
+                                                return (
+                                                    <tr key={field.id} className="hover:bg-muted/20 transition-colors">
+                                                        <td className="px-4 py-3">
+                                                            <div className="font-medium">{field.product}</div>
+                                                            <div className="text-[10px] text-muted-foreground">PO: {field.poNumber} | Indent: {field.indentNo}</div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right text-muted-foreground whitespace-nowrap">
+                                                            ₹ {rate.toLocaleString()}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            {field.pendingLiftQty}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <FormField
+                                                                control={form.control}
+                                                                name={`items.${index}.liftQty`}
+                                                                render={({ field: inputField }) => (
+                                                                    <FormItem>
+                                                                        <FormControl>
+                                                                            <Input
+                                                                                type="number"
+                                                                                {...inputField}
+                                                                                className={`h-9 text-right ${form.formState.errors.items?.[index]?.liftQty ? 'border-destructive' : ''}`}
+                                                                                max={field.pendingLiftQty}
+                                                                            />
+                                                                        </FormControl>
+                                                                        <FormMessage className="text-[10px] m-0" />
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-medium whitespace-nowrap text-primary">
+                                                            ₹ {amount.toLocaleString()}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                                onClick={() => remove(index)}
+                                                            >
+                                                                <X size={16} />
+                                                            </Button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        <tfoot className="bg-muted/30 font-bold border-t">
+                                            <tr>
+                                                <td className="px-4 py-3 text-left" colSpan={3}>Totals</td>
+                                                <td className="px-4 py-3 text-right border-x">
+                                                    {itemsWatcher?.reduce((sum, item) => sum + (Number(item.liftQty) || 0), 0) || 0}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-primary">
+                                                    ₹ {(itemsWatcher?.reduce((sum, item) => sum + (Number(item.approvedRate) * (Number(item.liftQty) || 0)), 0) || 0).toLocaleString()}
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
                                 </div>
 
                                 {/* Cancel Section */}
@@ -917,27 +1091,6 @@ export default function GetPurchase() {
                                             )}
                                         />
 
-                                        <FormField
-                                            control={form.control}
-                                            name="typeOfBill"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Type Of Bill *</FormLabel>
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <FormControl>
-                                                            <SelectTrigger className="h-11">
-                                                                <SelectValue placeholder="Select type" />
-                                                            </SelectTrigger>
-                                                        </FormControl>
-                                                        <SelectContent>
-                                                            <SelectItem value="independent">Independent</SelectItem>
-                                                            <SelectItem value="common">Common </SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
-
                                         {billStatus === "Bill Received" && (
                                             <FormField
                                                 control={form.control}
@@ -953,31 +1106,8 @@ export default function GetPurchase() {
                                             />
                                         )}
 
-                                        <FormField
-                                            control={form.control}
-                                            name="qty"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Quantity to Lift *</FormLabel>
-                                                    <FormControl>
-                                                        <Input type="number" {...field} className="h-11" />
-                                                    </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
 
-                                        <FormField
-                                            control={form.control}
-                                            name="vendorName"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Approved Vendor</FormLabel>
-                                                    <FormControl>
-                                                        <Input {...field} readOnly className="h-11 bg-muted cursor-not-allowed" />
-                                                    </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
+
                                     </div>
 
                                     {billStatus && (
@@ -1099,7 +1229,13 @@ export default function GetPurchase() {
                                                                 <FormItem>
                                                                     <FormLabel>Bill Amount {typeOfBill === 'common' && '(Auto)'}</FormLabel>
                                                                     <FormControl>
-                                                                        <Input type="number" {...field} className={`h-11 ${typeOfBill === 'common' ? 'bg-muted' : ''}`} disabled={typeOfBill === 'common'} />
+                                                                        <Input
+                                                                            type="number"
+                                                                            {...field}
+                                                                            value={field.value || 0}
+                                                                            className="h-11 bg-muted cursor-not-allowed font-semibold"
+                                                                            readOnly
+                                                                        />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )}

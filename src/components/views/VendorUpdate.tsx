@@ -31,6 +31,7 @@ import { formatDate } from '@/lib/utils';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 
 interface VendorUpdateData {
+    id: number;
     indentNo: string;
     firmNameMatch?: string;
     indenter: string;
@@ -45,6 +46,7 @@ interface VendorUpdateData {
 }
 
 interface HistoryData {
+    id: number;
     indentNo: string;
     indenter: string;
     department: string;
@@ -58,6 +60,13 @@ interface HistoryData {
     actual2: string;
     specifications: string;
     firmNameMatch?: string;
+    // For Three Party
+    vendorName1?: string;
+    rate1?: number;
+    vendorName2?: string;
+    rate2?: number;
+    vendorName3?: string;
+    rate3?: number;
 }
 
 export default () => {
@@ -74,7 +83,7 @@ export default () => {
     const [dialogStep, setDialogStep] = useState(1);
     const [amountToDetermineType, setAmountToDetermineType] = useState<number>(0);
     const [computedVendorType, setComputedVendorType] = useState<'Regular' | 'Three Party'>('Regular');
-    const [editingRow, setEditingRow] = useState<string | null>(null);
+    const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Partial<HistoryData>>({});
     const [dataLoading, setDataLoading] = useState(false);
 
@@ -109,6 +118,7 @@ export default () => {
 
             const rows = (data ?? []) as any[];
             const mappedData = rows.map((r) => ({
+                id: r.id,
                 indentNo: r.indent_number || '',
                 firmNameMatch: r.firm_name_match || '',
                 indenter: r.indenter_name || '',
@@ -153,7 +163,8 @@ export default () => {
             if (error) throw error;
 
             const rows = (data ?? []) as any[];
-            const mappedData = rows.map((r) => ({
+            const mappedData = rows.map((r): HistoryData => ({
+                id: r.id,
                 date: formatDate(new Date(r.actual2)),
                 indentNo: r.indent_number || '',
                 firmNameMatch: r.firm_name_match || '',
@@ -167,6 +178,12 @@ export default () => {
                 planned2: r.planned2 || '',
                 actual2: r.actual2 || '',
                 specifications: r.specifications || '',
+                vendorName1: r.vendor_name1 || '',
+                rate1: parseFloat(r.rate1) || 0,
+                vendorName2: r.vendor_name2 || '',
+                rate2: parseFloat(r.rate2) || 0,
+                vendorName3: r.vendor_name3 || '',
+                rate3: parseFloat(r.rate3) || 0,
             }));
 
             setHistoryData(mappedData);
@@ -250,7 +267,7 @@ export default () => {
     const uniqueHistoryUOMs = Array.from(new Set(historyData.map(item => item.uom))).sort();
 
     const handleEditClick = (row: HistoryData) => {
-        setEditingRow(row.indentNo);
+        setEditingRow(row.id);
         setEditValues({
             quantity: row.quantity,
             uom: row.uom,
@@ -263,7 +280,7 @@ export default () => {
         setEditValues({});
     };
 
-    const handleSaveEdit = async (indentNo: string) => {
+    const handleSaveEdit = async (id: number) => {
         try {
             const updates = {
                 approved_quantity: editValues.quantity,
@@ -274,11 +291,11 @@ export default () => {
             const { error } = await supabase
                 .from('indent')
                 .update(updates)
-                .eq('indent_number', indentNo);
+                .eq('id', editingRow);
 
             if (error) throw error;
 
-            toast.success(`Updated indent ${indentNo}`);
+            toast.success(`Updated indent ${id}`);
             fetchCompletedVendorUpdates();
             setEditingRow(null);
             setEditValues({});
@@ -338,20 +355,20 @@ export default () => {
                     cell: ({ row }: { row: Row<VendorUpdateData> }) => {
                         const indent = row.original;
                         return (
-                            <div>
-                                <DialogTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => {
-                                            setSelectedIndent(indent);
-                                            setDialogStep(1);
-                                            setAmountToDetermineType(0);
-                                            setComputedVendorType(indent.vendorType);
-                                        }}
-                                    >
-                                        Update
-                                    </Button>
-                                </DialogTrigger>
+                            <div onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setSelectedHistory(null);
+                                        setSelectedIndent(indent);
+                                        setDialogStep(1);
+                                        setAmountToDetermineType(0);
+                                        setComputedVendorType(indent.vendorType);
+                                        setOpenDialog(true);
+                                    }}
+                                >
+                                    Update
+                                </Button>
                             </div>
                         );
                     },
@@ -425,18 +442,18 @@ export default () => {
                         const indent = row.original;
 
                         return (
-                            <div>
-                                <DialogTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        disabled={indent.vendorType === 'Three Party'}
-                                        onClick={() => {
-                                            setSelectedHistory(indent);
-                                        }}
-                                    >
-                                        Update
-                                    </Button>
-                                </DialogTrigger>
+                            <div onClick={(e) => e.stopPropagation()}>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        setSelectedIndent(null);
+                                        setSelectedHistory(indent);
+                                        setOpenDialog(true);
+                                    }}
+                                >
+                                    Update
+                                </Button>
                             </div>
                         );
                     },
@@ -484,31 +501,6 @@ export default () => {
         {
             accessorKey: 'quantity',
             header: 'Quantity',
-            cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                return isEditing ? (
-                    <Input
-                        type="number"
-                        value={editValues.quantity ?? row.original.quantity}
-                        onChange={(e) => handleInputChange('quantity', Number(e.target.value))}
-                        className="w-20"
-                    />
-                ) : (
-                    <div className="flex items-center gap-2">
-                        {row.original.quantity}
-                        {user.updateVendorAction && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
-            },
         },
         {
             accessorKey: 'rate',
@@ -516,7 +508,6 @@ export default () => {
             cell: ({ row }) => {
                 const rate = row.original.rate;
                 const vendorType = row.original.vendorType;
-
                 if (!rate && vendorType === 'Three Party') {
                     return <span className="text-muted-foreground">Not Decided</span>;
                 }
@@ -526,70 +517,14 @@ export default () => {
         {
             accessorKey: 'uom',
             header: 'UOM',
-            cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                return isEditing ? (
-                    <Input
-                        value={editValues.uom ?? row.original.uom}
-                        onChange={(e) => handleInputChange('uom', e.target.value)}
-                        className="w-20"
-                    />
-                ) : (
-                    <div className="flex items-center gap-2">
-                        {row.original.uom}
-                        {user.updateVendorAction && editingRow !== row.original.indentNo && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
-            },
         },
         {
             accessorKey: 'vendorType',
             header: 'Vendor Type',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indentNo;
-                return isEditing ? (
-                    <Select
-                        value={editValues.vendorType ?? row.original.vendorType}
-                        onValueChange={(value) => handleInputChange('vendorType', value)}
-                    >
-                        <SelectTrigger className="w-[150px]">
-                            <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Regular">Regular</SelectItem>
-                            <SelectItem value="Three Party">Three Party</SelectItem>
-                        </SelectContent>
-                    </Select>
-                ) : (
-                    <div className="flex items-center gap-2">
-                        <Pill
-                            variant={
-                                row.original.vendorType === 'Regular' ? 'primary' : 'secondary'
-                            }
-                        >
-                            {row.original.vendorType}
-                        </Pill>
-                        {user.updateVendorAction && editingRow !== row.original.indentNo && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
+                const status = row.original.vendorType;
+                const variant = status === 'Regular' ? 'primary' : 'secondary';
+                return <Pill variant={variant}>{status}</Pill>;
             },
         },
         {
@@ -608,29 +543,6 @@ export default () => {
                     ? formatDateTime(row.original.actual2)
                     : '-',
         },
-        ...(user.updateVendorAction
-            ? [
-                {
-                    id: 'editActions',
-                    cell: ({ row }: { row: Row<HistoryData> }) => {
-                        const isEditing = editingRow === row.original.indentNo;
-                        return isEditing ? (
-                            <div className="flex gap-2">
-                                <Button
-                                    size="sm"
-                                    onClick={() => handleSaveEdit(row.original.indentNo)}
-                                >
-                                    Save
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={handleCancelEdit}>
-                                    Cancel
-                                </Button>
-                            </div>
-                        ) : null;
-                    },
-                },
-            ]
-            : []),
     ];
 
     // Creating Regular Vendor form
@@ -642,6 +554,8 @@ export default () => {
         advancePercent: z.coerce.number().min(0).max(100).optional(),
         quotationNo: z.string().optional(),
         quotationDate: z.string().optional(),
+        deliveryTime: z.coerce.number().gt(0, "Delivery time must be greater than 0").optional(),
+        make: z.string().optional(),
     });
 
     type RegularFormValues = z.infer<typeof regularSchema>;
@@ -654,6 +568,8 @@ export default () => {
             gstPercent: 0,
             paymentTerm: '',
             advancePercent: 0,
+            deliveryTime: undefined,
+            make: '',
         },
     });
 
@@ -674,17 +590,15 @@ export default () => {
                 advance_percent1: values.advancePercent?.toString(),
                 quotation_no1: values.quotationNo || '',
                 quotation_date1: values.quotationDate || '',
-                approved_vendor_name: values.vendorName,
-                approved_rate: finalRate.toString(),
-                approved_payment_term: values.paymentTerm,
-                approved_advance_percent: values.advancePercent?.toString(),
+                delivery_time1: values.deliveryTime?.toString() || '',
+                make1: values.make || '',
                 vendor_type: computedVendorType,
             };
 
             const { error } = await supabase
                 .from('indent')
                 .update(updates)
-                .eq('indent_number', selectedIndent?.indentNo);
+                .eq('id', selectedIndent?.id);
 
             if (error) throw error;
 
@@ -711,6 +625,8 @@ export default () => {
             emailId: z.string().optional(),
             quotationNo: z.string().optional(),
             quotationDate: z.string().optional(),
+            deliveryTime: z.coerce.number().optional(),
+            make: z.string().optional(),
         })).length(3).superRefine((vendors, ctx) => {
             // Vendors 1 and 2 are mandatory
             [0, 1].forEach(index => {
@@ -768,6 +684,8 @@ export default () => {
                     emailId: '',
                     quotationNo: '',
                     quotationDate: '',
+                    deliveryTime: undefined,
+                    make: '',
                 },
                 {
                     vendorName: '',
@@ -779,6 +697,8 @@ export default () => {
                     emailId: '',
                     quotationNo: '',
                     quotationDate: '',
+                    deliveryTime: undefined,
+                    make: '',
                 },
                 {
                     vendorName: '',
@@ -790,6 +710,8 @@ export default () => {
                     emailId: '',
                     quotationNo: '',
                     quotationDate: '',
+                    deliveryTime: undefined,
+                    make: '',
                 },
             ],
         },
@@ -870,6 +792,8 @@ export default () => {
                     advancePercent: vendor.advancePercent?.toString() || '0',
                     quotationNo: vendor.quotationNo || '',
                     quotationDate: vendor.quotationDate || '',
+                    deliveryTime: vendor.deliveryTime?.toString() || '',
+                    make: vendor.make || '',
                 };
             };
 
@@ -893,6 +817,8 @@ export default () => {
                 email_id1: values.vendors[0].emailId,
                 quotation_no1: vendor1Data.quotationNo,
                 quotation_date1: vendor1Data.quotationDate,
+                delivery_time1: vendor1Data.deliveryTime,
+                make1: vendor1Data.make,
 
                 // Vendor 2
                 vendor_name2: values.vendors[1].vendorName,
@@ -906,6 +832,8 @@ export default () => {
                 email_id2: values.vendors[1].emailId,
                 quotation_no2: vendor2Data.quotationNo,
                 quotation_date2: vendor2Data.quotationDate,
+                delivery_time2: vendor2Data.deliveryTime,
+                make2: vendor2Data.make,
 
                 // Vendor 3
                 vendor_name3: values.vendors[2].vendorName,
@@ -919,6 +847,8 @@ export default () => {
                 email_id3: values.vendors[2].emailId,
                 quotation_no3: vendor3Data.quotationNo,
                 quotation_date3: vendor3Data.quotationDate,
+                delivery_time3: vendor3Data.deliveryTime,
+                make3: vendor3Data.make,
 
                 comparison_sheet: url,
                 product_code: values.productCode || '',
@@ -928,7 +858,7 @@ export default () => {
             const { error } = await supabase
                 .from('indent')
                 .update(updates)
-                .eq('indent_number', selectedIndent?.indentNo);
+                .eq('id', selectedIndent?.id);
 
             if (error) throw error;
 
@@ -957,42 +887,71 @@ export default () => {
 
     // History Update form
     const historyUpdateSchema = z.object({
-        rate: z.coerce.number(),
+        rate: z.coerce.number().optional(),
+        vendors: z.array(z.object({
+            vendorName: z.string(),
+            rate: z.coerce.number(),
+        })).optional(),
     });
 
-    const historyUpdateForm = useForm({
+    const historyUpdateForm = useForm<z.infer<typeof historyUpdateSchema>>({
         resolver: zodResolver(historyUpdateSchema),
         defaultValues: {
             rate: 0,
+            vendors: [],
         },
     });
 
     useEffect(() => {
         if (selectedHistory) {
-            historyUpdateForm.reset({ rate: selectedHistory.rate });
+            if (selectedHistory.vendorType === 'Regular') {
+                historyUpdateForm.reset({
+                    rate: selectedHistory.rate,
+                    vendors: [],
+                });
+            } else {
+                const vendors = [];
+                if (selectedHistory.vendorName1) vendors.push({ vendorName: selectedHistory.vendorName1, rate: selectedHistory.rate1 || 0 });
+                if (selectedHistory.vendorName2) vendors.push({ vendorName: selectedHistory.vendorName2, rate: selectedHistory.rate2 || 0 });
+                if (selectedHistory.vendorName3) vendors.push({ vendorName: selectedHistory.vendorName3, rate: selectedHistory.rate3 || 0 });
+
+                historyUpdateForm.reset({
+                    rate: 0,
+                    vendors: vendors,
+                });
+            }
         }
     }, [selectedHistory]);
 
     async function onSubmitHistoryUpdate(values: z.infer<typeof historyUpdateSchema>) {
         try {
-            const updates = {
-                rate1: values.rate.toString(),
-                approved_rate: values.rate.toString(),
-            };
+            let updates: any = {};
+
+            if (selectedHistory?.vendorType === 'Regular') {
+                updates = {
+                    rate1: values.rate?.toString(),
+                    approved_rate: values.rate?.toString(),
+                };
+            } else {
+                // Three Party update
+                if (values.vendors?.[0]) updates.rate1 = values.vendors[0].rate.toString();
+                if (values.vendors?.[1]) updates.rate2 = values.vendors[1].rate.toString();
+                if (values.vendors?.[2]) updates.rate3 = values.vendors[2].rate.toString();
+            }
 
             const { error } = await supabase
                 .from('indent')
                 .update(updates)
-                .eq('indent_number', selectedHistory?.indentNo);
+                .eq('id', selectedHistory?.id);
 
             if (error) throw error;
 
-            toast.success(`Updated rate of ${selectedHistory?.indentNo}`);
+            toast.success(`Updated history for ${selectedHistory?.indentNo}`);
             setOpenDialog(false);
-            historyUpdateForm.reset({ rate: undefined });
+            historyUpdateForm.reset();
             fetchCompletedVendorUpdates();
         } catch (err) {
-            console.error('Error updating rate:', err);
+            console.error('Error updating history:', err);
             toast.error('Failed to update vendor');
         }
     }
@@ -1004,8 +963,18 @@ export default () => {
 
     return (
         <div>
-            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+            <Dialog
+                open={openDialog}
+                onOpenChange={(open) => {
+                    setOpenDialog(open);
+                    if (!open) {
+                        setSelectedIndent(null);
+                        setSelectedHistory(null);
+                    }
+                }}
+            >
                 <Tabs defaultValue="pending">
+
                     <Heading
                         heading="Vendor Rate Update"
                         subtext="Update vendors for Regular and Three Party indents"
@@ -1220,7 +1189,7 @@ export default () => {
                                 <DialogHeader className="grid gap-2">
                                     <DialogTitle>Step 1: Determine Vendor Type</DialogTitle>
                                     <DialogDescription>
-                                        <span className="font-medium">{selectedIndent.indentNo}</span>
+                                        <span className="font-medium">{selectedIndent?.indentNo}</span>
                                     </DialogDescription>
                                 </DialogHeader>
                                 <div className="grid gap-4">
@@ -1295,12 +1264,12 @@ export default () => {
                                         <DialogTitle>Step 2: Update Regular Vendor</DialogTitle>
                                         <DialogDescription>
                                             Update vendor for indent{' '}
-                                            <span className="font-medium">{selectedIndent.indentNo}</span>
+                                            <span className="font-medium">{selectedIndent?.indentNo}</span>
                                         </DialogDescription>
                                     </DialogHeader>
                                     {/* Copy existing form fields... */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="md:col-span-1">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="md:col-span-2">
                                             <FormField
                                                 control={regularForm.control}
                                                 name="vendorName"
@@ -1340,7 +1309,7 @@ export default () => {
                                             />
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 gap-4 md:col-span-2 border-t pt-4">
                                             <FormField
                                                 control={regularForm.control}
                                                 name="quotationNo"
@@ -1367,44 +1336,46 @@ export default () => {
                                             />
                                         </div>
 
-                                        <FormField
-                                            control={regularForm.control}
-                                            name="rate"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>Basic Rate</FormLabel>
-                                                    <FormControl>
-                                                        <Input type="number" {...field} />
-                                                    </FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-
-                                        <FormField
-                                            control={regularForm.control}
-                                            name="gstPercent"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>GST %</FormLabel>
-                                                    <Select onValueChange={(val) => field.onChange(Number(val))} value={field.value?.toString()}>
+                                        <div className="grid grid-cols-2 gap-4 md:col-span-2">
+                                            <FormField
+                                                control={regularForm.control}
+                                                name="rate"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Basic Rate</FormLabel>
                                                         <FormControl>
-                                                            <SelectTrigger>
-                                                                <SelectValue placeholder="Select GST %" />
-                                                            </SelectTrigger>
+                                                            <Input type="number" {...field} />
                                                         </FormControl>
-                                                        <SelectContent>
-                                                            <SelectItem value="0">0%</SelectItem>
-                                                            <SelectItem value="5">5%</SelectItem>
-                                                            <SelectItem value="12">12%</SelectItem>
-                                                            <SelectItem value="18">18%</SelectItem>
-                                                            <SelectItem value="28">28%</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </FormItem>
-                                            )}
-                                        />
+                                                    </FormItem>
+                                                )}
+                                            />
 
-                                        <div className="md:col-span-1">
+                                            <FormField
+                                                control={regularForm.control}
+                                                name="gstPercent"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>GST %</FormLabel>
+                                                        <Select onValueChange={(val) => field.onChange(Number(val))} value={field.value?.toString()}>
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Select GST %" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="0">0%</SelectItem>
+                                                                <SelectItem value="5">5%</SelectItem>
+                                                                <SelectItem value="12">12%</SelectItem>
+                                                                <SelectItem value="18">18%</SelectItem>
+                                                                <SelectItem value="28">28%</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
+
+                                        <div className={`grid gap-4 md:col-span-2 ${regularForm.watch('paymentTerm') === 'Partly Advance/ Partly PI' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                             <FormField
                                                 control={regularForm.control}
                                                 name="paymentTerm"
@@ -1428,23 +1399,49 @@ export default () => {
                                                     </FormItem>
                                                 )}
                                             />
+
+                                            {regularForm.watch('paymentTerm') === 'Partly Advance/ Partly PI' && (
+                                                <FormField
+                                                    control={regularForm.control}
+                                                    name="advancePercent"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Advance %</FormLabel>
+                                                            <FormControl>
+                                                                <Input type="number" placeholder="Enter % e.g. 50" {...field} min={0} max={100} />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            )}
                                         </div>
 
-                                        {regularForm.watch('paymentTerm') === 'Partly Advance/ Partly PI' && (
+                                        <div className="grid grid-cols-2 gap-4 md:col-span-2 border-t pt-4">
                                             <FormField
                                                 control={regularForm.control}
-                                                name="advancePercent"
+                                                name="deliveryTime"
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel>Advance %</FormLabel>
+                                                        <FormLabel>Delivery Time (Days)</FormLabel>
                                                         <FormControl>
-                                                            <Input type="number" placeholder="Enter % e.g. 50" {...field} min={0} max={100} />
+                                                            <Input type="number" placeholder="e.g. 4" {...field} />
                                                         </FormControl>
                                                     </FormItem>
                                                 )}
                                             />
-                                        )}
-
+                                            <FormField
+                                                control={regularForm.control}
+                                                name="make"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Make</FormLabel>
+                                                        <FormControl>
+                                                            <Input placeholder="Enter make" {...field} />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
                                     </div>
                                     <DialogFooter>
                                         <Button variant="outline" onClick={() => setDialogStep(1)}>Back</Button>
@@ -1537,7 +1534,7 @@ export default () => {
                                                     )}
                                                 />
 
-                                                <div className="grid grid-cols-2 gap-4">
+                                                <div className="grid grid-cols-1 gap-4">
                                                     <FormField
                                                         control={threePartyForm.control}
                                                         name={`vendors.${index}.quotationNo`}
@@ -1678,6 +1675,36 @@ export default () => {
                                                         )}
                                                     />
                                                 </div>
+
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={threePartyForm.control}
+                                                        name={`vendors.${index}.deliveryTime`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Delivery Time (Days)</FormLabel>
+                                                                <FormControl>
+                                                                    <Input type="number" placeholder="Days" {...field} />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <FormField
+                                                        control={threePartyForm.control}
+                                                        name={`vendors.${index}.make`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Make</FormLabel>
+                                                                <FormControl>
+                                                                    <Input {...field} placeholder="Make" />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -1697,9 +1724,8 @@ export default () => {
                     </DialogContent>
                 )}
 
-                {/* History Update Dialog */}
                 {selectedHistory && (
-                    <DialogContent>
+                    <DialogContent onCloseAutoFocus={(e) => e.preventDefault()}>
                         <Form {...historyUpdateForm}>
                             <form
                                 onSubmit={historyUpdateForm.handleSubmit(onSubmitHistoryUpdate, onError)}
@@ -1709,22 +1735,70 @@ export default () => {
                                     <DialogTitle>Update Rate</DialogTitle>
                                     <DialogDescription>
                                         Update rate for indent{' '}
-                                        <span className="font-medium">{selectedHistory.indentNo}</span>
+                                        <span className="font-medium">{selectedHistory?.indentNo}</span>
                                     </DialogDescription>
                                 </DialogHeader>
 
-                                <FormField
-                                    control={historyUpdateForm.control}
-                                    name="rate"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Rate</FormLabel>
-                                            <FormControl>
-                                                <Input type="number" {...field} />
-                                            </FormControl>
-                                        </FormItem>
-                                    )}
-                                />
+                                {selectedHistory?.vendorType === 'Regular' ? (
+                                    <FormField
+                                        control={historyUpdateForm.control}
+                                        name="rate"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Approved Rate (Regular)</FormLabel>
+                                                <FormControl>
+                                                    <Input type="number" {...field} />
+                                                </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                ) : (
+                                    <div className="space-y-4">
+                                        <p className="text-sm font-semibold text-muted-foreground border-b pb-2">Three Party Vendor Rates</p>
+                                        {selectedHistory?.vendorName1 && (
+                                            <FormField
+                                                control={historyUpdateForm.control}
+                                                name="vendors.0.rate"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>{selectedHistory.vendorName1}</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="number" {...field} />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
+                                        {selectedHistory?.vendorName2 && (
+                                            <FormField
+                                                control={historyUpdateForm.control}
+                                                name="vendors.1.rate"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>{selectedHistory.vendorName2}</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="number" {...field} />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
+                                        {selectedHistory?.vendorName3 && (
+                                            <FormField
+                                                control={historyUpdateForm.control}
+                                                name="vendors.2.rate"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>{selectedHistory.vendorName3}</FormLabel>
+                                                        <FormControl>
+                                                            <Input type="number" {...field} />
+                                                        </FormControl>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
+                                    </div>
+                                )}
 
                                 <DialogFooter>
                                     <DialogClose asChild>

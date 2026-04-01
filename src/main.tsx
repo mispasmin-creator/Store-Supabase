@@ -78,6 +78,7 @@ import BillNotReceived from './components/views/BillNotReceived';
 import FullKiting from './components/views/FullKiting';
 import PendingPo from './components/views/PendingPo';
 import PaymentStatus from './components/views/PaymentStatus';
+import HodStoreApproval from './components/views/HodStoreApproval';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { loggedIn, loading } = useAuth();
@@ -339,6 +340,21 @@ const routes: RouteAttributes[] = [
             ).length,
     },
     {
+        path: 'hod-store-check',
+        gateKey: 'hodStoreApproval',
+        name: 'HOD Check',
+        icon: <UserCheck size={20} />,
+        element: <HodStoreApproval />,
+        notifications: (storeInSheet: any[]) => {
+            const data = Array.isArray(storeInSheet[0]) ? storeInSheet[0] : storeInSheet;
+            return data.filter((sheet: any) =>
+                sheet.plannedHod &&
+                sheet.plannedHod.toString().trim() !== '' &&
+                (!sheet.actualHod || sheet.actualHod.toString().trim() === '')
+            ).length;
+        },
+    },
+    {
         path: 'Full-Kiting',
         gateKey: 'fullKiting',
         name: 'Freight Payment',
@@ -527,18 +543,28 @@ const routes: RouteAttributes[] = [
     //     path: 'Exchange-Materials',
     //     gateKey: 'exchangeMaterials',
     //     name: 'Exchange Materials',
-    //     icon: <PackageCheck  size={20} />,
+    //     icon: <PackageCheck size={20} />,
     //     element: <ExchangeMaterials />,
-    //     notifications: () => 0,
+    //     notifications: (sheets: any[]) =>
+    //         sheets.filter((sheet: any) =>
+    //             sheet.planned10 &&
+    //             sheet.planned10.toString().trim() !== '' &&
+    //             (!sheet.actual10 || sheet.actual10.toString().trim() === '')
+    //         ).length,
     // },
 
     // {
     //     path: 'Return-Material-To-Party',
     //     gateKey: 'returnMaterialToParty',
     //     name: 'Return Material To Party',
-    //     icon: <Users size={20} />,
+    //     icon: <RotateCcw size={20} />,
     //     element: <ReturnMaterialToParty />,
-    //     notifications: () => 0,
+    //     notifications: (sheets: any[]) =>
+    //         sheets.filter((sheet: any) =>
+    //             sheet.planned8 &&
+    //             sheet.planned8.toString().trim() !== '' &&
+    //             (!sheet.actual8 || sheet.actual8.toString().trim() === '')
+    //         ).length,
     // },
 
     {
@@ -736,7 +762,10 @@ const routes: RouteAttributes[] = [
         name: 'DB For PC',
         icon: <PackageCheck size={20} />,
         element: <DBforPc />,
-        notifications: () => 0,
+        notifications: (pcReportSheet: any[]) => {
+            const data = Array.isArray(pcReportSheet[0]) ? pcReportSheet[0] : pcReportSheet;
+            return data.reduce((sum: number, stage: any) => sum + (Number(stage.totalPending) || 0), 0);
+        },
     },
     {
         path: 'administration',

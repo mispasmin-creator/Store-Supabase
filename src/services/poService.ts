@@ -14,6 +14,7 @@ export async function fetchIndents() {
         if (error) throw error;
 
         return (data || []).map((r: any) => ({
+            id: r.id,
             planned4: r.planned4 || '',
             actual4: r.actual4 || '',
             approvedVendorName: r.approved_vendor_name || '',
@@ -258,7 +259,7 @@ export async function insertPoRecords(poRecords: any[]) {
  * @param indentNumbers - Array of indent numbers to update
  * @param deliveryDate - The delivery date from the PO
  */
-export async function updateIndentsAfterPoCreation(indentNumbers: string[], deliveryDate?: string) {
+export async function updateIndentsAfterPoCreation(ids: number[], deliveryDate?: string) {
     try {
         const updateData: any = { actual4: new Date().toISOString() };
         if (deliveryDate) {
@@ -268,7 +269,7 @@ export async function updateIndentsAfterPoCreation(indentNumbers: string[], deli
         const { error } = await supabase
             .from('indent')
             .update(updateData)
-            .in('indent_number', indentNumbers);
+            .in('id', ids);
 
         if (error) throw error;
     } catch (error) {

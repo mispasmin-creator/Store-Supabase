@@ -59,6 +59,7 @@ interface PIPendingData {
     status: string;
     pdf?: string;
     paymentForm?: string;
+    billAmount?: number;
 }
 
 interface POMasterRecord {
@@ -195,6 +196,10 @@ export default function PIApprovals() {
                         .filter((p: any) => (p.poNumber || p.po_number || p.po_no) === (record.poNumber || record.po_number || record.po_no))
                         .reduce((sum, p) => sum + Number(p.payAmount || p.pay_amount || 0), 0);
 
+                    const linkedStoreIn = safeStoreInSheet.find((s: any) =>
+                        (s.poNumber || s.po_number || '') === (record.poNumber || record.po_number || record.po_no || '')
+                    );
+
                     return {
                         rowIndex: record.id || record.rowIndex || 0,
                         timestamp: record.timestamp || '',
@@ -218,6 +223,7 @@ export default function PIApprovals() {
                         outstandingAmount: totalPo - totalPaid,
                         status: record.status || 'Pending',
                         pdf: record.pdf || '',
+                        billAmount: Number(linkedStoreIn?.billAmount || linkedStoreIn?.bill_amount || 0),
                     };
                 });
 
@@ -232,16 +238,17 @@ export default function PIApprovals() {
                     const isPending = status === 'pending';
                     const notScheduled = !payment?.planned || String(payment?.planned || '').trim() === '';
 
-                    // ✅ Link with StoreIn to check Bill Type
-                    // If Bill Type is "common", DO NOT show in HOD Approval
+                    // ✅ Link with StoreIn to check Bill Type and HOD Status
+                    // If Bill Type is "common", or HOD Status is "Rejected", DO NOT show in HOD Approval (Process for Payment)
                     const linkedStoreIn = safeStoreInSheet.find((s: any) =>
                         (s.indentNo || s.indentNumber) === (payment?.internalCode || payment?.internal_code)
                     );
 
-                    // Strictly show ONLY 'independent' if typeOfBill is present
-                    // This handles blocking 'common' bills as requested
-                    if (linkedStoreIn?.typeOfBill) {
-                        if (linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                    if (linkedStoreIn) {
+                        if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                            return false;
+                        }
+                        if (linkedStoreIn.hodStatus === 'Rejected') {
                             return false;
                         }
                     }
@@ -283,6 +290,7 @@ export default function PIApprovals() {
                     outstandingAmount: Number(payment?.outstandingAmount || payment?.outstanding_amount || payment?.payAmount || payment?.pay_amount || 0),
                     status: payment?.status || 'Pending',
                     pdf: payment?.pdf || payment?.file || '',
+                    billAmount: Number(payment?.billAmount || payment?.bill_amount || 0),
                 }));
 
             // Combine both lists and remove duplicates by poNumber
@@ -358,6 +366,15 @@ export default function PIApprovals() {
             cell: ({ row }) => (
                 <div className="text-right font-bold text-slate-900">
                     ₹{row.original.totalPoAmount?.toLocaleString('en-IN')}
+                </div>
+            )
+        },
+        {
+            accessorKey: 'billAmount',
+            header: () => <div className="text-right">Bill Amount</div>,
+            cell: ({ row }) => (
+                <div className="text-right font-semibold text-purple-700">
+                    ₹{row.original.billAmount?.toLocaleString('en-IN') || '0'}
                 </div>
             )
         },
@@ -509,7 +526,11 @@ export default function PIApprovals() {
             const formattedDateOnly = currentDateTime.split('T')[0];
             const formattedDateTime = currentDateTime;
 
-            const payAmount = Number(selectedItem.outstandingAmount) || 0;
+            // ✅ Prioritize Bill Amount from lifting if available, otherwise fallback to outstanding
+            const payAmount = selectedItem.billAmount && selectedItem.billAmount > 0
+                ? Number(selectedItem.billAmount)
+                : Number(selectedItem.outstandingAmount) || 0;
+
             const newTotalPaid = (selectedItem.totalPaidAmount || 0) + payAmount;
             const newOutstanding = (selectedItem.outstandingAmount || 0) - payAmount;
             const newStatus = newOutstanding <= 0 ? 'Complete' : 'Pending';
@@ -794,6 +815,12 @@ export default function PIApprovals() {
                                                     <p className="text-xs font-medium text-gray-600">Outstanding</p>
                                                     <p className="text-sm font-semibold text-red-600">
                                                         ₹{selectedItem.outstandingAmount?.toLocaleString('en-IN')}
+                                                    </p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-xs font-medium text-gray-600 uppercase">Bill Amount</p>
+                                                    <p className="text-sm font-bold text-purple-700">
+                                                        ₹{selectedItem.billAmount?.toLocaleString('en-IN') || '0'}
                                                     </p>
                                                 </div>
                                                 <div className="space-y-1">

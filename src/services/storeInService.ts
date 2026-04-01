@@ -75,6 +75,11 @@ export interface StoreInRecord {
     driverName: string;
     driverMobileNo: string;
     billRemark: string;
+    // HOD Approval fields
+    plannedHod: string;
+    actualHod: string;
+    hodStatus: string;
+    hodRemark: string;
 }
 
 export interface LocationOption {
@@ -148,6 +153,11 @@ export async function fetchStoreInRecords() {
             billCopyAttached: r.bill_copy_attached || '',
             reason: r.reason || '',
             sendDebitNote: r.send_debit_note || '',
+            // HOD Approval fields
+            plannedHod: r.hod_planned || '',
+            actualHod: r.hod_actual || '',
+            hodStatus: r.hod_status || 'Pending',
+            hodRemark: r.hod_remark || '',
             // Stage 8 fields (Return Material To Party)
             planned8: r.planned8 || '',
             actual8: r.actual8 || '',
@@ -242,30 +252,68 @@ export async function updateStoreInReceiving(
             .eq('lift_number', liftNumber);
 
         if (error) throw error;
+        
+        // ✅ TRIGGER HOD CHECK (hod_planned) ALWAYS AFTER STORE CHECK (Stage 6)
+        console.log('📝 Triggering HOD Check stage...');
+        const { error: plannedHodError } = await supabase
+            .from('store_in')
+            .update({
+                hod_planned: updateData.actual6,
+                hod_status: 'Pending'
+            })
+            .eq('lift_number', liftNumber);
 
-        // ✅ TRIGGER GRN (Planned 7) ONLY IF ANY CHECK FAILS (Rejection Workflow)
-        const anyCheckFailed =
-            updateData.damageOrder === 'No' || // Not OK
-            updateData.quantityAsPerBill === 'No' ||
-            updateData.priceAsPerPoCheck === 'No';
-
-        if (anyCheckFailed) {
-            console.log('⚠️ Some checks failed. Triggering Reject for GRN (Stage 7)...');
-            const { error: planned7Error } = await supabase
-                .from('store_in')
-                .update({
-                    planned7: updateData.actual6,
-                })
-                .eq('lift_number', liftNumber);
-
-            if (planned7Error) console.error('Error triggering Stage 7:', planned7Error);
-        } else {
-            console.log('✅ All checks passed. Skipping Stage 7.');
-        }
+        if (plannedHodError) console.error('Error triggering HOD Stage:', plannedHodError);
 
         return true;
     } catch (error) {
         console.error('Error updating store-in record:', error);
+        throw error;
+    }
+}
+
+/**
+ * Update store-in record for HOD Approval
+ * @param liftNumber - Lift number to identify the record
+ * @param updateData - Data to update
+ */
+export async function updateStoreInHodApproval(
+    liftNumber: string,
+    updateData: {
+        actualHod: string;
+        hodStatus: string;
+        hodRemark: string;
+        triggerStage7: boolean; // If true, triggers Reject for GRN (Stage 7)
+    }
+) {
+    try {
+        const { error } = await supabase
+            .from('store_in')
+            .update({
+                hod_actual: updateData.actualHod,
+                hod_status: updateData.hodStatus,
+                hod_remark: updateData.hodRemark,
+            })
+            .eq('lift_number', liftNumber);
+
+        if (error) throw error;
+
+        // ✅ Trigger Stage 7 if HOD rejects OR if HOD approves a record that has faults
+        if (updateData.triggerStage7) {
+            console.log('⚠️ Triggering Stage 7 (Reject for GRN)...');
+            const { error: planned7Error } = await supabase
+                .from('store_in')
+                .update({
+                    planned7: updateData.actualHod,
+                })
+                .eq('lift_number', liftNumber);
+
+            if (planned7Error) console.error('Error triggering Stage 7:', planned7Error);
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Error updating HOD approval:', error);
         throw error;
     }
 }

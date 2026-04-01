@@ -101,6 +101,7 @@ export default ({ items }: SidebarProps) => {
                                             sheetData = issueSheet || [];
                                             break;
                                         case 'store-in':
+                                        case 'hod-store-approval':
                                             sheetData = storeInSheet || [];
                                             break;
                                         case 'Make-Payment':
@@ -127,6 +128,8 @@ export default ({ items }: SidebarProps) => {
                                         case 'Bill-Not-Received':
                                         case 'Quality-Check-In-Received-Item':
                                         case 'Send-Debit-Note':
+                                        case 'Exchange-Materials':
+                                        case 'Return-Material-To-Party':
                                             sheetData = storeInSheet || [];
                                             break;
                                         case 'Payment-Status':

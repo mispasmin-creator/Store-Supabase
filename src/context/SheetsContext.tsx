@@ -141,9 +141,10 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             issueSheet,
             fullkittingSheet,
             tallyEntrySheet,
-            paymentsSheet
+            paymentsSheet,
+            poMasterSheet
         );
-    }, [indentSheet, storeSheet, issueSheet, fullkittingSheet, tallyEntrySheet, paymentsSheet]);
+    }, [indentSheet, storeSheet, issueSheet, fullkittingSheet, tallyEntrySheet, paymentsSheet, poMasterSheet]);
 
     const sheets = storeSheet;
 
@@ -377,11 +378,11 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             updateAll();
             toast.success('Fetched all the data');
 
-            // ✅ AUTO-REFRESH EVERY 2 MINUTES
+            // ✅ AUTO-REFRESH EVERY 30 SECONDS
             const intervalId = setInterval(() => {
                 console.log('🔄 Auto-refreshing data...');
                 updateAll();
-            }, 120000); // 120,000 ms = 2 minutes
+            }, 30000); // 30,000 ms = 30 seconds
 
             return () => clearInterval(intervalId);
         } catch (e) {

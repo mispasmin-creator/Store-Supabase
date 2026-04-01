@@ -209,7 +209,7 @@ export default function MakePayment() {
                 const { data: paymentsData, error: paymentsError } = await supabase
                     .from('payments')
                     .select('*')
-                    .order('timestamp', { ascending: false });
+                    .order('id', { ascending: false });
 
                 const { data: storeInData, error: storeInError } = await supabase
                     .from('store_in')
@@ -219,7 +219,7 @@ export default function MakePayment() {
                 const { data: historyDbData, error: historyDbError } = await supabase
                     .from('payment_history')
                     .select('*')
-                    .order('timestamp', { ascending: false });
+                    .order('id', { ascending: false });
 
                 if (paymentsError) {
                     console.error('Error fetching payments:', paymentsError);
@@ -276,6 +276,15 @@ export default function MakePayment() {
                         const hasPlanned = plannedValue !== '';
                         const status = String(sheet?.status || '').toLowerCase();
                         const isCompleted = status === 'completed';
+
+                        // Check linked Store In for HOD rejection
+                        const linkedStoreIn = storeInRecords.find((s: any) =>
+                            (s.indent_no || s.indent_number) === (sheet.internalCode)
+                        );
+                        if (linkedStoreIn?.hod_status === 'Rejected') {
+                            return false;
+                        }
+
                         return hasPlanned && !isCompleted;
                     });
 
@@ -319,9 +328,7 @@ export default function MakePayment() {
 
                 // Sort pending items by planned date descending
                 const sortedPending = [...pendingItems].sort((a, b) => {
-                    const dateA = parseDateHelper(a.planned).getTime();
-                    const dateB = parseDateHelper(b.planned).getTime();
-                    return dateB - dateA;
+                    return b.rowIndex - a.rowIndex;
                 });
 
                 setPendingData(sortedPending);
@@ -1131,7 +1138,7 @@ export default function MakePayment() {
                                     <div className="text-center py-12">
                                         <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
                                         <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading Payment Data...</h3>
-                                        <p className="text-gray-500">Fetching data from Payments sheet</p>
+                                        <p className="text-gray-500">Fetching data from Payments</p>
                                         <Button
                                             onClick={handleRefresh}
                                             variant="outline"
@@ -1204,7 +1211,7 @@ export default function MakePayment() {
                                     <div className="text-center py-12">
                                         <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mb-4"></div>
                                         <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading Payment History...</h3>
-                                        <p className="text-gray-500">Fetching data from Payment History sheet</p>
+                                        <p className="text-gray-500">Fetching data from Payment History</p>
                                     </div>
                                 ) : historyData.length > 0 ? (
                                     <>

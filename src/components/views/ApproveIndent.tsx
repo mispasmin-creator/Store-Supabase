@@ -42,7 +42,7 @@ export default function ApproveIndent() {
     const [dataLoading, setDataLoading] = useState(true);
     const [selectedIndent, setSelectedIndent] = useState<IndentRecord | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
-    const [editingRow, setEditingRow] = useState<string | null>(null);
+    const [editingRow, setEditingRow] = useState<number | null>(null);
     const [editValues, setEditValues] = useState<Partial<IndentRecord>>({});
     const [downloading, setDownloading] = useState(false);
 
@@ -100,7 +100,7 @@ export default function ApproveIndent() {
     };
 
     const handleEditClick = (row: IndentRecord) => {
-        setEditingRow(row.indent_number);
+        setEditingRow(row.id);
         setEditValues({
             approved_quantity: row.approved_quantity,
             uom: row.uom,
@@ -113,15 +113,15 @@ export default function ApproveIndent() {
         setEditValues({});
     };
 
-    const handleSaveEdit = async (indentNumber: string) => {
+    const handleSaveEdit = async (id: number) => {
         try {
-            await updateIndentHistoryFields(indentNumber, {
+            await updateIndentHistoryFields(id, {
                 approved_quantity: Number(editValues.approved_quantity),
                 uom: editValues.uom,
                 vendor_type: editValues.vendor_type,
             });
 
-            toast.success(`Updated indent ${indentNumber}`);
+            toast.success(`Updated record ID ${id}`);
             fetchData();
             setEditingRow(null);
             setEditValues({});
@@ -135,10 +135,10 @@ export default function ApproveIndent() {
         setEditValues(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleSpecificationUpdate = async (indentNumber: string, value: string) => {
+    const handleSpecificationUpdate = async (id: number, value: string) => {
         try {
-            await updateIndentSpecifications(indentNumber, value);
-            toast.success(`Updated specifications for ${indentNumber}`);
+            await updateIndentSpecifications(id, value);
+            toast.success(`Updated specifications for ID ${id}`);
             fetchData();
         } catch (err) {
             console.error('Error updating specifications:', err);
@@ -192,12 +192,12 @@ export default function ApproveIndent() {
             cell: ({ row, getValue }) => {
                 const [value, setValue] = useState(getValue() as string);
                 const [isEditing, setIsEditing] = useState(false);
-                const indentNumber = row.original.indent_number;
+                const id = row.original.id;
 
                 const handleBlur = async () => {
                     setIsEditing(false);
                     if (value !== getValue()) {
-                        await handleSpecificationUpdate(indentNumber, value);
+                        await handleSpecificationUpdate(id, value);
                     }
                 };
 
@@ -307,7 +307,7 @@ export default function ApproveIndent() {
             accessorKey: 'approved_quantity',
             header: 'Quantity',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indent_number;
+                const isEditing = editingRow === row.original.id;
                 return isEditing ? (
                     <Input
                         type="number"
@@ -336,7 +336,7 @@ export default function ApproveIndent() {
             accessorKey: 'uom',
             header: 'UOM',
             cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indent_number;
+                const isEditing = editingRow === row.original.id;
                 return isEditing ? (
                     <Input
                         value={editValues.uom ?? row.original.uom}
@@ -346,7 +346,7 @@ export default function ApproveIndent() {
                 ) : (
                     <div className="flex items-center gap-2">
                         {row.original.uom}
-                        {user.indentApprovalAction && editingRow !== row.original.indent_number && (
+                        {user.indentApprovalAction && editingRow !== row.original.id && (
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -369,52 +369,52 @@ export default function ApproveIndent() {
                 </div>
             ),
         },
-        {
-            accessorKey: 'vendor_type',
-            header: 'Vendor Type',
-            cell: ({ row }) => {
-                const isEditing = editingRow === row.original.indent_number;
-                return isEditing ? (
-                    <Select
-                        value={editValues.vendor_type ?? row.original.vendor_type}
-                        onValueChange={(value) => handleInputChange('vendor_type', value)}
-                    >
-                        <SelectTrigger className="w-[150px]">
-                            <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="Regular">Regular</SelectItem>
-                            <SelectItem value="Three Party">Three Party</SelectItem>
-                            <SelectItem value="Reject">Reject</SelectItem>
-                        </SelectContent>
-                    </Select>
-                ) : (
-                    <div className="flex items-center gap-2">
-                        <Pill
-                            variant={
-                                row.original.vendor_type === 'Reject'
-                                    ? 'reject'
-                                    : row.original.vendor_type === 'Regular'
-                                        ? 'primary'
-                                        : 'secondary'
-                            }
-                        >
-                            {row.original.vendor_type}
-                        </Pill>
-                        {user.indentApprovalAction && editingRow !== row.original.indent_number && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-4 w-4"
-                                onClick={() => handleEditClick(row.original)}
-                            >
-                                <PenSquare className="h-3 w-3" />
-                            </Button>
-                        )}
-                    </div>
-                );
-            },
-        },
+        // {
+        //     accessorKey: 'vendor_type',
+        //     header: 'Vendor Type',
+        //     cell: ({ row }) => {
+        //         const isEditing = editingRow === row.original.id;
+        //         return isEditing ? (
+        //             <Select
+        //                 value={editValues.vendor_type ?? row.original.vendor_type}
+        //                 onValueChange={(value) => handleInputChange('vendor_type', value)}
+        //             >
+        //                 <SelectTrigger className="w-[150px]">
+        //                     <SelectValue placeholder="Select type" />
+        //                 </SelectTrigger>
+        //                 <SelectContent>
+        //                     <SelectItem value="Regular">Regular</SelectItem>
+        //                     <SelectItem value="Three Party">Three Party</SelectItem>
+        //                     <SelectItem value="Reject">Reject</SelectItem>
+        //                 </SelectContent>
+        //             </Select>
+        //         ) : (
+        //             <div className="flex items-center gap-2">
+        //                 <Pill
+        //                     variant={
+        //                         row.original.vendor_type === 'Reject'
+        //                             ? 'reject'
+        //                             : row.original.vendor_type === 'Regular'
+        //                                 ? 'primary'
+        //                                 : 'secondary'
+        //                     }
+        //                 >
+        //                     {row.original.vendor_type}
+        //                 </Pill>
+        //                 {user.indentApprovalAction && editingRow !== row.original.id && (
+        //                     <Button
+        //                         variant="ghost"
+        //                         size="icon"
+        //                         className="h-4 w-4"
+        //                         onClick={() => handleEditClick(row.original)}
+        //                     >
+        //                         <PenSquare className="h-3 w-3" />
+        //                     </Button>
+        //                 )}
+        //             </div>
+        //         );
+        //     },
+        // },
         {
             accessorKey: 'indent_status',
             header: 'Priority',
@@ -456,12 +456,12 @@ export default function ApproveIndent() {
                 {
                     id: 'editActions',
                     cell: ({ row }: { row: Row<IndentRecord> }) => {
-                        const isEditing = editingRow === row.original.indent_number;
+                        const isEditing = editingRow === row.original.id;
                         return isEditing ? (
                             <div className="flex gap-2">
                                 <Button
                                     size="sm"
-                                    onClick={() => handleSaveEdit(row.original.indent_number)}
+                                    onClick={() => handleSaveEdit(row.original.id)}
                                 >
                                     Save
                                 </Button>
@@ -513,12 +513,12 @@ export default function ApproveIndent() {
         if (!selectedIndent) return;
         try {
             const currentDateTime = new Date().toISOString();
-            await updateIndentApproval(selectedIndent.indent_number, {
+            await updateIndentApproval(selectedIndent.id, {
                 actual1: currentDateTime,
                 vendor_type: 'Reject',
                 approved_quantity: 0,
             });
-            toast.success(`Rejected indent ${selectedIndent.indent_number}`);
+            toast.success(`Rejected indent item from ${selectedIndent.indent_number}`);
             setOpenDialog(false);
             setSelectedIndent(null);
             fetchData();
@@ -534,7 +534,7 @@ export default function ApproveIndent() {
 
             const currentDateTime = new Date().toISOString();
 
-            await updateIndentApproval(selectedIndent.indent_number, {
+            await updateIndentApproval(selectedIndent.id, {
                 actual1: currentDateTime,
                 vendor_type: values.approval,
                 approved_quantity: values.approvedQuantity ?? selectedIndent.quantity,

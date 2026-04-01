@@ -25,6 +25,7 @@ export interface GetLiftIndentRecord {
     cancelQty: number;
     approvedRate: string;
     timestamp: string;
+    expectedDate: string;
     department?: string;
     areaOfUse?: string;
     approvedQuantity: number;
@@ -116,6 +117,7 @@ export async function fetchIndentRecords() {
             department: r.department || '',
             areaOfUse: r.area_of_use || '',
             timestamp: r.timestamp || '',
+            expectedDate: r.expected_req_date || '',
             approvedQuantity: Number(r.approved_quantity) || 0,
         }));
     } catch (error) {

@@ -14,7 +14,7 @@ import DataTable from '../element/DataTable';
 import { Button } from '../ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { z } from 'zod';
-import { useForm } from 'react-hook-form';
+import { type SubmitHandler, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { PuffLoader as Loader } from 'react-spinners';
@@ -28,26 +28,48 @@ import { Input } from '../ui/input';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 
 interface RateApprovalData {
+    id: number;
     indentNo: string;
     indenter: string;
     department: string;
     product: string;
     comparisonSheet: string;
-    vendors: [string, string, string, string, string, string, string, string, string][];
+    vendors: [string, string, string, string, string, string, string, string, string, string, string][];
     date: string;
     firmNameMatch?: string;
-    plannedDate: string; // ✅ ADD THIS
+    plannedDate: string;
 }
 
 interface HistoryData {
+    id: number;
     indentNo: string;
     indenter: string;
+    firmNameMatch: string;
     department: string;
     product: string;
-    vendor: [string, string];
+    vendors: [string, string, string, string, string, string, string, string, string, string, string][];
     date: string;
-    rank: string;
 }
+
+const technicalApprovalSchema = z.object({
+    ranks: z.record(z.string()),
+}).refine(data => {
+    return Object.values(data.ranks).some(val => val !== '');
+}, {
+    message: "At least one rank must be assigned",
+    path: ["ranks"],
+});
+type TechnicalApprovalValues = z.infer<typeof technicalApprovalSchema>;
+
+const historyUpdateSchema = z.object({
+    ranks: z.record(z.string()),
+}).refine(data => {
+    return Object.values(data.ranks).some(val => val !== '');
+}, {
+    message: "At least one rank must be assigned",
+    path: ["ranks"],
+});
+type HistoryUpdateValues = z.infer<typeof historyUpdateSchema>;
 
 export default () => {
     const { user } = useAuth();
@@ -82,7 +104,9 @@ export default () => {
 
             const rows = (data ?? []) as any[];
             setTableData(
-                rows.map((r): RateApprovalData => ({
+                rows.filter(r => !r.vendor1_rank && !r.vendor2_rank && !r.vendor3_rank)
+                    .map((r): RateApprovalData => ({
+                    id: r.id,
                     indentNo: r.indent_number || '',
                     firmNameMatch: r.firm_name_match || '',
                     indenter: r.indenter_name || '',
@@ -101,7 +125,9 @@ export default () => {
                             r.tax_value1?.toString() || '0',
                             r.quotation_no1 || '',
                             r.quotation_date1 || '',
-                            r.vendor1_rank || ''
+                            r.vendor1_rank || '',
+                            r.delivery_time1 || '',
+                            r.make1 || ''
                         ],
                         [
                             r.vendor_name2 || '',
@@ -112,7 +138,9 @@ export default () => {
                             r.tax_value2?.toString() || '0',
                             r.quotation_no2 || '',
                             r.quotation_date2 || '',
-                            r.vendor2_rank || ''
+                            r.vendor2_rank || '',
+                            r.delivery_time2 || '',
+                            r.make2 || ''
                         ],
                         [
                             r.vendor_name3 || '',
@@ -123,9 +151,11 @@ export default () => {
                             r.tax_value3?.toString() || '0',
                             r.quotation_no3 || '',
                             r.quotation_date3 || '',
-                            r.vendor3_rank || ''
+                            r.vendor3_rank || '',
+                            r.delivery_time3 || '',
+                            r.make3 || ''
                         ],
-                    ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string][],
+                    ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string, string, string][],
                 }))
             );
         } catch (err) {
@@ -151,7 +181,6 @@ export default () => {
                 .from('indent')
                 .select('*')
                 .not('planned3', 'is', null)
-                .not('actual3', 'is', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
             if (user.firmNameMatch.toLowerCase() !== 'all') {
@@ -164,15 +193,56 @@ export default () => {
 
             const rows = (data ?? []) as any[];
             setHistoryData(
-                rows.map((r) => ({
+                rows.filter(r => r.vendor1_rank || r.vendor2_rank || r.vendor3_rank)
+                    .map((r): HistoryData => ({
+                    id: r.id,
                     indentNo: r.indent_number || '',
                     firmNameMatch: r.firm_name_match || '',
                     indenter: r.indenter_name || '',
                     department: r.department || '',
                     product: r.product_name || '',
-                    date: formatDateTime(new Date(r.timestamp)).replace(/\//g, '-'),
-                    vendor: [r.approved_vendor_name || '', r.approved_rate?.toString() || '0'],
-                    rank: r.vendor_rate || '',
+                    date: r.actual3 ? formatDate(new Date(r.actual3)) : formatDate(new Date(r.timestamp)),
+                    vendors: [
+                        [
+                            r.vendor_name1 || '',
+                            r.rate1?.toString() || '0',
+                            r.payment_term1 || '',
+                            r.select_rate_type1 || 'With Tax',
+                            r.with_tax_or_not1 || 'Yes',
+                            r.tax_value1?.toString() || '0',
+                            r.quotation_no1 || '',
+                            r.quotation_date1 || '',
+                            r.vendor1_rank || '',
+                            r.delivery_time1 || '',
+                            r.make1 || ''
+                        ],
+                        [
+                            r.vendor_name2 || '',
+                            r.rate2?.toString() || '0',
+                            r.payment_term2 || '',
+                            r.select_rate_type2 || 'With Tax',
+                            r.with_tax_or_not2 || 'Yes',
+                            r.tax_value2?.toString() || '0',
+                            r.quotation_no2 || '',
+                            r.quotation_date2 || '',
+                            r.vendor2_rank || '',
+                            r.delivery_time2 || '',
+                            r.make2 || ''
+                        ],
+                        [
+                            r.vendor_name3 || '',
+                            r.rate3?.toString() || '0',
+                            r.payment_term3 || '',
+                            r.select_rate_type3 || 'With Tax',
+                            r.with_tax_or_not3 || 'Yes',
+                            r.tax_value3?.toString() || '0',
+                            r.quotation_no3 || '',
+                            r.quotation_date3 || '',
+                            r.vendor3_rank || '',
+                            r.delivery_time3 || '',
+                            r.make3 || ''
+                        ],
+                    ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string, string, string][],
                 }))
             );
         } catch (err) {
@@ -196,20 +266,16 @@ export default () => {
                     id: 'action',
                     cell: ({ row }: { row: Row<RateApprovalData> }) => {
                         const indent = row.original;
-
                         return (
-                            <div>
-                                <DialogTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => {
-                                            setSelectedIndent(indent);
-                                        }}
-                                    >
-                                        Approve
-                                    </Button>
-                                </DialogTrigger>
-                            </div>
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setSelectedIndent(indent);
+                                    setOpenDialog(true);
+                                }}
+                            >
+                                Approve
+                            </Button>
                         );
                     },
                 },
@@ -261,18 +327,15 @@ export default () => {
                     const indent = row.original;
 
                     return (
-                        <div>
-                            <DialogTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    onClick={() => {
-                                        setSelectedHistory(indent);
-                                    }}
-                                >
-                                    Update
-                                </Button>
-                            </DialogTrigger>
-                        </div>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setSelectedHistory(indent);
+                                setOpenDialog(true);
+                            }}
+                        >
+                            Update
+                        </Button>
                     );
                 },
             },
@@ -284,21 +347,26 @@ export default () => {
         { accessorKey: 'department', header: 'Department' },
         { accessorKey: 'product', header: 'Product' },
         {
-            accessorKey: 'vendor',
-            header: 'Vendor',
+            accessorKey: 'vendors',
+            header: 'Vendors',
             cell: ({ row }) => {
-                const vendor = row.original.vendor;
+                const vendors = row.original.vendors;
                 return (
                     <div className="grid place-items-center">
                         <div className="flex flex-col gap-1">
-                            <span className="rounded-full text-xs px-3 py-1 bg-accent text-accent-foreground border border-accent-foreground">
-                                {vendor[0]} - &#8377;{vendor[1]}
-                                {row.original.rank && (
-                                    <span className="ml-2 bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                                        {row.original.rank}
+                            {vendors.map((vendor, index) => {
+                                const rank = vendor[8]; // rank is at index 8
+                                return (
+                                    <span key={index} className="rounded-full text-xs px-3 py-1 bg-accent text-accent-foreground border border-accent-foreground">
+                                        {vendor[0]} - &#8377;{vendor[1]}
+                                        {rank && (
+                                            <span className="ml-2 bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                                                {rank}
+                                            </span>
+                                        )}
                                     </span>
-                                )}
-                            </span>
+                                );
+                            })}
                         </div>
                     </div>
                 );
@@ -306,19 +374,21 @@ export default () => {
         },
     ];
 
-    const schema = z.object({
-        ranks: z.record(z.string()),
-    });
-
-    const form = useForm<z.infer<typeof schema>>({
-        resolver: zodResolver(schema),
+    const form = useForm<TechnicalApprovalValues>({
+        resolver: zodResolver(technicalApprovalSchema),
         defaultValues: {
             ranks: {},
         },
     });
 
-    async function onSubmit(values: z.infer<typeof schema>) {
+    const onSubmit: SubmitHandler<TechnicalApprovalValues> = async (values) => {
         try {
+            const hasRank = Object.values(values.ranks).some(v => v !== '');
+            if (!hasRank) {
+                toast.error('Please assign at least one technical rank');
+                return;
+            }
+
             const updates: any = {
                 actual3: new Date().toISOString(),
                 planned4: new Date().toISOString(),
@@ -337,7 +407,7 @@ export default () => {
             const { error } = await supabase
                 .from('indent')
                 .update(updates)
-                .eq('indent_number', selectedIndent?.indentNo);
+                .eq('id', selectedIndent?.id);
 
             if (error) throw error;
 
@@ -354,40 +424,56 @@ export default () => {
         }
     }
 
-    const historyUpdateSchema = z.object({
-        rate: z.coerce.number(),
-    })
 
-    const historyUpdateForm = useForm<z.infer<typeof historyUpdateSchema>>({
+
+    const historyUpdateForm = useForm<HistoryUpdateValues>({
         resolver: zodResolver(historyUpdateSchema),
         defaultValues: {
-            rate: 0,
+            ranks: {},
         },
     })
 
     useEffect(() => {
         if (selectedHistory) {
-            historyUpdateForm.reset({ rate: parseInt(selectedHistory.vendor[1]) || 0 })
+            const initialRanks: Record<string, string> = {};
+            selectedHistory.vendors.forEach((v, idx) => {
+                initialRanks[idx.toString()] = v[8] || ''; // rank is at index 8
+            });
+            historyUpdateForm.reset({ ranks: initialRanks });
         }
     }, [selectedHistory, historyUpdateForm])
 
-    async function onSubmitHistoryUpdate(values: z.infer<typeof historyUpdateSchema>) {
+    const onSubmitHistoryUpdate: SubmitHandler<HistoryUpdateValues> = async (values) => {
         try {
+            const hasRank = Object.values(values.ranks).some(v => v !== '');
+            if (!hasRank) {
+                toast.error('Please assign at least one technical rank');
+                return;
+            }
+
+            const updates: any = {};
+            selectedHistory?.vendors.forEach((_, idx) => {
+                const rankVal = values.ranks[idx.toString()] || '';
+                if (idx === 0) updates.vendor1_rank = rankVal;
+                if (idx === 1) updates.vendor2_rank = rankVal;
+                if (idx === 2) updates.vendor3_rank = rankVal;
+            });
+
             const { error } = await supabase
                 .from('indent')
-                .update({ approved_rate: values.rate.toString() })
-                .eq('indent_number', selectedHistory?.indentNo);
+                .update(updates)
+                .eq('id', selectedHistory?.id);
 
             if (error) throw error;
 
-            toast.success(`Updated rate of ${selectedHistory?.indentNo}`);
+            toast.success(`Updated ranks for ${selectedHistory?.indentNo}`);
             setOpenDialog(false);
-            historyUpdateForm.reset({ rate: 0 });
+            historyUpdateForm.reset({ ranks: {} });
 
             // Refresh history table
             fetchCompletedApprovals();
         } catch (err) {
-            console.error('Error updating rate:', err);
+            console.error('Error updating ranks:', err);
             toast.error('Failed to update vendor');
         }
     }
@@ -483,6 +569,8 @@ export default () => {
                                                             <div className="font-semibold text-foreground">{vendor[0]}</div>
                                                             <div className="text-xs text-muted-foreground mt-0.5">
                                                                 {vendor[6] ? `Quote: ${vendor[6]}` : ''} | {vendor[2]}
+                                                                {vendor[9] ? ` | Delivery: ${vendor[9]} days` : ''}
+                                                                {vendor[10] ? ` | Make: ${vendor[10]}` : ''}
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-3 text-right">
@@ -493,26 +581,49 @@ export default () => {
                                                                 {vendor[3]} {vendor[3] === 'Basic Rate' ? `(+${vendor[5]}% tax)` : ''}
                                                             </div>
                                                         </td>
-                                                        <td className="px-4 py-3 text-center w-36">
+                                                        <td className="px-4 py-3 text-center w-48">
                                                             <FormField
                                                                 control={form.control}
                                                                 name={`ranks.${originalIndex}`}
-                                                                render={({ field }) => (
-                                                                    <FormItem className="space-y-0">
-                                                                        <FormControl>
-                                                                            <select
-                                                                                {...field}
-                                                                                className="w-full h-8 px-2 rounded border border-input bg-background text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
-                                                                                value={field.value || ''}
-                                                                            >
-                                                                                <option value="">None</option>
-                                                                                <option value="T1">T1</option>
-                                                                                <option value="T2">T2</option>
-                                                                                <option value="T3">T3</option>
-                                                                            </select>
-                                                                        </FormControl>
-                                                                    </FormItem>
-                                                                )}
+                                                                render={({ field }) => {
+                                                                    const currentRanks = form.watch('ranks');
+                                                                    const takenRanks = Object.entries(currentRanks)
+                                                                        .filter(([idx, val]) => idx !== originalIndex.toString() && val !== '')
+                                                                        .map(([_, val]) => val);
+
+                                                                    return (
+                                                                        <FormItem className="space-y-0">
+                                                                            <FormControl>
+                                                                                <div className="flex justify-center gap-1">
+                                                                                    {['T1', 'T2', 'T3'].map((rank) => {
+                                                                                        const isActive = field.value === rank;
+                                                                                        const isTaken = takenRanks.includes(rank);
+
+                                                                                        return (
+                                                                                            <Button
+                                                                                                key={rank}
+                                                                                                type="button"
+                                                                                                variant={isActive ? "default" : "outline"}
+                                                                                                size="sm"
+                                                                                                className={`h-8 w-12 px-0 text-xs font-bold transition-all ${isActive ? 'scale-110 shadow-md' : 'opacity-70 hover:opacity-100'}`}
+                                                                                                disabled={isTaken && !isActive}
+                                                                                                onClick={() => {
+                                                                                                    if (isActive) {
+                                                                                                        field.onChange('');
+                                                                                                    } else {
+                                                                                                        field.onChange(rank);
+                                                                                                    }
+                                                                                                }}
+                                                                                            >
+                                                                                                {rank}
+                                                                                            </Button>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            </FormControl>
+                                                                        </FormItem>
+                                                                    );
+                                                                }}
                                                             />
                                                         </td>
                                                     </tr>
@@ -537,50 +648,125 @@ export default () => {
                 )}
 
                 {selectedHistory && (
-                    <DialogContent className="w-[95vw] md:max-w-xl">
+                    <DialogContent className="w-[95vw] md:max-w-3xl">
                         <Form {...historyUpdateForm}>
-                            <form onSubmit={historyUpdateForm.handleSubmit(onSubmitHistoryUpdate, onError)} className="space-y-7">
-                                <DialogHeader className="space-y-1">
-                                    <DialogTitle>Update Rate</DialogTitle>
+                            <form
+                                onSubmit={historyUpdateForm.handleSubmit(onSubmitHistoryUpdate, onError)}
+                                className="space-y-6"
+                            >
+                                <DialogHeader>
+                                    <DialogTitle>Update Technical Ranks</DialogTitle>
                                     <DialogDescription>
-                                        Update rate for{' '}
-                                        <span className="font-medium">
-                                            {selectedHistory.indentNo}
-                                        </span>
+                                        Update T1, T2, T3 ranks for vendor quotes in Indent <span className="font-bold text-foreground">{selectedHistory.indentNo}</span>
                                     </DialogDescription>
                                 </DialogHeader>
-                                <div className="grid gap-3">
-                                    <FormField
-                                        control={historyUpdateForm.control}
-                                        name="rate"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Rate</FormLabel>
-                                                <FormControl>
-                                                    <Input type="number" {...field} />
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
+
+                                {/* Indent Info Summary */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-md border text-sm bg-muted/20">
+                                    <div>
+                                        <p className="font-semibold text-muted-foreground mb-1 text-xs uppercase">Indenter</p>
+                                        <p>{selectedHistory.indenter}</p>
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold text-muted-foreground mb-1 text-xs uppercase">Department</p>
+                                        <p>{selectedHistory.department}</p>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <p className="font-semibold text-muted-foreground mb-1 text-xs uppercase">Product</p>
+                                        <p className="truncate" title={selectedHistory.product}>{selectedHistory.product}</p>
+                                    </div>
                                 </div>
 
-                                <DialogFooter>
-                                    <DialogClose asChild>
-                                        <Button variant="outline">Close</Button>
-                                    </DialogClose>
+                                {/* Minimal Vendor Table */}
+                                <div className="rounded-md border overflow-hidden text-sm">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-muted">
+                                            <tr>
+                                                <th className="px-4 py-3 font-medium">Vendor</th>
+                                                <th className="px-4 py-3 font-medium text-right">Effective Rate</th>
+                                                <th className="px-4 py-3 font-medium text-center">Rank</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {(() => {
+                                                const processedVendors = selectedHistory.vendors.map((v, i) => {
+                                                    const rate = parseFloat(v[1]) || 0;
+                                                    const tax = parseFloat(v[5]) || 0;
+                                                    const total = v[3] === 'Basic Rate' ? rate * (1 + tax / 100) : rate;
+                                                    return { vendor: v, originalIndex: i, total };
+                                                }).sort((a, b) => a.total - b.total);
 
-                                    <Button
-                                        type="submit"
-                                        disabled={historyUpdateForm.formState.isSubmitting}
-                                    >
-                                        {historyUpdateForm.formState.isSubmitting && (
-                                            <Loader
-                                                size={20}
-                                                color="white"
-                                                aria-label="Loading Spinner"
-                                            />
-                                        )}
-                                        Update
+                                                return processedVendors.map(({ vendor, originalIndex, total }) => (
+                                                    <tr key={originalIndex} className="hover:bg-muted/10 transition-colors">
+                                                        <td className="px-4 py-3">
+                                                            <div className="font-semibold text-foreground">{vendor[0]}</div>
+                                                            <div className="text-xs text-muted-foreground mt-0.5">
+                                                                {vendor[6] ? `Quote: ${vendor[6]}` : ''} | {vendor[2]}
+                                                                {vendor[9] ? ` | Delivery: ${vendor[9]} days` : ''}
+                                                                {vendor[10] ? ` | Make: ${vendor[10]}` : ''}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <div className="font-bold text-primary">
+                                                                &#8377;{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </div>
+                                                            <div className="text-[10px] text-muted-foreground">
+                                                                {vendor[3]} {vendor[3] === 'Basic Rate' ? `(+${vendor[5]}% tax)` : ''}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center w-48">
+                                                            <FormField
+                                                                control={historyUpdateForm.control}
+                                                                name={`ranks.${originalIndex}`}
+                                                                render={({ field }) => {
+                                                                    const currentRanks = historyUpdateForm.watch('ranks') || {};
+                                                                    const takenRanks = Object.entries(currentRanks)
+                                                                        .filter(([idx, val]) => idx !== originalIndex.toString() && val !== '')
+                                                                        .map(([_, val]) => val);
+
+                                                                    return (
+                                                                        <FormItem className="space-y-0">
+                                                                            <FormControl>
+                                                                                <div className="flex justify-center gap-1">
+                                                                                    {['T1', 'T2', 'T3'].map((rank) => {
+                                                                                        const isActive = field.value === rank;
+                                                                                        const isTaken = takenRanks.includes(rank);
+
+                                                                                        return (
+                                                                                            <Button
+                                                                                                key={rank}
+                                                                                                type="button"
+                                                                                                variant={isActive ? "default" : "outline"}
+                                                                                                size="sm"
+                                                                                                className={`h-8 w-11 px-0 transition-all ${isActive ? 'ring-2 ring-primary ring-offset-1' : ''}`}
+                                                                                                disabled={isTaken}
+                                                                                                onClick={() => field.onChange(isActive ? '' : rank)}
+                                                                                            >
+                                                                                                {rank}
+                                                                                            </Button>
+                                                                                        );
+                                                                                    })}
+                                                                                </div>
+                                                                            </FormControl>
+                                                                        </FormItem>
+                                                                    );
+                                                                }}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                ));
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <DialogFooter className="gap-2 sm:gap-0 mt-2">
+                                    <DialogClose asChild>
+                                        <Button variant="outline" type="button">Cancel</Button>
+                                    </DialogClose>
+                                    <Button type="submit" disabled={historyUpdateForm.formState.isSubmitting}>
+                                        {historyUpdateForm.formState.isSubmitting && <Loader size={16} color="white" className="mr-2" />}
+                                        Save Changes
                                     </Button>
                                 </DialogFooter>
                             </form>

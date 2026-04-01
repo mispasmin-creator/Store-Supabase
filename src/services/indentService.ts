@@ -60,6 +60,9 @@ export interface IndentRecord {
     po_qty?: number;
     received_quantity?: number;
     pending_qty?: number;
+    vendor1_rank?: string;
+    vendor2_rank?: string;
+    vendor3_rank?: string;
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -124,6 +127,9 @@ export async function fetchIndentRecords(): Promise<IndentRecord[]> {
             po_qty: Number(r.po_qty) || 0,
             received_quantity: Number(r.received_quantity) || 0,
             pending_qty: Number(r.pending_qty) || 0,
+            vendor1_rank: r.vendor1_rank || '',
+            vendor2_rank: r.vendor2_rank || '',
+            vendor3_rank: r.vendor3_rank || '',
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);
@@ -137,7 +143,7 @@ export async function fetchIndentRecords(): Promise<IndentRecord[]> {
  * Update indent record for Stage 1: Approval
  */
 export async function updateIndentApproval(
-    indentNumber: string,
+    id: number,
     updateData: {
         actual1: string;
         vendor_type: string;
@@ -154,7 +160,7 @@ export async function updateIndentApproval(
                 approved_quantity: updateData.approved_quantity,
                 planned2: updateData.planned2,
             })
-            .eq('indent_number', indentNumber);
+            .eq('id', id);
 
         if (error) throw error;
         return true;
@@ -167,12 +173,12 @@ export async function updateIndentApproval(
 /**
  * Update indent specifications
  */
-export async function updateIndentSpecifications(indentNumber: string, specifications: string) {
+export async function updateIndentSpecifications(id: number, specifications: string) {
     try {
         const { error } = await supabase
             .from('indent')
             .update({ specifications })
-            .eq('indent_number', indentNumber);
+            .eq('id', id);
 
         if (error) throw error;
         return true;
@@ -186,7 +192,7 @@ export async function updateIndentSpecifications(indentNumber: string, specifica
  * Update indent fields from history edit
  */
 export async function updateIndentHistoryFields(
-    indentNumber: string,
+    id: number,
     updateData: {
         approved_quantity?: number;
         uom?: string;
@@ -197,7 +203,7 @@ export async function updateIndentHistoryFields(
         const { error } = await supabase
             .from('indent')
             .update(updateData)
-            .eq('indent_number', indentNumber);
+            .eq('id', id);
 
         if (error) throw error;
         return true;

@@ -576,7 +576,7 @@ export default function Dashboard() {
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                                {pcReportSheet.slice(0, 14).map((pc, i) => (
+                                {pcReportSheet.map((pc, i) => (
                                     <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                                         <p className="text-[10px] uppercase font-bold text-slate-500 mb-1 truncate" title={pc.stage}>
                                             {pc.stage}

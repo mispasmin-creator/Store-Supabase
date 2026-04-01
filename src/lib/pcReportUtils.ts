@@ -1,3 +1,4 @@
+import type { PoMasterSheet } from '@/types';
 import type { PcReportSheet, IndentSheet, StoreInSheet, IssueSheet, FullkittingSheet, TallyEntrySheet, PaymentsSheet } from '@/types/sheets';
 
 export const calculatePcReportCounts = (
@@ -6,7 +7,8 @@ export const calculatePcReportCounts = (
     issueSheet: IssueSheet[],
     fullkittingSheet: FullkittingSheet[],
     tallyEntrySheet: TallyEntrySheet[],
-    paymentsSheet: PaymentsSheet[]
+    paymentsSheet: PaymentsSheet[],
+    poMasterSheet: PoMasterSheet[]
 ): PcReportSheet[] => {
     const calculateCounts = (data: any[], pendingFilter: (item: any) => boolean, completeFilter: (item: any) => boolean, stageName: string): PcReportSheet => {
         const firms = ['PMPL', 'PURAB', 'PMMPL', 'REFRASYNTH'];
@@ -34,7 +36,7 @@ export const calculatePcReportCounts = (
             issueSheet || [],
             (item) => item.planned1 && !item.actual1,
             (item) => !!item.actual1,
-            'Issue Data'
+            'Store Issue'
         ),
         calculateCounts(
             indentSheet || [],
@@ -52,13 +54,25 @@ export const calculatePcReportCounts = (
             indentSheet || [],
             (item) => item.planned3 && !item.actual3,
             (item) => !!item.actual3,
-            'Department Approval'
+            'Technical Approval'
         ),
         calculateCounts(
             indentSheet || [],
             (item) => item.planned4 && !item.actual4,
             (item) => !!item.actual4,
-            'PO Creation'
+            'Department Approval'
+        ),
+        calculateCounts(
+            indentSheet || [],
+            (item) =>
+                item.poRequred &&
+                item.poRequred.toString().trim() === 'Yes' &&
+                item.pendingPoQty &&
+                item.pendingPoQty > 0 &&
+                item.approvedVendorName &&
+                item.approvedVendorName.toString().trim() !== '',
+            (item) => !item.poRequred || item.poRequred !== 'Yes' || (item.pendingPoQty || 0) <= 0,
+            'Pending PO'
         ),
         calculateCounts(
             indentSheet || [],
@@ -73,6 +87,12 @@ export const calculatePcReportCounts = (
             'Store Check'
         ),
         calculateCounts(
+            storeInSheet || [],
+            (item) => (item.plannedHod || item.hod_planned) && !(item.actualHod || item.hod_actual),
+            (item) => !!(item.actualHod || item.hod_actual),
+            'HOD Check'
+        ),
+        calculateCounts(
             fullkittingSheet || [],
             (item) => item.planned && !item.actual,
             (item) => !!item.actual,
@@ -80,7 +100,7 @@ export const calculatePcReportCounts = (
         ),
         calculateCounts(
             paymentsSheet || [],
-            (item) => item.planned && !item.actual,
+            (item) => item.planned && !item.actual && item.status1 !== 'hod_approval_pending',
             (item) => !!item.actual,
             'Make Payment'
         ),
@@ -108,5 +128,34 @@ export const calculatePcReportCounts = (
             (item) => !!(item.actual11 || item.actual_11),
             'Bill Not Received'
         ),
+        {
+            stage: 'Process for Payment / Debit Note',
+            totalPending: (() => {
+                const receivedPos = new Set((storeInSheet || []).filter((s: any) => s.actual6 && s.actual6 !== '').map((s: any) => s.poNumber || s.po_number).filter(Boolean));
+                const paymentsByPo: Record<string, number> = {};
+                (paymentsSheet || []).forEach((p: any) => { const k = p.poNumber || p.po_number || ''; if(k) paymentsByPo[k] = (paymentsByPo[k] || 0) + Number(p.payAmount || p.pay_amount || 0); });
+                
+                const poBased = (poMasterSheet || []).filter((r: any) => {
+                    const isReceived = receivedPos.has(r.poNumber || r.po_number || '');
+                    const totalPo = Number(r.totalPoAmount || 0);
+                    const totalPaid = paymentsByPo[r.poNumber || r.po_number || ''] || 0;
+                    const outstanding = totalPo - totalPaid;
+                    const status = String(r.status || '').toLowerCase();
+                    const isPending = status === 'pending' || status === '';
+                    return isReceived && outstanding > 0 && isPending;
+                }).length;
+
+                const paymentBased = (paymentsSheet || []).filter((p: any) => {
+                    return String(p.status || '').toLowerCase() === 'pending' && (!p.planned || String(p.planned).trim() === '');
+                }).length;
+
+                return poBased + paymentBased;
+            })(),
+            totalComplete: 0, // Simplified for brevity
+            pendingPmpl: 0,
+            pendingPurab: 0,
+            pendingPmmpl: 0,
+            pendingRefrasynth: 0
+        }
     ];
 };

@@ -113,6 +113,7 @@ function filterUniquePoNumbers(data: any[]): any[] {
 interface IndentSheetItem {
     planned4?: string;
     actual4?: string;
+    id?: number;
     approvedVendorName?: string | number; // ✅ Allow both string and number
     firmName?: string;
     firmNameMatch?: string;
@@ -222,6 +223,7 @@ export default () => {
         description: z.string(),
         indents: z.array(
             z.object({
+                id: z.number(),
                 indentNumber: z.string().nonempty(),
                 productName: z.string().optional(),
                 specifications: z.string().optional(),
@@ -321,6 +323,7 @@ export default () => {
             const normalizedSelectedVendor = normalize(vendor);
 
             return hasVendor &&
+                i.approvedVendorName !== '' &&
                 i.planned4 !== '' &&
                 i.actual4 === '' &&
                 normalizedVendorName === normalizedSelectedVendor;
@@ -359,7 +362,7 @@ export default () => {
         form.setValue(
             'indents',
             matchingIndents.map((i: IndentSheetItem) => {
-                let gstValue: number | undefined = undefined;
+                let gstValue = 0;
 
                 if (i.taxValue1 && !isNaN(Number(i.taxValue1)) && Number(i.taxValue1) > 0) {
                     gstValue = Number(i.taxValue1);
@@ -369,10 +372,11 @@ export default () => {
                 }
 
                 return {
+                    id: i.id as number,
                     indentNumber: i.indentNumber || '',
                     productName: i.productName || '',
                     specifications: i.specifications || '',
-                    gst: gstValue ?? 0,
+                    gst: gstValue,
                     discount: 0,
                     quantity: i.approvedQuantity || 0,
                     unit: i.uom || '',
@@ -496,16 +500,23 @@ export default () => {
                 form.setValue('paymentTerms', firstPoItem.paymentTerms as any || undefined);
                 form.setValue('numberOfDays', firstPoItem.numberOfDays || 0);
 
-                const poIndents = poItems.map((poItem) => ({
-                    indentNumber: poItem.internalCode || '',
-                    productName: poItem.product || '',
-                    specifications: poItem.description || '',
-                    gst: poItem.gstPercent || 18,
-                    discount: poItem.discountPercent || 0,
-                    quantity: poItem.quantity || 0,
-                    unit: poItem.unit || '',
-                    rate: poItem.rate || 0,
-                }));
+                const poIndents = poItems.map((poItem) => {
+                    const originalIndent = indentSheet.find(i => 
+                        i.indentNumber === poItem.internalCode && 
+                        i.productName === poItem.product
+                    );
+                    return {
+                        id: originalIndent?.id || 0,
+                        indentNumber: poItem.internalCode || '',
+                        productName: poItem.product || '',
+                        specifications: poItem.description || '',
+                        gst: poItem.gstPercent || 18,
+                        discount: poItem.discountPercent || 0,
+                        quantity: poItem.quantity || 0,
+                        unit: poItem.unit || '',
+                        rate: poItem.rate || 0,
+                    };
+                });
                 form.setValue('indents', poIndents);
 
                 const terms = [];
@@ -784,10 +795,12 @@ export default () => {
             await insertPoRecords(rows);
 
             // Update indents to mark PO as created (set actual4 and delivery_date)
-            const indentNumbers = values.indents.map(v => v.indentNumber);
+            const indentIds = values.indents.map(v => v.id).filter(id => id > 0);
             // Use ISO string for database compatibility to avoid "out of range" error
             const databaseDeliveryDate = values.deliveryDate.toISOString();
-            await updateIndentsAfterPoCreation(indentNumbers, databaseDeliveryDate);
+            if (indentIds.length > 0) {
+                await updateIndentsAfterPoCreation(indentIds, databaseDeliveryDate);
+            }
 
             toast.success(`Successfully ${mode}d purchase order`);
             form.reset();
@@ -917,9 +930,10 @@ export default () => {
                                                                     .filter((i: IndentSheetItem) => {
                                                                         const vendorName = i.approvedVendorName;
                                                                         const hasVendor = vendorName && typeof vendorName === 'string' && vendorName.trim() !== '';
+                                                                        const hasApprovedVendor = i.approvedVendorName && typeof i.approvedVendorName === 'string' && i.approvedVendorName.trim() !== '';
                                                                         const hasPlannedDate = i.planned4 !== '';
                                                                         const hasNoActualDate = i.actual4 === '';
-                                                                        return hasVendor && hasPlannedDate && hasNoActualDate;
+                                                                        return hasVendor && hasApprovedVendor && hasPlannedDate && hasNoActualDate;
                                                                     })
                                                                     .map((i) => [i.approvedVendorName, i])
                                                             ).values()]

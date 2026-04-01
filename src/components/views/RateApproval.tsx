@@ -28,22 +28,24 @@ import { Input } from '../ui/input';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 
 interface RateApprovalData {
+    id: number;
     indentNo: string;
     indenter: string;
     department: string;
     product: string;
     comparisonSheet: string;
-    vendors: [string, string, string, string, string, string, string, string, string][];
+    vendors: [string, string, string, string, string, string, string, string, string, string, string, string][];
     date: string;
     firmNameMatch?: string;
-    plannedDate: string; // ✅ ADD THIS
-
+    plannedDate: string;
 }
 
 interface HistoryData {
+    id: number;
     indentNo: string;
     indenter: string;
     department: string;
+    firmNameMatch: string;
     product: string;
     vendor: [string, string];
     date: string;
@@ -70,7 +72,7 @@ export default () => {
                 .from('indent')
                 .select('*')
                 .not('planned4', 'is', null)
-                .is('actual4', null)
+                .is('approved_vendor_name', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
             if (user.firmNameMatch.toLowerCase() !== 'all') {
@@ -83,51 +85,63 @@ export default () => {
 
             const rows = (data ?? []) as any[];
             setTableData(
-                rows.map((r): RateApprovalData => ({
-                    indentNo: r.indent_number || '',
-                    firmNameMatch: r.firm_name_match || '',
-                    indenter: r.indenter_name || '',
-                    department: r.department || '',
-                    product: r.product_name || '',
-                    comparisonSheet: r.comparison_sheet || '',
-                    date: formatDateTime(new Date(r.timestamp)).replace(/\//g, '-'),
-                    plannedDate: r.planned4 ? formatDate(new Date(r.planned4)) : 'Not Set',
-                    vendors: [
-                        [
-                            r.vendor_name1 || '',
-                            r.rate1?.toString() || '0',
-                            r.payment_term1 || '',
-                            r.select_rate_type1 || 'With Tax',
-                            r.with_tax_or_not1 || 'Yes',
-                            r.tax_value1?.toString() || '0',
-                            r.quotation_no1 || '',
-                            r.quotation_date1 || '',
-                            r.vendor1_rank || ''
-                        ],
-                        [
-                            r.vendor_name2 || '',
-                            r.rate2?.toString() || '0',
-                            r.payment_term2 || '',
-                            r.select_rate_type2 || 'With Tax',
-                            r.with_tax_or_not2 || 'Yes',
-                            r.tax_value2?.toString() || '0',
-                            r.quotation_no2 || '',
-                            r.quotation_date2 || '',
-                            r.vendor2_rank || ''
-                        ],
-                        [
-                            r.vendor_name3 || '',
-                            r.rate3?.toString() || '0',
-                            r.payment_term3 || '',
-                            r.select_rate_type3 || 'With Tax',
-                            r.with_tax_or_not3 || 'Yes',
-                            r.tax_value3?.toString() || '0',
-                            r.quotation_no3 || '',
-                            r.quotation_date3 || '',
-                            r.vendor3_rank || ''
-                        ],
-                    ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string][],
-                }))
+                rows
+                    .filter((r) => r.vendor1_rank || r.vendor2_rank || r.vendor3_rank)
+                    .map((r): RateApprovalData => ({
+                        id: r.id,
+                        indentNo: r.indent_number || '',
+                        firmNameMatch: r.firm_name_match || '',
+                        indenter: r.indenter_name || '',
+                        department: r.department || '',
+                        product: r.product_name || '',
+                        comparisonSheet: r.comparison_sheet || '',
+                        date: formatDateTime(new Date(r.timestamp)).replace(/\//g, '-'),
+                        plannedDate: r.planned4 ? formatDate(new Date(r.planned4)) : 'Not Set',
+                        vendors: [
+                            [
+                                r.vendor_name1 || '',
+                                r.rate1?.toString() || '0',
+                                r.payment_term1 || '',
+                                r.select_rate_type1 || 'With Tax',
+                                r.with_tax_or_not1 || 'Yes',
+                                r.tax_value1?.toString() || '0',
+                                r.quotation_no1 || '',
+                                r.quotation_date1 || '',
+                                r.vendor1_rank || '',
+                                r.delivery_time1 || '',
+                                r.make1 || '',
+                                r.advance_percent1 || ''
+                            ],
+                            [
+                                r.vendor_name2 || '',
+                                r.rate2?.toString() || '0',
+                                r.payment_term2 || '',
+                                r.select_rate_type2 || 'With Tax',
+                                r.with_tax_or_not2 || 'Yes',
+                                r.tax_value2?.toString() || '0',
+                                r.quotation_no2 || '',
+                                r.quotation_date2 || '',
+                                r.vendor2_rank || '',
+                                r.delivery_time2 || '',
+                                r.make2 || '',
+                                r.advance_percent2 || ''
+                            ],
+                            [
+                                r.vendor_name3 || '',
+                                r.rate3?.toString() || '0',
+                                r.payment_term3 || '',
+                                r.select_rate_type3 || 'With Tax',
+                                r.with_tax_or_not3 || 'Yes',
+                                r.tax_value3?.toString() || '0',
+                                r.quotation_no3 || '',
+                                r.quotation_date3 || '',
+                                r.vendor3_rank || '',
+                                r.delivery_time3 || '',
+                                r.make3 || '',
+                                r.advance_percent3 || ''
+                            ],
+                        ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string, string, string, string][],
+                    }))
             );
         } catch (err) {
             console.error('Error fetching pending approvals:', err);
@@ -152,7 +166,7 @@ export default () => {
                 .from('indent')
                 .select('*')
                 .not('planned4', 'is', null)
-                .not('actual4', 'is', null)
+                .not('approved_vendor_name', 'is', null)
                 .in('vendor_type', ['Three Party', 'Regular']);
 
             if (user.firmNameMatch.toLowerCase() !== 'all') {
@@ -165,7 +179,9 @@ export default () => {
 
             const rows = (data ?? []) as any[];
             setHistoryData(
-                rows.map((r) => ({
+                rows.filter(r => r.approved_vendor_name)
+                    .map((r): HistoryData => ({
+                    id: r.id,
                     indentNo: r.indent_number || '',
                     firmNameMatch: r.firm_name_match || '',
                     indenter: r.indenter_name || '',
@@ -321,25 +337,29 @@ export default () => {
     async function onSubmit(values: z.infer<typeof schema>) {
         try {
             const selectedVendor = selectedIndent?.vendors[values.vendor];
+            if (!selectedVendor) return;
+
+            const rate = parseFloat(selectedVendor[1]) || 0;
+            const tax = parseFloat(selectedVendor[5]) || 0;
+            const finalRate = selectedVendor[3] === 'Basic Rate' ? rate * (1 + tax / 100) : rate;
 
             const updates = {
-                actual4: new Date().toISOString(),
-                planned5: new Date().toISOString(),
                 po_requred: 'Yes', // Automatically set PO Required to Yes
-                approved_vendor_name: selectedVendor?.[0] || '',
-                approved_rate: selectedVendor?.[1] || '0',
-                approved_payment_term: selectedVendor?.[2] || '',
-                with_tax_or_not4: selectedVendor?.[4] || 'Yes',
-                tax_value4: selectedVendor?.[5] || '0',
-                approved_quotation_no: selectedVendor?.[6] || '',
-                approved_quotation_date: selectedVendor?.[7] || '',
-                vendor_rate: selectedVendor?.[8] || '',  // Store pre-assigned rank from VendorUpdate
+                approved_vendor_name: selectedVendor[0] || '',
+                approved_rate: finalRate.toString(),
+                approved_payment_term: selectedVendor[2] || '',
+                approved_advance_percent: selectedVendor[11] || '',
+                with_tax_or_not4: selectedVendor[4] || 'Yes',
+                tax_value4: selectedVendor[5] || '0',
+                approved_quotation_no: selectedVendor[6] || '',
+                approved_quotation_date: selectedVendor[7] || '',
+                vendor_rate: selectedVendor[8] || '',  // Store pre-assigned rank (T1/T2/T3)
             };
 
             const { error } = await supabase
                 .from('indent')
                 .update(updates)
-                .eq('indent_number', selectedIndent?.indentNo);
+                .eq('id', selectedIndent?.id);
 
             if (error) throw error;
 
@@ -378,7 +398,7 @@ export default () => {
             const { error } = await supabase
                 .from('indent')
                 .update({ approved_rate: values.rate.toString() })
-                .eq('indent_number', selectedHistory?.indentNo);
+                .eq('id', selectedHistory?.id);
 
             if (error) throw error;
 
@@ -491,7 +511,7 @@ export default () => {
                                                                         return { vendor: v, originalIndex: i, total };
                                                                     }).sort((a, b) => a.total - b.total);
 
-                                                                    return processedVendors.map(({ vendor, originalIndex, total }, idx) => {
+                                                                    return processedVendors.map(({ vendor, originalIndex, total }) => {
                                                                         const isSelected = field.value?.toString() === originalIndex.toString();
                                                                         return (
                                                                             <tr key={originalIndex} className={`transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/10'}`}>
@@ -503,6 +523,9 @@ export default () => {
                                                                                         <div className="font-semibold text-foreground">{vendor[0]}</div>
                                                                                         <div className="text-xs text-muted-foreground mt-0.5">
                                                                                             {vendor[6] ? `Quote: ${vendor[6]}` : ''} | {vendor[2]}
+                                                                                            {vendor[11] && vendor[2].toLowerCase().includes('advance') ? ` (Advance: ${vendor[11]}%)` : ''}
+                                                                                            {vendor[9] ? ` | Delivery: ${vendor[9]} days` : ''}
+                                                                                            {vendor[10] ? ` | Make: ${vendor[10]}` : ''}
                                                                                         </div>
                                                                                     </label>
                                                                                 </td>
@@ -510,7 +533,7 @@ export default () => {
                                                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase
                                                                                         ${vendor[8] ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}
                                                                                     `}>
-                                                                                        {vendor[8] || (idx === 0 ? 'L1' : `L${idx + 1}`)}
+                                                                                        {vendor[8] || 'Not Ranked'}
                                                                                     </span>
                                                                                 </td>
                                                                                 <td className="px-4 py-3 text-right">

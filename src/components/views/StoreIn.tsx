@@ -474,9 +474,15 @@ export default () => {
         quantityAsPerBill: z.enum(['Yes', 'No']),
         priceAsPerPoCheck: z.enum(['Yes', 'No']),
         remark: z.string().optional(),
-        location: z.string().optional(), // ✅ Location is now optional
-
-
+        location: z.string().optional(),
+    }).superRefine((data, ctx) => {
+        if (selectedIndent && data.qty > selectedIndent.qty) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: `Received quantity (${data.qty}) cannot exceed lifting quantity (${selectedIndent.qty})`,
+                path: ['qty'],
+            });
+        }
     });
 
     type FormValues = z.infer<typeof schema>;
@@ -606,6 +612,10 @@ export default () => {
 
     function onError(e: any) {
         console.log(e);
+        if (e.qty) {
+            toast.error(e.qty.message || 'Received quantity cannot exceed lifting quantity');
+            return;
+        }
         toast.error('Please fill all required fields');
     }
 
@@ -736,6 +746,7 @@ export default () => {
                                                         type="number"
                                                         placeholder="Enter received quantity"
                                                         disabled={status !== 'Received'}
+                                                        max={selectedIndent?.qty}
                                                         {...field}
                                                     />
                                                 </FormControl>

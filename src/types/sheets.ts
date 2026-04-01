@@ -280,6 +280,7 @@ export type UserPermissions = {
     dbForPc: boolean;
     billNotReceived: boolean;
     storeIn: boolean;
+    hodStoreApproval: boolean;
     poHistory: boolean;
     storeIssue: boolean;
     issueData: boolean;
@@ -346,6 +347,7 @@ export const allPermissionKeys = [
     "dbForPc",
     "billNotReceived",
     "storeIn",
+    "hodStoreApproval",
     "poHistory",
     "storeIssue",
     "issueData",
@@ -478,6 +480,10 @@ export type StoreInSheet = {
 
     firmNameMatch: string;
     location: string;
+    hodStatus: string;
+    hodRemark: string;
+    plannedHod: string;
+    actualHod: string;
 
 }
 
