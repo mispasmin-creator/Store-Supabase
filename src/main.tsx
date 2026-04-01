@@ -413,8 +413,12 @@ const routes: RouteAttributes[] = [
                         (s.poNumber || s.po_number || '') === (record.poNumber || record.po_number || record.po_no || '')
                     );
 
-                    if (linkedStoreIn?.typeOfBill) {
-                        if (linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                    if (linkedStoreIn) {
+                        if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                            return false;
+                        }
+                        // ✅ HOD Status Check: Only show if Approved
+                        if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') {
                             return false;
                         }
                     }
@@ -450,13 +454,17 @@ const routes: RouteAttributes[] = [
                     const isPending = status === 'pending';
                     const notScheduled = !payment.planned || String(payment.planned || '').trim() === '';
 
-                    // ✅ Link with StoreIn to check Bill Type
+                    // ✅ Link with StoreIn to check Bill Type and HOD Status
                     const linkedStoreIn = (storeInSheet || []).find((s: any) =>
                         (s.indentNo || s.indentNumber) === (payment.internalCode || payment.internal_code)
                     );
 
-                    if (linkedStoreIn?.typeOfBill) {
-                        if (linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                    if (linkedStoreIn) {
+                        if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
+                            return false;
+                        }
+                        // ✅ HOD Status Check: Only show if Approved
+                        if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') {
                             return false;
                         }
                     }
@@ -505,12 +513,22 @@ const routes: RouteAttributes[] = [
         element: <MakePayment />,
         notifications: (sheets: any[], user: any) => {
             const paymentsData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
+            const storeInSheet = Array.isArray(sheets[1]) ? sheets[1] : [];
+            
             if (paymentsData.length === 0) return 0;
 
             const pendingItems = paymentsData.filter((payment: any) => {
                 const firmMatch = !user || user.firmNameMatch.toLowerCase() === "all" ||
                     (payment.firmNameMatch || payment.firm_name) === user.firmNameMatch;
                 if (!firmMatch) return false;
+
+                // Check linked Store In for HOD status: Only count if Approved
+                const linkedStoreIn = storeInSheet.find((s: any) =>
+                    (s.indentNo || s.indentNumber) === (payment.internalCode || payment.internal_code)
+                );
+                if (linkedStoreIn && (linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') {
+                    return false;
+                }
 
                 const planned = String(payment?.planned || '').trim();
                 const actual = String(payment?.actual || '').trim();

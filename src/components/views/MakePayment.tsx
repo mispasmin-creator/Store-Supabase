@@ -277,11 +277,11 @@ export default function MakePayment() {
                         const status = String(sheet?.status || '').toLowerCase();
                         const isCompleted = status === 'completed';
 
-                        // Check linked Store In for HOD rejection
+                        // Check linked Store In for HOD status: Only show if Approved
                         const linkedStoreIn = storeInRecords.find((s: any) =>
                             (s.indent_no || s.indent_number) === (sheet.internalCode)
                         );
-                        if (linkedStoreIn?.hod_status === 'Rejected') {
+                        if (linkedStoreIn && linkedStoreIn.hod_status !== 'Approved') {
                             return false;
                         }
 

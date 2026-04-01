@@ -178,6 +178,11 @@ export default function PIApprovals() {
                         }
                     }
 
+                    // ✅ HOD Status Check: Only show if Approved
+                    if (linkedStoreIn && (linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') {
+                        return false;
+                    }
+
                     // ✅ Relaxed Payment Terms Check
                     // Allow everything if it's already been received,
                     // or if it matches the PI terms for pre-receipt payment.
@@ -248,7 +253,8 @@ export default function PIApprovals() {
                         if (linkedStoreIn.typeOfBill && linkedStoreIn.typeOfBill.toLowerCase() !== 'independent') {
                             return false;
                         }
-                        if (linkedStoreIn.hodStatus === 'Rejected') {
+                        // ✅ HOD Status Check: Only show if Approved
+                        if ((linkedStoreIn.hodStatus || linkedStoreIn.hod_status) !== 'Approved') {
                             return false;
                         }
                     }

@@ -87,7 +87,8 @@ interface StoreInHistoryData {
     photoOfProduct: string;
     unitOfMeasurement: string;
     damageOrder: string;
-    quantityAsPerBill: number;
+    quantityAsPerBill: string;
+    priceAsPerPoCheck: string;
     priceAsPerPo: number;
     remark: string;
     poDate: string;
@@ -134,7 +135,8 @@ interface StoreInSheetItem {
     debitNote?: string;
     reason?: string;
     damageOrder?: string;
-    quantityAsPerBill?: number;
+    quantityAsPerBill?: string;
+    priceAsPerPoCheck?: string;
     priceAsPerPo?: number;
     remark?: string;
     firmNameMatch?: string;
@@ -313,7 +315,8 @@ export default () => {
                     photoOfProduct: i.photoOfProduct || '',
                     unitOfMeasurement: i.unitOfMeasurement || '',
                     damageOrder: i.damageOrder || '',
-                    quantityAsPerBill: Number(i.quantityAsPerBill) || 0,
+                    quantityAsPerBill: i.quantityAsPerBill || '',
+                    priceAsPerPoCheck: i.priceAsPerPoCheck || '',
                     priceAsPerPo: i.priceAsPerPo || 0,
                     remark: i.remark || '',
                     poDate: i.poDate || '',
@@ -453,9 +456,36 @@ export default () => {
                 ) : null;
             },
         },
-        { accessorKey: 'damageOrder', header: 'Physical Check', cell: textWrapCell },
-        { accessorKey: 'quantityAsPerBill', header: 'Qty Per Bill' },
-        { accessorKey: 'priceAsPerPo', header: 'Rate as per PO' },
+        {
+            accessorKey: 'damageOrder',
+            header: 'Physical Check',
+            cell: ({ row }) => {
+                const isDamaged = row.original.damageOrder === 'No';
+                return (
+                    <Pill variant={isDamaged ? 'reject' : 'default'}>
+                        {isDamaged ? 'Not Good' : 'Good'}
+                    </Pill>
+                );
+            }
+        },
+        {
+            accessorKey: 'quantityAsPerBill',
+            header: 'Qty Match?',
+            cell: ({ row }) => (
+                <Pill variant={row.original.quantityAsPerBill === 'Yes' ? 'default' : 'reject'}>
+                    {row.original.quantityAsPerBill === 'Yes' ? 'Match' : 'Mismatch'}
+                </Pill>
+            )
+        },
+        {
+            accessorKey: 'priceAsPerPo',
+            header: 'Price Match?',
+            cell: ({ row }) => (
+                <Pill variant={row.original.priceAsPerPoCheck === 'Yes' ? 'default' : 'reject'}>
+                    {row.original.priceAsPerPoCheck === 'Yes' ? 'Match' : 'Mismatch'}
+                </Pill>
+            )
+        },
         { accessorKey: 'remark', header: 'Remark', cell: textWrapCell },
         {
             accessorKey: 'planned6Date',

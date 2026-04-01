@@ -338,9 +338,36 @@ export default () => {
         { accessorKey: 'transportationInclude', header: 'Transportation Include' },
         { accessorKey: 'transporterName', header: 'Transporter Name' },
         { accessorKey: 'amount', header: 'Amount' },
-        { accessorKey: 'damageOrder', header: 'Physical Good ?' },
-        { accessorKey: 'quantityAsPerBill', header: 'Quantity As Per Bill' },
-        { accessorKey: 'priceAsPerPoCheck', header: 'Price As Per Po' },
+        {
+            accessorKey: 'damageOrder',
+            header: 'Physical Good ?',
+            cell: ({ row }) => {
+                const isDamaged = row.original.damageOrder === 'No';
+                return (
+                    <Pill variant={isDamaged ? 'reject' : 'default'}>
+                        {isDamaged ? 'Not Good' : 'Good'}
+                    </Pill>
+                );
+            }
+        },
+        {
+            accessorKey: 'quantityAsPerBill',
+            header: 'Qty Match?',
+            cell: ({ row }) => (
+                <Pill variant={row.original.quantityAsPerBill === 'Yes' ? 'default' : 'reject'}>
+                    {row.original.quantityAsPerBill === 'Yes' ? 'Match' : 'Mismatch'}
+                </Pill>
+            )
+        },
+        {
+            accessorKey: 'priceAsPerPoCheck',
+            header: 'Price Match?',
+            cell: ({ row }) => (
+                <Pill variant={row.original.priceAsPerPoCheck === 'Yes' ? 'default' : 'reject'}>
+                    {row.original.priceAsPerPoCheck === 'Yes' ? 'Match' : 'Mismatch'}
+                </Pill>
+            )
+        },
         { accessorKey: 'remark', header: 'Remark' },
         {
             accessorKey: 'planned7Date',
@@ -406,9 +433,36 @@ export default () => {
         },
         { accessorKey: 'debitNote', header: 'Debit Note' },
         { accessorKey: 'reason', header: 'Reason' },
-        { accessorKey: 'damageOrder', header: 'Physical Good ?' },
-        { accessorKey: 'quantityAsPerBill', header: 'Quantity As Per Bill' },
-        { accessorKey: 'priceAsPerPoCheck', header: 'Price As Per Po' },
+        {
+            accessorKey: 'damageOrder',
+            header: 'Physical Good ?',
+            cell: ({ row }) => {
+                const isDamaged = row.original.damageOrder === 'No';
+                return (
+                    <Pill variant={isDamaged ? 'reject' : 'default'}>
+                        {isDamaged ? 'Damaged' : 'Good'}
+                    </Pill>
+                );
+            }
+        },
+        {
+            accessorKey: 'quantityAsPerBill',
+            header: 'Qty Match?',
+            cell: ({ row }) => (
+                <Pill variant={row.original.quantityAsPerBill === 'Yes' ? 'default' : 'reject'}>
+                    {row.original.quantityAsPerBill === 'Yes' ? 'Match' : 'Mismatch'}
+                </Pill>
+            )
+        },
+        {
+            accessorKey: 'priceAsPerPoCheck',
+            header: 'Price Match?',
+            cell: ({ row }) => (
+                <Pill variant={row.original.priceAsPerPoCheck === 'Yes' ? 'default' : 'reject'}>
+                    {row.original.priceAsPerPoCheck === 'Yes' ? 'Match' : 'Mismatch'}
+                </Pill>
+            )
+        },
         { accessorKey: 'remark', header: 'Remark' },
         {
             accessorKey: 'planned7Date',
@@ -531,20 +585,20 @@ export default () => {
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                             <div className="space-y-1">
                                                 <p className="text-xs font-medium text-muted-foreground">Physical Good?</p>
-                                                <Pill variant={selectedItem.damageOrder === 'No' ? 'default' : 'reject'}>
-                                                    {selectedItem.damageOrder === 'No' ? 'Good' : 'Damaged/No'}
+                                                <Pill variant={selectedItem.damageOrder === 'Yes' ? 'default' : 'reject'}>
+                                                    {selectedItem.damageOrder === 'Yes' ? 'Good' : 'Damaged'}
                                                 </Pill>
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="text-xs font-medium text-muted-foreground">Qty Match?</p>
                                                 <Pill variant={selectedItem.quantityAsPerBill === 'Yes' ? 'default' : 'reject'}>
-                                                    {selectedItem.quantityAsPerBill || 'N/A'}
+                                                    {selectedItem.quantityAsPerBill === 'Yes' ? 'Match' : 'Mismatch'}
                                                 </Pill>
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="text-xs font-medium text-muted-foreground">Price Match?</p>
                                                 <Pill variant={selectedItem.priceAsPerPoCheck === 'Yes' ? 'default' : 'reject'}>
-                                                    {selectedItem.priceAsPerPoCheck || 'N/A'}
+                                                    {selectedItem.priceAsPerPoCheck === 'Yes' ? 'Match' : 'Mismatch'}
                                                 </Pill>
                                             </div>
                                         </div>

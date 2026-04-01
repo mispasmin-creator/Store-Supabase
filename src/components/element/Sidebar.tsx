@@ -105,8 +105,8 @@ export default ({ items }: SidebarProps) => {
                                             sheetData = storeInSheet || [];
                                             break;
                                         case 'Make-Payment':
-                                            // Pass both indentSheet and paymentHistorySheet for Make Payment
-                                            sheetData = [paymentsSheet || []];
+                                            // Pass paymentsSheet and storeInSheet for filtering
+                                            sheetData = [paymentsSheet || [], storeInSheet || []];
                                             break;
                                         case 'Full-Kiting':
                                             sheetData = fullkittingSheet || [];
