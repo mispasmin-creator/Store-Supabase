@@ -252,6 +252,7 @@ interface Item {
     gst: number;
     discount: number;
     amount: number;
+    quotationNumber: string;
 }
 
 export interface POPdfProps {
@@ -268,8 +269,6 @@ export interface POPdfProps {
     orderNumber: string;
     orderDate: string;
     deliveryDate: string;
-    quotationNumber: string;
-    quotationDate: string;
     description: string;
     items: Item[];
     total: number;
@@ -278,6 +277,8 @@ export interface POPdfProps {
     terms: string[];
     preparedBy: string;
     approvedBy: string;
+    paymentTerms?: string;
+    numberOfDays?: number;
     logo?: string;
 }
 
@@ -295,8 +296,6 @@ export default ({
     orderNumber,
     orderDate,
     deliveryDate,
-    quotationNumber,
-    quotationDate,
     description,
     items,
     total,
@@ -305,13 +304,15 @@ export default ({
     terms,
     preparedBy,
     approvedBy,
+    paymentTerms,
+    numberOfDays,
     logo,
 }: POPdfProps) => {
     return (
         <Document>
             <Page size="A4" style={styles.page}>
                 <View style={styles.mainContainer}>
-                    
+
                     {/* Header */}
                     <View style={styles.headerContainer}>
                         <View style={styles.logoContainer}>
@@ -360,14 +361,6 @@ export default ({
                                 <Text style={styles.infoLabel}>Delivery Date:</Text>
                                 <Text style={styles.infoValue}>{deliveryDate}</Text>
                             </View>
-                            <View style={styles.infoRow}>
-                                <Text style={styles.infoLabel}>Quotation No:</Text>
-                                <Text style={styles.infoValue}>{quotationNumber || 'N/A'}</Text>
-                            </View>
-                            <View style={styles.infoRow}>
-                                <Text style={styles.infoLabel}>Quot. Date:</Text>
-                                <Text style={styles.infoValue}>{quotationDate || 'N/A'}</Text>
-                            </View>
                         </View>
                     </View>
 
@@ -391,30 +384,32 @@ export default ({
                     {/* Items Table */}
                     <View>
                         <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.tableHeaderCell, styles.w1]}>S/N</Text>
-                            <Text style={[styles.tableHeaderCell, styles.w2]}>Int. Code</Text>
-                            <Text style={[styles.tableHeaderCell, styles.w3]}>Product</Text>
-                            <Text style={[styles.tableHeaderCell, styles.w4]}>Description</Text>
-                            <Text style={[styles.tableHeaderCell, styles.w5]}>Qty</Text>
-                            <Text style={[styles.tableHeaderCell, styles.w6]}>Unit</Text>
-                            <Text style={[styles.tableHeaderCell, styles.w7]}>Rate</Text>
-                            <Text style={[styles.tableHeaderCell, styles.w8]}>GST</Text>
-                            <Text style={[styles.tableHeaderCell, styles.w9]}>Disc</Text>
-                            <Text style={[styles.tableHeaderCell, styles.w10, { borderRight: 0 }]}>Amount</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '4%', borderRight: '1 solid #cbd5e1' }]}>S/N</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>Int. Code</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>Q. No.</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '15%', borderRight: '1 solid #cbd5e1' }]}>Product</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '20%', borderRight: '1 solid #cbd5e1' }]}>Description</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '6%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Qty</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '6%', borderRight: '1 solid #cbd5e1', textAlign: 'center' }]}>Unit</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '7%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Rate</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>GST</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Disc</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '8%', textAlign: 'right' }]}>Amount</Text>
                         </View>
 
                         {items.map((item, i) => (
                             <View style={styles.tableRow} key={i}>
-                                <Text style={[styles.tableCell, styles.w1]}>{i + 1}</Text>
-                                <Text style={[styles.tableCell, styles.w2]}>{item.internalCode}</Text>
-                                <Text style={[styles.tableCell, styles.w3]}>{item.product}</Text>
-                                <Text style={[styles.tableCell, styles.w4]}>{item.description}</Text>
-                                <Text style={[styles.tableCell, styles.w5]}>{item.quantity}</Text>
-                                <Text style={[styles.tableCell, styles.w6]}>{item.unit}</Text>
-                                <Text style={[styles.tableCell, styles.w7]}>{item.rate}</Text>
-                                <Text style={[styles.tableCell, styles.w8]}>{item.gst}%</Text>
-                                <Text style={[styles.tableCell, styles.w9]}>{item.discount}%</Text>
-                                <Text style={[styles.tableCell, styles.w10, { borderRight: 0 }]}>{item.amount}</Text>
+                                <Text style={[styles.tableCell, { width: '4%', borderRight: '1 solid #cbd5e1' }]}>{i + 1}</Text>
+                                <Text style={[styles.tableCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>{item.internalCode}</Text>
+                                <Text style={[styles.tableCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>{item.quotationNumber}</Text>
+                                <Text style={[styles.tableCell, { width: '15%', borderRight: '1 solid #cbd5e1' }]}>{item.product}</Text>
+                                <Text style={[styles.tableCell, { width: '20%', borderRight: '1 solid #cbd5e1' }]}>{item.description}</Text>
+                                <Text style={[styles.tableCell, { width: '6%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.quantity}</Text>
+                                <Text style={[styles.tableCell, { width: '6%', borderRight: '1 solid #cbd5e1', textAlign: 'center' }]}>{item.unit}</Text>
+                                <Text style={[styles.tableCell, { width: '7%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.rate}</Text>
+                                <Text style={[styles.tableCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.gst}%</Text>
+                                <Text style={[styles.tableCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.discount}%</Text>
+                                <Text style={[styles.tableCell, { width: '8%', textAlign: 'right' }]}>{item.amount}</Text>
                             </View>
                         ))}
                     </View>
@@ -437,6 +432,25 @@ export default ({
                             </View>
                         </View>
                     </View>
+
+                    {/* Payment Terms Section */}
+                    {(paymentTerms || numberOfDays !== undefined) && (
+                        <View style={{
+                            padding: 5,
+                            borderBottom: '1 solid #374151',
+                            backgroundColor: '#f8fafc',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingLeft: 12
+                        }}>
+                            <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#334155' }}>Payment Terms : </Text>
+                            <Text style={{ fontSize: 9, color: '#475569', marginLeft: 4 }}>
+                                {paymentTerms === 'After Delivery'
+                                    ? `Payment will be made ${numberOfDays} days after delivery.`
+                                    : paymentTerms || 'N/A'}
+                            </Text>
+                        </View>
+                    )}
 
                     {/* Terms & Description */}
                     <View style={styles.termsDescriptionContainer}>

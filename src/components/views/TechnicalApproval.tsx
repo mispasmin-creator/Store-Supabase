@@ -106,57 +106,57 @@ export default () => {
             setTableData(
                 rows.filter(r => !r.vendor1_rank && !r.vendor2_rank && !r.vendor3_rank)
                     .map((r): RateApprovalData => ({
-                    id: r.id,
-                    indentNo: r.indent_number || '',
-                    firmNameMatch: r.firm_name_match || '',
-                    indenter: r.indenter_name || '',
-                    department: r.department || '',
-                    product: r.product_name || '',
-                    comparisonSheet: r.comparison_sheet || '',
-                    date: formatDateTime(new Date(r.timestamp)).replace(/\//g, '-'),
-                    plannedDate: r.planned3 ? formatDate(new Date(r.planned3)) : 'Not Set',
-                    vendors: [
-                        [
-                            r.vendor_name1 || '',
-                            r.rate1?.toString() || '0',
-                            r.payment_term1 || '',
-                            r.select_rate_type1 || 'With Tax',
-                            r.with_tax_or_not1 || 'Yes',
-                            r.tax_value1?.toString() || '0',
-                            r.quotation_no1 || '',
-                            r.quotation_date1 || '',
-                            r.vendor1_rank || '',
-                            r.delivery_time1 || '',
-                            r.make1 || ''
-                        ],
-                        [
-                            r.vendor_name2 || '',
-                            r.rate2?.toString() || '0',
-                            r.payment_term2 || '',
-                            r.select_rate_type2 || 'With Tax',
-                            r.with_tax_or_not2 || 'Yes',
-                            r.tax_value2?.toString() || '0',
-                            r.quotation_no2 || '',
-                            r.quotation_date2 || '',
-                            r.vendor2_rank || '',
-                            r.delivery_time2 || '',
-                            r.make2 || ''
-                        ],
-                        [
-                            r.vendor_name3 || '',
-                            r.rate3?.toString() || '0',
-                            r.payment_term3 || '',
-                            r.select_rate_type3 || 'With Tax',
-                            r.with_tax_or_not3 || 'Yes',
-                            r.tax_value3?.toString() || '0',
-                            r.quotation_no3 || '',
-                            r.quotation_date3 || '',
-                            r.vendor3_rank || '',
-                            r.delivery_time3 || '',
-                            r.make3 || ''
-                        ],
-                    ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string, string, string][],
-                }))
+                        id: r.id,
+                        indentNo: r.indent_number || '',
+                        firmNameMatch: r.firm_name_match || '',
+                        indenter: r.indenter_name || '',
+                        department: r.department || '',
+                        product: r.product_name || '',
+                        comparisonSheet: r.comparison_sheet || '',
+                        date: formatDateTime(new Date(r.timestamp)).replace(/\//g, '-'),
+                        plannedDate: r.planned3 ? formatDate(new Date(r.planned3)) : 'Not Set',
+                        vendors: [
+                            [
+                                r.vendor_name1 || '',
+                                r.rate1?.toString() || '0',
+                                r.payment_term1 || '',
+                                r.select_rate_type1 || 'With Tax',
+                                r.with_tax_or_not1 || 'Yes',
+                                r.tax_value1?.toString() || '0',
+                                r.quotation_no1 || '',
+                                r.quotation_date1 || '',
+                                r.vendor1_rank || '',
+                                r.delivery_time1 || '',
+                                r.make1 || ''
+                            ],
+                            [
+                                r.vendor_name2 || '',
+                                r.rate2?.toString() || '0',
+                                r.payment_term2 || '',
+                                r.select_rate_type2 || 'With Tax',
+                                r.with_tax_or_not2 || 'Yes',
+                                r.tax_value2?.toString() || '0',
+                                r.quotation_no2 || '',
+                                r.quotation_date2 || '',
+                                r.vendor2_rank || '',
+                                r.delivery_time2 || '',
+                                r.make2 || ''
+                            ],
+                            [
+                                r.vendor_name3 || '',
+                                r.rate3?.toString() || '0',
+                                r.payment_term3 || '',
+                                r.select_rate_type3 || 'With Tax',
+                                r.with_tax_or_not3 || 'Yes',
+                                r.tax_value3?.toString() || '0',
+                                r.quotation_no3 || '',
+                                r.quotation_date3 || '',
+                                r.vendor3_rank || '',
+                                r.delivery_time3 || '',
+                                r.make3 || ''
+                            ],
+                        ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string, string, string][],
+                    }))
             );
         } catch (err) {
             console.error('Error fetching pending approvals:', err);
@@ -195,55 +195,55 @@ export default () => {
             setHistoryData(
                 rows.filter(r => r.vendor1_rank || r.vendor2_rank || r.vendor3_rank)
                     .map((r): HistoryData => ({
-                    id: r.id,
-                    indentNo: r.indent_number || '',
-                    firmNameMatch: r.firm_name_match || '',
-                    indenter: r.indenter_name || '',
-                    department: r.department || '',
-                    product: r.product_name || '',
-                    date: r.actual3 ? formatDate(new Date(r.actual3)) : formatDate(new Date(r.timestamp)),
-                    vendors: [
-                        [
-                            r.vendor_name1 || '',
-                            r.rate1?.toString() || '0',
-                            r.payment_term1 || '',
-                            r.select_rate_type1 || 'With Tax',
-                            r.with_tax_or_not1 || 'Yes',
-                            r.tax_value1?.toString() || '0',
-                            r.quotation_no1 || '',
-                            r.quotation_date1 || '',
-                            r.vendor1_rank || '',
-                            r.delivery_time1 || '',
-                            r.make1 || ''
-                        ],
-                        [
-                            r.vendor_name2 || '',
-                            r.rate2?.toString() || '0',
-                            r.payment_term2 || '',
-                            r.select_rate_type2 || 'With Tax',
-                            r.with_tax_or_not2 || 'Yes',
-                            r.tax_value2?.toString() || '0',
-                            r.quotation_no2 || '',
-                            r.quotation_date2 || '',
-                            r.vendor2_rank || '',
-                            r.delivery_time2 || '',
-                            r.make2 || ''
-                        ],
-                        [
-                            r.vendor_name3 || '',
-                            r.rate3?.toString() || '0',
-                            r.payment_term3 || '',
-                            r.select_rate_type3 || 'With Tax',
-                            r.with_tax_or_not3 || 'Yes',
-                            r.tax_value3?.toString() || '0',
-                            r.quotation_no3 || '',
-                            r.quotation_date3 || '',
-                            r.vendor3_rank || '',
-                            r.delivery_time3 || '',
-                            r.make3 || ''
-                        ],
-                    ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string, string, string][],
-                }))
+                        id: r.id,
+                        indentNo: r.indent_number || '',
+                        firmNameMatch: r.firm_name_match || '',
+                        indenter: r.indenter_name || '',
+                        department: r.department || '',
+                        product: r.product_name || '',
+                        date: r.actual3 ? formatDate(new Date(r.actual3)) : formatDate(new Date(r.timestamp)),
+                        vendors: [
+                            [
+                                r.vendor_name1 || '',
+                                r.rate1?.toString() || '0',
+                                r.payment_term1 || '',
+                                r.select_rate_type1 || 'With Tax',
+                                r.with_tax_or_not1 || 'Yes',
+                                r.tax_value1?.toString() || '0',
+                                r.quotation_no1 || '',
+                                r.quotation_date1 || '',
+                                r.vendor1_rank || '',
+                                r.delivery_time1 || '',
+                                r.make1 || ''
+                            ],
+                            [
+                                r.vendor_name2 || '',
+                                r.rate2?.toString() || '0',
+                                r.payment_term2 || '',
+                                r.select_rate_type2 || 'With Tax',
+                                r.with_tax_or_not2 || 'Yes',
+                                r.tax_value2?.toString() || '0',
+                                r.quotation_no2 || '',
+                                r.quotation_date2 || '',
+                                r.vendor2_rank || '',
+                                r.delivery_time2 || '',
+                                r.make2 || ''
+                            ],
+                            [
+                                r.vendor_name3 || '',
+                                r.rate3?.toString() || '0',
+                                r.payment_term3 || '',
+                                r.select_rate_type3 || 'With Tax',
+                                r.with_tax_or_not3 || 'Yes',
+                                r.tax_value3?.toString() || '0',
+                                r.quotation_no3 || '',
+                                r.quotation_date3 || '',
+                                r.vendor3_rank || '',
+                                r.delivery_time3 || '',
+                                r.make3 || ''
+                            ],
+                        ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string, string, string][],
+                    }))
             );
         } catch (err) {
             console.error('Error fetching completed approvals:', err);
@@ -411,7 +411,7 @@ export default () => {
 
             if (error) throw error;
 
-            toast.success(`Completed Technical Approval for ${selectedIndent?.indentNo}`);
+            toast.success(`Completed Department Approval for ${selectedIndent?.indentNo}`);
             setOpenDialog(false);
             form.reset();
 
@@ -488,7 +488,7 @@ export default () => {
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
                     <Heading
-                        heading="Technical Approval"
+                        heading="Department Approval"
                         subtext="Set the technical details of the vendors"
                         tabs
                         pendingCount={tableData.length}
@@ -522,7 +522,7 @@ export default () => {
                                 className="space-y-6"
                             >
                                 <DialogHeader>
-                                    <DialogTitle>Technical Approval</DialogTitle>
+                                    <DialogTitle>Department Approval</DialogTitle>
                                     <DialogDescription>
                                         Assign T1, T2, T3 ranks for vendor quotes in Indent <span className="font-bold text-foreground">{selectedIndent.indentNo}</span>
                                     </DialogDescription>

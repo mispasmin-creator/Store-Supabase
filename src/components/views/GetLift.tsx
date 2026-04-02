@@ -198,6 +198,7 @@ export default function GetPurchase() {
                     indentNumbers: [],
                     products: [],
                     expectedDate: item.expectedDate ? formatDate(parseCustomDate(item.expectedDate)) : '',
+                    rawExpectedDate: item.expectedDate || null,
                     originalItems: []
                 });
             }
@@ -212,7 +213,13 @@ export default function GetPurchase() {
             group.originalItems.push(item);
         });
 
-        setTableData(Array.from(groupedMap.values()));
+        const sortedData = Array.from(groupedMap.values()).sort((a, b) => {
+            const dateA = a.rawExpectedDate ? parseCustomDate(a.rawExpectedDate).getTime() : Infinity;
+            const dateB = b.rawExpectedDate ? parseCustomDate(b.rawExpectedDate).getTime() : Infinity;
+            return dateA - dateB;
+        });
+
+        setTableData(sortedData);
     }, [indentRecords, storeInRecords, user?.firmNameMatch]);
 
     // Process history data
@@ -520,6 +527,8 @@ export default function GetPurchase() {
             receivedQty: z.number(),
             pendingPoQty: z.number(),
             approvedRate: z.string(),
+            taxValue: z.number(),
+            withTax: z.string(),
             liftQty: z.coerce.number().min(0),
         })).superRefine((items, ctx) => {
             items.forEach((item, index) => {
@@ -669,6 +678,8 @@ export default function GetPurchase() {
                     receivedQty: item.receivedQty || 0,
                     pendingPoQty: item.pendingPoQty || 0,
                     approvedRate: item.approvedRate || '0',
+                    taxValue: item.taxValue || 0,
+                    withTax: item.withTax || 'No',
                     liftQty: item.pendingPoQty || 0,
                 })),
             });
@@ -676,8 +687,11 @@ export default function GetPurchase() {
             // Immediately calculate and set initial bill amount
             const initialTotal = allIndividualItems.reduce((sum, item) => {
                 const rate = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
+                const tax = item.taxValue || 0;
+                const withTax = item.withTax || 'No';
+                const effectiveRate = withTax === 'No' ? rate * (1 + tax / 100) : rate;
                 const qty = item.pendingPoQty || 0;
-                return sum + (rate * qty);
+                return sum + (effectiveRate * qty);
             }, 0);
             form.setValue('billAmount', initialTotal);
 
@@ -692,7 +706,10 @@ export default function GetPurchase() {
         const total = (itemsWatcher || []).reduce((sum: number, item: any) => {
             const qty = Number(item.liftQty) || 0;
             const rate = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
-            return sum + (qty * rate);
+            const tax = Number(item.taxValue) || 0;
+            const withTax = item.withTax || 'No';
+            const effectiveRate = withTax === 'No' ? rate * (1 + tax / 100) : rate;
+            return sum + (qty * effectiveRate);
         }, 0);
 
         form.setValue('billAmount', total, {
@@ -905,6 +922,8 @@ export default function GetPurchase() {
                                             <tr>
                                                 <th className="px-4 py-3 text-left font-semibold">Product</th>
                                                 <th className="px-4 py-3 text-right font-semibold">Rate</th>
+                                                <th className="px-4 py-3 text-right font-semibold">Tax %</th>
+                                                <th className="px-4 py-3 text-right font-semibold">Eff. Rate</th>
                                                 <th className="px-4 py-3 text-right font-semibold">Pending Qty</th>
                                                 <th className="px-4 py-3 text-right font-semibold w-32">Lift Qty</th>
                                                 <th className="px-4 py-3 text-right font-semibold">Amount</th>
@@ -913,9 +932,12 @@ export default function GetPurchase() {
                                         </thead>
                                         <tbody className="divide-y">
                                             {fields.map((field, index) => {
-                                                const rate = Number(field.approvedRate) || 0;
+                                                const rate = parseFloat(String(field.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
+                                                const tax = Number(field.taxValue) || 0;
+                                                const withTax = field.withTax || 'No';
+                                                const effectiveRate = withTax === 'No' ? rate * (1 + tax / 100) : rate;
                                                 const liftQty = Number(itemsWatcher?.[index]?.liftQty) || 0;
-                                                const amount = rate * liftQty;
+                                                const amount = effectiveRate * liftQty;
                                                 return (
                                                     <tr key={field.id} className="hover:bg-muted/20 transition-colors">
                                                         <td className="px-4 py-3">
@@ -924,6 +946,12 @@ export default function GetPurchase() {
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-muted-foreground whitespace-nowrap">
                                                             ₹ {rate.toLocaleString()}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right text-muted-foreground">
+                                                            {tax}%
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right text-primary whitespace-nowrap font-medium">
+                                                            ₹ {effectiveRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                         <td className="px-4 py-3 text-right">
                                                             {field.pendingLiftQty}
@@ -967,14 +995,19 @@ export default function GetPurchase() {
                                         </tbody>
                                         <tfoot className="bg-muted/30 font-bold border-t">
                                             <tr>
-                                                <td className="px-4 py-3 text-left" colSpan={3}>Totals</td>
+                                                <td className="px-4 py-3 text-left" colSpan={5}>Totals</td>
                                                 <td className="px-4 py-3 text-right border-x">
                                                     {itemsWatcher?.reduce((sum, item) => sum + (Number(item.liftQty) || 0), 0) || 0}
                                                 </td>
-                                                <td className="px-4 py-3 text-right text-primary">
-                                                    ₹ {(itemsWatcher?.reduce((sum, item) => sum + (Number(item.approvedRate) * (Number(item.liftQty) || 0)), 0) || 0).toLocaleString()}
+                                                <td className="px-4 py-3 text-right text-primary" colSpan={2}>
+                                                    ₹ {(itemsWatcher?.reduce((sum, item: any) => {
+                                                        const r = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
+                                                        const t = Number(item.taxValue) || 0;
+                                                        const wt = item.withTax || 'No';
+                                                        const eff = wt === 'No' ? r * (1 + t / 100) : r;
+                                                        return sum + (eff * (Number(item.liftQty) || 0));
+                                                    }, 0) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </td>
-                                                <td></td>
                                             </tr>
                                         </tfoot>
                                     </table>

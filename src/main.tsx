@@ -191,7 +191,7 @@ const routes: RouteAttributes[] = [
     {
         path: 'technical-approval',
         gateKey: 'threePartyApprovalView',
-        name: 'Technical Approval',
+        name: 'Department Approval',
         icon: <Users size={20} />,
         element: <DepartmentApproval />,
         notifications: (sheets: any[]) =>
@@ -203,9 +203,9 @@ const routes: RouteAttributes[] = [
             ).length,
     },
     {
-        path: 'department-approval',
+        path: 'management-approval',
         gateKey: 'threePartyApprovalView',
-        name: 'Department Approval',
+        name: 'Management Approval',
         icon: <ShieldCheck size={20} />,
         element: <RateApproval />,
         notifications: (sheets: any[]) =>
@@ -514,7 +514,7 @@ const routes: RouteAttributes[] = [
         notifications: (sheets: any[], user: any) => {
             const paymentsData = Array.isArray(sheets[0]) ? sheets[0] : sheets;
             const storeInSheet = Array.isArray(sheets[1]) ? sheets[1] : [];
-            
+
             if (paymentsData.length === 0) return 0;
 
             const pendingItems = paymentsData.filter((payment: any) => {

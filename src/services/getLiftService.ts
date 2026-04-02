@@ -24,6 +24,8 @@ export interface GetLiftIndentRecord {
     liftingStatus: string;
     cancelQty: number;
     approvedRate: string;
+    taxValue: number;
+    withTax: string;
     timestamp: string;
     expectedDate: string;
     department?: string;
@@ -114,6 +116,8 @@ export async function fetchIndentRecords() {
             liftingStatus: r.lifting_status || '',
             cancelQty: Number(r.cancel_qty) || 0,
             approvedRate: r.approved_rate || '',
+            taxValue: Number(r.tax_value4) || 0,
+            withTax: r.with_tax_or_not4 || 'No',
             department: r.department || '',
             areaOfUse: r.area_of_use || '',
             timestamp: r.timestamp || '',

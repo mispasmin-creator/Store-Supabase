@@ -60,6 +60,7 @@ interface PIPendingData {
     pdf?: string;
     paymentForm?: string;
     billAmount?: number;
+    rowIds: number[];
 }
 
 interface POMasterRecord {
@@ -206,7 +207,7 @@ export default function PIApprovals() {
                     );
 
                     return {
-                        rowIndex: record.id || record.rowIndex || 0,
+                        rowIndex: record.id || 0,
                         timestamp: record.timestamp || '',
                         partyName: record.partyName || record.party_name || '',
                         poNumber: record.poNumber || record.po_number || '',
@@ -229,6 +230,7 @@ export default function PIApprovals() {
                         status: record.status || 'Pending',
                         pdf: record.pdf || '',
                         billAmount: Number(linkedStoreIn?.billAmount || linkedStoreIn?.bill_amount || 0),
+                        rowIds: [record.id || 0],
                     };
                 });
 
@@ -297,19 +299,41 @@ export default function PIApprovals() {
                     status: payment?.status || 'Pending',
                     pdf: payment?.pdf || payment?.file || '',
                     billAmount: Number(payment?.billAmount || payment?.bill_amount || 0),
+                    rowIds: [payment?.id || 0],
                 }));
 
             // Combine both lists and remove duplicates by poNumber
-            const allPendingItems = [...poBasedPendingItems];
-            const poNumbersInList = new Set(poBasedPendingItems.map(item => item.poNumber));
+            const uniquePoMap = new Map<string, PIPendingData>();
 
-            for (const paymentItem of paymentBasedItems) {
-                if (!paymentItem.poNumber || !poNumbersInList.has(paymentItem.poNumber)) {
-                    allPendingItems.push(paymentItem);
+            // Process poBasedPendingItems first
+            poBasedPendingItems.forEach(item => {
+                const poKey = item.poNumber || `NOPO-${item.rowIndex}`;
+                if (!uniquePoMap.has(poKey)) {
+                    uniquePoMap.set(poKey, { ...item });
+                } else {
+                    const existing = uniquePoMap.get(poKey)!;
+                    existing.rowIds = Array.from(new Set([...existing.rowIds, ...item.rowIds]));
+                    // Optionally combine product names if they are different
+                    if (item.product && !existing.product.includes(item.product)) {
+                        existing.product += `, ${item.product}`;
+                    }
                 }
-            }
+            });
 
-            setPendingData(allPendingItems);
+            // Process paymentBasedItems
+            paymentBasedItems.forEach(paymentItem => {
+                const poKey = paymentItem.poNumber || `NOPO-PAY-${paymentItem.rowIndex}`;
+                if (!uniquePoMap.has(poKey)) {
+                    uniquePoMap.set(poKey, { ...paymentItem });
+                } else {
+                    // If PO already exists from PO Master, we optionally sync rowIds if needed
+                    // But usually we prioritize PO Master for the display
+                    const existing = uniquePoMap.get(poKey)!;
+                    existing.rowIds = Array.from(new Set([...existing.rowIds, ...paymentItem.rowIds]));
+                }
+            });
+
+            setPendingData(Array.from(uniquePoMap.values()));
 
         } catch (error) {
             console.error('❌ Error in HOD Approval logic:', error);
@@ -611,7 +635,7 @@ export default function PIApprovals() {
                         outstanding_amount: newOutstanding,
                         status: newStatus,
                     })
-                    .eq('id', selectedItem.rowIndex);
+                    .in('id', selectedItem.rowIds);
 
                 if (updateError) {
                     throw updateError;

@@ -2,7 +2,7 @@ import type { ColumnDef, Row } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
 import DataTable from '../element/DataTable';
 import { z } from 'zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/lib/supabase';
 import {
@@ -15,6 +15,7 @@ import {
     DialogTrigger,
     DialogClose,
 } from '../ui/dialog';
+import { Truck } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
 import { PuffLoader as Loader } from 'react-spinners';
@@ -22,7 +23,6 @@ import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
-import { Truck } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
@@ -66,6 +66,9 @@ interface StoreInPendingData {
     firmNameMatch: string;
     planned6Date: string;
     timestamp: string;
+    products?: string[];
+    indentNumbers?: string[];
+    originalItems?: any[];
 }
 
 interface StoreInHistoryData {
@@ -193,27 +196,26 @@ export default () => {
     const [indentLoading, setIndentLoading] = useState(false);
     const [receivedLoading, setReceivedLoading] = useState(false);
     const [storeInRecords, setStoreInRecords] = useState<StoreInRecord[]>([]);
+    const [activeItemIndex, setActiveItemIndex] = useState(0);
+    const [completedItems, setCompletedItems] = useState<Set<number>>(new Set());
+
+    const fetchAllData = async () => {
+        setIndentLoading(true);
+        setReceivedLoading(true);
+        try {
+            const storeIns = await fetchStoreInRecords();
+            setStoreInRecords(storeIns);
+        } catch (error) {
+            console.error('Failed to fetch data:', error);
+            toast.error('Failed to load data');
+        } finally {
+            setIndentLoading(false);
+            setReceivedLoading(false);
+        }
+    };
 
     // Fetch all data from Supabase
     useEffect(() => {
-        const fetchAllData = async () => {
-            setIndentLoading(true);
-            setReceivedLoading(true);
-            try {
-                const [storeIns] = await Promise.all([
-                    fetchStoreInRecords(),
-                ]);
-
-                setStoreInRecords(storeIns);
-            } catch (error) {
-                console.error('Failed to fetch data:', error);
-                toast.error('Failed to load data');
-            } finally {
-                setIndentLoading(false);
-                setReceivedLoading(false);
-            }
-        };
-
         fetchAllData();
     }, []);
 
@@ -224,8 +226,6 @@ export default () => {
         );
 
         // Filter to keep only the latest record per Indent and Product
-        // Since storeInRecords are already sorted by timestamp DESC, 
-        // the first one we see for each key is the latest.
         const latestRecords: any[] = [];
         const seen = new Set<string>();
 
@@ -237,16 +237,23 @@ export default () => {
             }
         }
 
-        setTableData(
-            latestRecords
-                .filter((i) => i.planned6 !== '' && i.actual6 === '' && i.billStatus === 'Bill Received')
-                .map((i) => ({
+        // Group by Vendor + Bill No
+        const groupedMap = new Map<string, any>();
+
+        const pendingItems = latestRecords.filter((i) => i.planned6 !== '' && i.actual6 === '' && i.billStatus === 'Bill Received');
+
+        pendingItems.forEach((i) => {
+            const billNo = String(i.billNo || '');
+            const key = `${i.vendorName}-${billNo}`;
+
+            if (!groupedMap.has(key)) {
+                groupedMap.set(key, {
                     liftNumber: i.liftNumber || '',
                     indentNo: i.indentNo || '',
-                    billNo: String(i.billNo) || '',
+                    billNo: billNo,
                     vendorName: i.vendorName || '',
                     productName: i.productName || '',
-                    qty: i.qty || 0,
+                    qty: 0,
                     typeOfBill: i.typeOfBill || '',
                     billAmount: i.billAmount || 0,
                     amount: i.amount || 0,
@@ -270,8 +277,20 @@ export default () => {
                     timestamp: i.timestamp || '',
                     priceAsPerPo: i.priceAsPerPo || 0,
                     remark: i.remark || '',
-                }))
-        );
+                    products: [],
+                    indentNumbers: [],
+                    originalItems: []
+                });
+            }
+
+            const group = groupedMap.get(key);
+            group.qty += Number(i.qty) || 0;
+            group.products.push(i.productName);
+            group.indentNumbers.push(i.indentNo);
+            group.originalItems.push(i);
+        });
+
+        setTableData(Array.from(groupedMap.values()));
     }, [storeInRecords, user.firmNameMatch]);
 
     // Process history data
@@ -373,19 +392,23 @@ export default () => {
             header: 'Timestamp',
             cell: ({ getValue }) => <div>{getValue() ? formatDateTime(parseCustomDate(getValue())) : '-'}</div>,
         },
-        { accessorKey: 'liftNumber', header: 'Lift Number', cell: textWrapCell },
-        { accessorKey: 'indentNo', header: 'Indent No.', cell: textWrapCell },
-        {
-            accessorKey: 'planned6Date',
-            header: 'Planned Date',
-            cell: ({ row }) => formatPlannedDate(row.original.planned6Date)
-        },
         { accessorKey: 'poNumber', header: 'PO Number', cell: textWrapCell },
         { accessorKey: 'vendorName', header: 'Vendor Name', cell: textWrapCell },
-        { accessorKey: 'productName', header: 'Product Name', cell: textWrapCell },
+        { accessorKey: 'billNo', header: 'Bill No.', cell: textWrapCell },
+        {
+            accessorKey: 'products',
+            header: 'Products',
+            cell: ({ row }) => {
+                const products = row.original.products || [];
+                return (
+                    <div className="max-w-[200px] truncate" title={products.join(', ')}>
+                        {products.length > 1 ? `${products[0]} (+${products.length - 1})` : products[0]}
+                    </div>
+                );
+            }
+        },
         { accessorKey: 'firmNameMatch', header: 'Firm Name', cell: textWrapCell },
         { accessorKey: 'billStatus', header: 'Bill Status', cell: textWrapCell },
-        { accessorKey: 'billNo', header: 'Bill No.', cell: textWrapCell },
         { accessorKey: 'billAmount', header: 'Bill Amount' },
         { accessorKey: 'discountAmount', header: 'Discount Amount' },
         { accessorKey: 'qty', header: 'Qty' },
@@ -496,7 +519,6 @@ export default () => {
 
     const schema = z.object({
         status: z.enum(['Received']),
-        qty: z.coerce.number().min(1, 'Quantity is required'),
         photoOfProduct: z.instanceof(File, {
             message: "Photo of product is required"
         }),
@@ -505,14 +527,13 @@ export default () => {
         priceAsPerPoCheck: z.enum(['Yes', 'No']),
         remark: z.string().optional(),
         location: z.string().optional(),
-    }).superRefine((data, ctx) => {
-        if (selectedIndent && data.qty > selectedIndent.qty) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                message: `Received quantity (${data.qty}) cannot exceed lifting quantity (${selectedIndent.qty})`,
-                path: ['qty'],
-            });
-        }
+        items: z.array(z.object({
+            liftNumber: z.string(),
+            indentNo: z.string(),
+            productName: z.string(),
+            qty: z.number(),
+            receivedQty: z.coerce.number().min(1, 'Received quantity is required'),
+        })),
     });
 
     type FormValues = z.infer<typeof schema>;
@@ -521,119 +542,89 @@ export default () => {
         resolver: zodResolver(schema),
         defaultValues: {
             status: 'Received',
-            qty: 0,
             photoOfProduct: undefined,
             damageOrder: undefined,
             quantityAsPerBill: undefined,
             priceAsPerPoCheck: undefined,
             remark: '',
-            location: '', // ✅ Location in default values
-
+            location: '',
+            items: [],
         },
     });
 
-    const status = form.watch('status');
+    const { fields: itemFields, append, remove } = useFieldArray({
+        control: form.control,
+        name: "items"
+    });
 
+    const statusSelector = form.watch('status');
+    const itemsWatcher = form.watch('items');
+
+    // Reset form when dialog closes
     useEffect(() => {
         if (!openDialog) {
+            form.reset();
+            fetchAllData(); // Refresh data on close
+        }
+    }, [openDialog, form]);
+
+    useEffect(() => {
+        if (selectedIndent?.originalItems) {
             form.reset({
                 status: 'Received',
-                qty: 0,
                 photoOfProduct: undefined,
                 damageOrder: undefined,
                 quantityAsPerBill: undefined,
                 priceAsPerPoCheck: undefined,
                 remark: '',
-                location: '', // ✅ Reset location field
+                location: '',
+                items: selectedIndent.originalItems.map(item => ({
+                    liftNumber: item.liftNumber || '',
+                    indentNo: item.indentNo || '',
+                    productName: item.productName || '',
+                    qty: Number(item.qty) || 0,
+                    receivedQty: Number(item.qty) || 0,
+                })),
             });
         }
-    }, [openDialog, form]);
+    }, [selectedIndent, form]);
 
     async function onSubmit(values: FormValues) {
+        if (!selectedIndent) return;
         try {
             let photoUrl = '';
 
+            // 1. Upload photo once for all items
             if (values.photoOfProduct) {
                 photoUrl = await uploadProductPhoto(
                     values.photoOfProduct,
-                    selectedIndent?.indentNo || ''
+                    selectedIndent.indentNo || ''
                 );
-                console.log('✅ Photo uploaded:', photoUrl);
             }
 
             const currentDateTime = new Date().toISOString();
 
-            if (!selectedIndent?.liftNumber) {
-                toast.error('No lift number found');
-                return;
-            }
+            // 2. Update all items in parallel
+            const updatePromises = values.items.map(item =>
+                updateStoreInReceiving(item.liftNumber, {
+                    actual6: currentDateTime,
+                    receivingStatus: values.status,
+                    receivedQuantity: item.receivedQty,
+                    photoOfProduct: photoUrl,
+                    damageOrder: values.damageOrder || '',
+                    quantityAsPerBill: values.quantityAsPerBill || '',
+                    priceAsPerPoCheck: values.priceAsPerPoCheck || '',
+                    remark: values.remark || '',
+                    location: values.location || '',
+                })
+            );
 
-            await updateStoreInReceiving(selectedIndent.liftNumber, {
-                actual6: currentDateTime,
-                receivingStatus: values.status,
-                receivedQuantity: values.qty,
-                photoOfProduct: photoUrl,
-                damageOrder: values.damageOrder || '',
-                quantityAsPerBill: values.quantityAsPerBill || '',
-                priceAsPerPoCheck: values.priceAsPerPoCheck || '',
-                remark: values.remark || '',
-                location: values.location || '',
-            });
+            await Promise.all(updatePromises);
 
-            // ✅ FETCH STORE IN RECORD TO CHECK TRANSPORTATION
-            try {
-                const { data: storeInRecord, error: storeInError } = await supabase
-                    .from('store_in')
-                    .select('*')
-                    .eq('lift_number', selectedIndent.liftNumber)
-                    .maybeSingle();
 
-                if (storeInError) console.warn('Error fetching store_in record:', storeInError);
-
-                // ✅ IF TRANSPORTATION IS NOT INCLUDED ("No"), CREATE PAYMENT ENTRY
-                // AND BILL TYPE IS NOT "common"
-                if (storeInRecord && storeInRecord.transportation_include !== 'Yes' && storeInRecord.type_of_bill !== 'common') {
-                    console.log('📝 Creating payment entry for Store In...');
-
-                    // Fetch indent data to get PO info
-                    const { data: indentData, error: indentError } = await supabase
-                        .from('indent')
-                        .select('po_number,approved_vendor_name,vendor_name,product_name')
-                        .eq('indent_number', selectedIndent.indentNo)
-                        .maybeSingle();
-
-                    if (indentError) console.warn('Error fetching indent data:', indentError);
-
-                    const poNumber = indentData?.po_number || selectedIndent.indentNo;
-                    const vendorName = indentData?.approved_vendor_name || indentData?.vendor_name || selectedIndent.vendorName;
-                    const productName = indentData?.product_name || selectedIndent.productName;
-
-                    // Create payment entry
-                    await createPaymentEntry({
-                        indent_number: selectedIndent.indentNo,
-                        vendor_name: vendorName,
-                        po_number: poNumber,
-                        bill_amount: storeInRecord.bill_amount || 0,
-                        photo_of_bill: storeInRecord.photo_of_bill || '',
-                        product_name: productName,
-                        firm_name_match: user.firmNameMatch,
-                    }, photoUrl);
-
-                    toast.success('✅ Payment entry created for HOD approval');
-                }
-            } catch (paymentErr) {
-                console.warn('⚠️ Error creating payment entry:', paymentErr);
-                // Don't block the main operation if payment creation fails
-            }
-
-            toast.success(`Stored in successfully`);
+            toast.success(`All ${values.items.length} items stored in successfully!`);
             setOpenDialog(false);
-
-            // Refresh data
-            setTimeout(async () => {
-                const storeIns = await fetchStoreInRecords();
-                setStoreInRecords(storeIns);
-            }, 1000);
+            await fetchAllData();
         } catch (error) {
             console.error('Error in onSubmit:', error);
             toast.error('Failed to store in');
@@ -667,7 +658,7 @@ export default () => {
                         <DataTable
                             data={tableData}
                             columns={columns}
-                            searchFields={['productName', 'billNo', 'indentNo']}
+                            searchFields={['vendorName', 'productName', 'billNo', 'indentNo', 'poNumber']}
                             dataLoading={indentLoading}
                         />
                     </TabsContent>
@@ -675,14 +666,14 @@ export default () => {
                         <DataTable
                             data={historyData}
                             columns={historyColumns}
-                            searchFields={['productName', 'billNo', 'indentNo', 'vendorName']}
+                            searchFields={['productName', 'billNo', 'indentNo', 'vendorName', 'poNumber']}
                             dataLoading={receivedLoading}
                         />
                     </TabsContent>
                 </Tabs>
 
                 {selectedIndent && (
-                    <DialogContent className="sm:max-w-3xl">
+                    <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
                         <Form {...form}>
                             <form
                                 onSubmit={form.handleSubmit(onSubmit, onError)}
@@ -691,59 +682,58 @@ export default () => {
                                 <DialogHeader className="space-y-1">
                                     <DialogTitle>Store In</DialogTitle>
                                     <DialogDescription>
-                                        Store In from indent{' '}
-                                        <span className="font-medium">
-                                            {selectedIndent.indentNo}
-                                        </span>
+                                        Vendor: <span className="font-medium">{selectedIndent.vendorName}</span> | Bill No: <span className="font-medium">{selectedIndent.billNo}</span>
                                     </DialogDescription>
                                 </DialogHeader>
-                                <div className="bg-muted p-4 rounded-md grid gap-3">
-                                    <h3 className="text-lg font-bold">Item Details</h3>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 bg-muted rounded-md gap-3 ">
-                                        <div className="space-y-1">
-                                            <p className="font-medium text-nowrap">Indent Number</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.indentNo}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">Vendor</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.vendorName}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">Product Name</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.productName}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">Bill No</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.billNo}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">Bill Amount</p>
-                                            <p className="text-sm font-light">
-                                                ₹{selectedIndent.billAmount}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">Lifting Quantity</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.qty} {selectedIndent.uom}
-                                            </p>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="font-medium">Remark</p>
-                                            <p className="text-sm font-light">
-                                                {selectedIndent.remark || '-'}
-                                            </p>
-                                        </div>
+
+                                {/* Product list - click to switch */}
+                                {(selectedIndent.originalItems?.length || 0) > 1 && (
+                                    <div className="border rounded-md overflow-hidden">
+                                        <div className="bg-muted px-3 py-2 text-sm font-semibold">Products in this shipment ({selectedIndent.originalItems?.length})</div>
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-muted/40 border-b">
+                                                <tr>
+                                                    <th className="px-3 py-2 text-left">S.No.</th>
+                                                    <th className="px-3 py-2 text-left">Product</th>
+                                                    <th className="px-3 py-2 text-left">Indent No.</th>
+                                                    <th className="px-3 py-2 text-right">Lift Qty</th>
+                                                    <th className="px-3 py-2 text-right w-32">Received Qty</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {itemFields.map((field, idx) => (
+                                                    <tr key={field.id} className="hover:bg-muted/30 transition-colors">
+                                                        <td className="px-3 py-2">{idx + 1}</td>
+                                                        <td className="px-3 py-2 font-medium">{field.productName}</td>
+                                                        <td className="px-3 py-2 text-muted-foreground">{field.indentNo}</td>
+                                                        <td className="px-3 py-2 text-right">{field.qty}</td>
+                                                        <td className="px-3 py-2">
+                                                            <FormField
+                                                                control={form.control}
+                                                                name={`items.${idx}.receivedQty`}
+                                                                render={({ field: inputField }) => (
+                                                                    <FormItem>
+                                                                        <FormControl>
+                                                                            <Input
+                                                                                type="number"
+                                                                                {...inputField}
+                                                                                max={field.qty}
+                                                                                className="h-8 text-right"
+                                                                            />
+                                                                        </FormControl>
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
-                                </div>
+                                )}
+
+
+                                {/* Standard form fields */}
                                 <div className="grid md:grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
@@ -754,7 +744,6 @@ export default () => {
                                                 <FormControl>
                                                     <Input
                                                         type="text"
-
                                                         disabled={true}
                                                         readOnly
                                                         className="bg-gray-100 cursor-not-allowed"
@@ -767,18 +756,12 @@ export default () => {
 
                                     <FormField
                                         control={form.control}
-                                        name="qty"
+                                        name="location"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Received Quantity</FormLabel>
+                                                <FormLabel>Location (optional)</FormLabel>
                                                 <FormControl>
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="Enter received quantity"
-                                                        disabled={status !== 'Received'}
-                                                        max={selectedIndent?.qty}
-                                                        {...field}
-                                                    />
+                                                    <Input {...field} placeholder="Enter storage location" />
                                                 </FormControl>
                                             </FormItem>
                                         )}
@@ -795,7 +778,6 @@ export default () => {
                                             <FormControl>
                                                 <Input
                                                     type="file"
-                                                    disabled={status !== 'Received'}
                                                     onChange={(e) =>
                                                         field.onChange(e.target.files?.[0])
                                                     }
@@ -859,7 +841,7 @@ export default () => {
                                         name="priceAsPerPoCheck"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel className=" font-semibold ">Price as per PO?</FormLabel>
+                                                <FormLabel className="font-semibold">Price as per PO?</FormLabel>
                                                 <FormControl>
                                                     <Select
                                                         onValueChange={field.onChange}
@@ -873,20 +855,6 @@ export default () => {
                                                             <SelectItem value="No">No</SelectItem>
                                                         </SelectContent>
                                                     </Select>
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-
-                                    {/* ✅ ADD DYNAMIC LOCATION DROPDOWN FROM MASTER SHEET */}
-                                    <FormField
-                                        control={form.control}
-                                        name="location"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Location</FormLabel>
-                                                <FormControl>
-                                                    <Input {...field} placeholder="Enter location" />
                                                 </FormControl>
                                             </FormItem>
                                         )}
@@ -925,7 +893,10 @@ export default () => {
                                                 aria-label="Loading Spinner"
                                             />
                                         )}
-                                        Store In
+                                        {(selectedIndent.originalItems?.length || 0) > 1
+                                            ? `Store In`
+                                            : 'Store In'
+                                        }
                                     </Button>
                                 </DialogFooter>
                             </form>

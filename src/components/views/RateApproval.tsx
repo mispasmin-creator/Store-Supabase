@@ -181,16 +181,16 @@ export default () => {
             setHistoryData(
                 rows.filter(r => r.approved_vendor_name)
                     .map((r): HistoryData => ({
-                    id: r.id,
-                    indentNo: r.indent_number || '',
-                    firmNameMatch: r.firm_name_match || '',
-                    indenter: r.indenter_name || '',
-                    department: r.department || '',
-                    product: r.product_name || '',
-                    date: formatDateTime(new Date(r.timestamp)).replace(/\//g, '-'),
-                    vendor: [r.approved_vendor_name || '', r.approved_rate?.toString() || '0'],
-                    rank: r.vendor_rate || '',
-                }))
+                        id: r.id,
+                        indentNo: r.indent_number || '',
+                        firmNameMatch: r.firm_name_match || '',
+                        indenter: r.indenter_name || '',
+                        department: r.department || '',
+                        product: r.product_name || '',
+                        date: formatDateTime(new Date(r.timestamp)).replace(/\//g, '-'),
+                        vendor: [r.approved_vendor_name || '', r.approved_rate?.toString() || '0'],
+                        rank: r.vendor_rate || '',
+                    }))
             );
         } catch (err) {
             console.error('Error fetching completed approvals:', err);
@@ -346,10 +346,10 @@ export default () => {
             const updates = {
                 po_requred: 'Yes', // Automatically set PO Required to Yes
                 approved_vendor_name: selectedVendor[0] || '',
-                approved_rate: finalRate.toString(),
+                approved_rate: rate.toString(), // Store base rate, not final rate
                 approved_payment_term: selectedVendor[2] || '',
                 approved_advance_percent: selectedVendor[11] || '',
-                with_tax_or_not4: selectedVendor[4] || 'Yes',
+                with_tax_or_not4: selectedVendor[3] === 'Basic Rate' ? 'No' : 'Yes', // Map Basic Rate to No, With Tax to Yes
                 tax_value4: selectedVendor[5] || '0',
                 approved_quotation_no: selectedVendor[6] || '',
                 approved_quotation_date: selectedVendor[7] || '',
@@ -424,7 +424,7 @@ export default () => {
             <Dialog open={openDialog} onOpenChange={setOpenDialog}>
                 <Tabs defaultValue="pending">
                     <Heading
-                        heading="Department Approval"
+                        heading="Management Approval"
                         subtext="Approve rates the updated vendors"
                         tabs
                         pendingCount={tableData.length}

@@ -156,8 +156,42 @@ interface MasterDetails {
 }
 
 
+const schema = z.object({
+    poNumber: z.string().nonempty(),
+    poDate: z.coerce.date(),
+    supplierName: z.string().nonempty(),
+    supplierAddress: z.string().nonempty(),
+    gstin: z.string().nonempty(),
+    companyEmail: z.string().email().optional(),
 
-export default () => {
+    ourEnqNo: z.string().optional(),
+    enquiryDate: z.coerce.date().optional(),
+    description: z.string(),
+    indents: z.array(
+        z.object({
+            id: z.number(),
+            indentNumber: z.string().nonempty(),
+            quotationNumber: z.string().optional(),
+            productName: z.string().optional(),
+            specifications: z.string().optional(),
+            gst: z.coerce.number(),
+            discount: z.coerce.number().default(0).optional(),
+            quantity: z.coerce.number().optional(),
+            unit: z.string().optional(),
+            rate: z.coerce.number().optional(),
+        })
+    ),
+    terms: z.array(z.string().nonempty()).max(10),
+    deliveryDate: z.coerce.date(),
+    deliveryDays: z.coerce.number().optional(),
+    deliveryType: z.enum(['for', 'exfactory']).optional(),
+    paymentTerms: z.string().nonempty(),
+    numberOfDays: z.coerce.number().optional(),
+});
+
+type FormData = z.infer<typeof schema>;
+
+const CreatePO = () => {
     const { user } = useAuth();
 
     // Supabase state
@@ -207,42 +241,6 @@ export default () => {
             setDestinationAddress(details.destinationAddress);
         }
     }, [details]);
-
-    const schema = z.object({
-        poNumber: z.string().nonempty(),
-        poDate: z.coerce.date(),
-        supplierName: z.string().nonempty(),
-        supplierAddress: z.string().nonempty(),
-        gstin: z.string().nonempty(),
-        companyEmail: z.string().email().optional(),
-
-        quotationNumber: z.string().nonempty(),
-        quotationDate: z.coerce.date(),
-        ourEnqNo: z.string().optional(),
-        enquiryDate: z.coerce.date().optional(),
-        description: z.string(),
-        indents: z.array(
-            z.object({
-                id: z.number(),
-                indentNumber: z.string().nonempty(),
-                productName: z.string().optional(),
-                specifications: z.string().optional(),
-                gst: z.coerce.number(),
-                discount: z.coerce.number().default(0).optional(),
-                quantity: z.coerce.number().optional(),
-                unit: z.string().optional(),
-                rate: z.coerce.number().optional(),
-            })
-        ),
-        terms: z.array(z.string().nonempty()).max(10),
-        deliveryDate: z.coerce.date(),
-        deliveryDays: z.coerce.number().optional(),
-        deliveryType: z.enum(['for', 'exfactory']).optional(),
-        paymentTerms: z.string().nonempty(),
-        numberOfDays: z.coerce.number().optional(),
-    });
-
-    type FormData = z.infer<typeof schema>;
     const form = useForm<FormData>({
         resolver: zodResolver(schema),
         defaultValues: {
@@ -252,8 +250,6 @@ export default () => {
             supplierAddress: '',
             gstin: '',
             companyEmail: '',
-            quotationNumber: '',
-            quotationDate: new Date(),
             ourEnqNo: '',
             enquiryDate: undefined as any,
             description: '',
@@ -351,10 +347,6 @@ export default () => {
 
         if (matchingIndents.length > 0) {
             const first = matchingIndents[0];
-            form.setValue('quotationNumber', first.quotationNumber || '');
-            if (first.quotationDate) {
-                form.setValue('quotationDate', new Date(first.quotationDate));
-            }
             form.setValue('paymentTerms', first.approvedPaymentTerm || '');
             form.setValue('numberOfDays', Number(first.approvedAdvancePercent) || 0);
         }
@@ -374,6 +366,7 @@ export default () => {
                 return {
                     id: i.id as number,
                     indentNumber: i.indentNumber || '',
+                    quotationNumber: i.quotationNumber || '',
                     productName: i.productName || '',
                     specifications: i.specifications || '',
                     gst: gstValue,
@@ -399,9 +392,6 @@ export default () => {
                 supplierAddress: '',
                 gstin: '',
                 companyEmail: '',
-                quotationNumber: '',
-                quotationDate: new Date(),
-                ourEnqNo: '',
                 enquiryDate: undefined as any,
                 indents: [],
                 terms: (details as MasterDetails)?.defaultTerms || [],
@@ -423,8 +413,6 @@ export default () => {
                     supplierAddress: '',
                     gstin: '',
                     companyEmail: '',
-                    quotationNumber: '',
-                    quotationDate: new Date(),
                     ourEnqNo: '',
                     enquiryDate: undefined as any,
                     indents: [],
@@ -444,8 +432,6 @@ export default () => {
                     supplierAddress: '',
                     gstin: '',
                     companyEmail: '',
-                    quotationNumber: '',
-                    quotationDate: new Date(),
                     ourEnqNo: '',
                     enquiryDate: undefined as any,
                     indents: [],
@@ -489,9 +475,6 @@ export default () => {
                     form.setValue('companyEmail', storedEmail);
                 }
 
-                form.setValue('quotationNumber', firstPoItem.quotationNumber || '');
-                form.setValue('quotationDate', parseCustomDate(firstPoItem.quotationDate));
-                form.setValue('description', firstPoItem.description || '');
                 form.setValue('ourEnqNo', firstPoItem.enquiryNumber || '');
                 form.setValue('enquiryDate', parseCustomDate(firstPoItem.enquiryDate));
                 form.setValue('deliveryDate', parseCustomDate(firstPoItem.deliveryDate));
@@ -501,13 +484,14 @@ export default () => {
                 form.setValue('numberOfDays', firstPoItem.numberOfDays || 0);
 
                 const poIndents = poItems.map((poItem) => {
-                    const originalIndent = indentSheet.find(i => 
-                        i.indentNumber === poItem.internalCode && 
+                    const originalIndent = indentSheet.find(i =>
+                        i.indentNumber === poItem.internalCode &&
                         i.productName === poItem.product
                     );
                     return {
                         id: originalIndent?.id || 0,
                         indentNumber: poItem.internalCode || '',
+                        quotationNumber: poItem.quotationNumber || '',
                         productName: poItem.product || '',
                         specifications: poItem.description || '',
                         gst: poItem.gstPercent || 18,
@@ -583,13 +567,14 @@ export default () => {
             orderNumber: mode === 'create' ? values.poNumber : incrementPoRevision(values.poNumber, poMasterSheet),
             orderDate: formatDate(values.poDate),
             deliveryDate: formatDate(values.deliveryDate),
-            quotationNumber: values.quotationNumber,
-            quotationDate: formatDate(values.quotationDate),
+            paymentTerms: values.paymentTerms,
+            numberOfDays: values.numberOfDays || 0,
             description: values.description,
             items: values.indents.map((item) => {
                 const indent = indentSheet.find((i: IndentSheetItem) => i.indentNumber === item.indentNumber);
                 return {
                     internalCode: indent?.indentNumber || item.indentNumber,
+                    quotationNumber: item.quotationNumber || '',
                     product: item.productName || indent?.productName || '',
                     description: item.specifications || indent?.specifications || '',
                     quantity: item.quantity || 0,
@@ -667,14 +652,15 @@ export default () => {
                 orderNumber: poNumber,
                 orderDate: formatDate(values.poDate),
                 deliveryDate: formatDate(values.deliveryDate),
-                quotationNumber: values.quotationNumber,
-                quotationDate: formatDate(values.quotationDate),
+                paymentTerms: values.paymentTerms,
+                numberOfDays: values.numberOfDays || 0,
                 description: values.description,
 
                 items: values.indents.map((item) => {
                     const indent = indentSheet.find((i: IndentSheetItem) => i.indentNumber === item.indentNumber);
                     return {
                         internalCode: indent?.indentNumber || item.indentNumber,
+                        quotationNumber: item.quotationNumber || '',
                         product: item.productName || indent?.productName || '',
                         description: item.specifications || indent?.specifications || '',
                         quantity: item.quantity || 0,
@@ -767,8 +753,8 @@ export default () => {
                     ),
                     totalPoAmount: grandTotal,
                     pdf: url,
-                    quotationNumber: values.quotationNumber,
-                    quotationDate: formatDateTime(values.quotationDate),
+                    quotationNumber: v.quotationNumber || '',
+                    quotationDate: '',
                     enquiryNumber: values.ourEnqNo || '',
                     enquiryDate: values.enquiryDate ? formatDateTime(values.enquiryDate) : '',
                     term1: values.terms[0],
@@ -799,7 +785,7 @@ export default () => {
             // Use ISO string for database compatibility to avoid "out of range" error
             const databaseDeliveryDate = values.deliveryDate.toISOString();
             if (indentIds.length > 0) {
-                await updateIndentsAfterPoCreation(indentIds, databaseDeliveryDate);
+                await updateIndentsAfterPoCreation(indentIds, databaseDeliveryDate, poNumber);
             }
 
             toast.success(`Successfully ${mode}d purchase order`);
@@ -953,23 +939,6 @@ export default () => {
                                                     </FormControl>
                                                 </>
                                             )}
-                                        </FormItem>
-                                    )} />
-                                    <FormField control={form.control} name="quotationNumber" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Quotation Number</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" placeholder="Enter Quotation number" {...field} readOnly />
-                                            </FormControl>
-                                        </FormItem>
-                                    )} />
-                                    <FormField control={form.control} name="quotationDate" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Quotation Date</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" type="date" value={field.value && !isNaN(field.value.getTime()) ? field.value.toISOString().split('T')[0] : ''}
-                                                    readOnly />
-                                            </FormControl>
                                         </FormItem>
                                     )} />
                                 </div>
@@ -1159,6 +1128,7 @@ export default () => {
                                             <TableRow>
                                                 <TableHead>S/N</TableHead>
                                                 <TableHead>Internal Code</TableHead>
+                                                <TableHead>Quotation No.</TableHead>
                                                 <TableHead>Product</TableHead>
                                                 <TableHead>Description</TableHead>
                                                 <TableHead>Qty</TableHead>
@@ -1179,13 +1149,22 @@ export default () => {
                                                     <TableRow key={field.id}>
                                                         <TableCell>{index + 1}</TableCell>
                                                         <TableCell className="font-medium">{formValue?.indentNumber || 'N/A'}</TableCell>
+                                                        <TableCell className="font-medium">
+                                                            <FormField control={form.control} name={`indents.${index}.quotationNumber`} render={({ field }) => (
+                                                                <FormItem className="flex justify-center">
+                                                                    <FormControl>
+                                                                        <Input className="h-9 w-24 text-center bg-gray-50" value={field.value || ''} onChange={field.onChange} />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )} />
+                                                        </TableCell>
                                                         <TableCell>{formValue?.productName || 'No Product'}</TableCell>
                                                         <TableCell>{formValue?.specifications || <span className="text-muted-foreground italic">No description</span>}</TableCell>
                                                         <TableCell>
                                                             <FormField control={form.control} name={`indents.${index}.quantity`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-20 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-14 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1194,7 +1173,7 @@ export default () => {
                                                             <FormField control={form.control} name={`indents.${index}.unit`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input readOnly className="h-9 w-20 text-center bg-gray-50 cursor-not-allowed" value={field.value || ''} onChange={field.onChange} />
+                                                                        <Input readOnly className="h-9 w-14 text-center bg-gray-50 cursor-not-allowed" value={field.value || ''} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1203,7 +1182,7 @@ export default () => {
                                                             <FormField control={form.control} name={`indents.${index}.rate`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-24 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-20 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1212,7 +1191,7 @@ export default () => {
                                                             <FormField control={form.control} name={`indents.${index}.gst`} render={({ field }) => (
                                                                 <FormItem className="flex items-center justify-center gap-1">
                                                                     <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-16 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-14 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                     <span>%</span>
                                                                 </FormItem>
@@ -1222,7 +1201,7 @@ export default () => {
                                                             <FormField control={form.control} name={`indents.${index}.discount`} render={({ field }) => (
                                                                 <FormItem className="flex items-center justify-center gap-1">
                                                                     <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-16 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input type="number" readOnly className="h-9 w-14 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
                                                                     </FormControl>
                                                                     <span>%</span>
                                                                 </FormItem>
@@ -1402,3 +1381,5 @@ export default () => {
         </div>
     );
 };
+
+export default CreatePO;

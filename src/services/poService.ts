@@ -259,11 +259,14 @@ export async function insertPoRecords(poRecords: any[]) {
  * @param indentNumbers - Array of indent numbers to update
  * @param deliveryDate - The delivery date from the PO
  */
-export async function updateIndentsAfterPoCreation(ids: number[], deliveryDate?: string) {
+export async function updateIndentsAfterPoCreation(ids: number[], deliveryDate?: string, poNumber?: string) {
     try {
         const updateData: any = { actual4: new Date().toISOString() };
         if (deliveryDate) {
             updateData.delivery_date = deliveryDate;
+        }
+        if (poNumber) {
+            updateData.po_number = poNumber;
         }
 
         const { error } = await supabase

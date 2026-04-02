@@ -54,7 +54,7 @@ export const calculatePcReportCounts = (
             indentSheet || [],
             (item) => item.planned3 && !item.actual3,
             (item) => !!item.actual3,
-            'Technical Approval'
+            'Department Approval'
         ),
         calculateCounts(
             indentSheet || [],
@@ -133,8 +133,8 @@ export const calculatePcReportCounts = (
             totalPending: (() => {
                 const receivedPos = new Set((storeInSheet || []).filter((s: any) => s.actual6 && s.actual6 !== '').map((s: any) => s.poNumber || s.po_number).filter(Boolean));
                 const paymentsByPo: Record<string, number> = {};
-                (paymentsSheet || []).forEach((p: any) => { const k = p.poNumber || p.po_number || ''; if(k) paymentsByPo[k] = (paymentsByPo[k] || 0) + Number(p.payAmount || p.pay_amount || 0); });
-                
+                (paymentsSheet || []).forEach((p: any) => { const k = p.poNumber || p.po_number || ''; if (k) paymentsByPo[k] = (paymentsByPo[k] || 0) + Number(p.payAmount || p.pay_amount || 0); });
+
                 const poBased = (poMasterSheet || []).filter((r: any) => {
                     const isReceived = receivedPos.has(r.poNumber || r.po_number || '');
                     const totalPo = Number(r.totalPoAmount || 0);

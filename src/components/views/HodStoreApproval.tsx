@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
     fetchStoreInRecords,
     updateStoreInHodApproval,
+    createPaymentEntry,
     type StoreInRecord,
 } from '@/services/storeInService';
 
@@ -48,6 +49,11 @@ interface HodPendingData {
     plannedHod: string;
     timestamp: string;
     firmNameMatch: string;
+    poNumber: string;
+    billAmount: number;
+    photoOfBill: string;
+    typeOfBill: string;
+    transportationInclude: string;
 }
 
 interface HodHistoryData {
@@ -126,6 +132,11 @@ export default () => {
                     plannedHod: i.plannedHod || '',
                     timestamp: i.timestamp || '',
                     firmNameMatch: i.firmNameMatch || '',
+                    poNumber: i.poNumber || '',
+                    billAmount: Number(i.billAmount) || 0,
+                    photoOfBill: i.photoOfBill || '',
+                    typeOfBill: i.typeOfBill || '',
+                    transportationInclude: i.transportationInclude || '',
                 }))
         );
 
@@ -165,6 +176,22 @@ export default () => {
                 hodRemark: values.remark || '',
                 triggerStage7: triggerStage7
             });
+
+            // ✅ Create Payment Entry ONLY if HOD approves
+            if (values.status === 'Approved' && !triggerStage7) {
+                if (selectedItem.transportationInclude !== 'Yes' && selectedItem.typeOfBill !== 'common') {
+                    console.log('✅ HOD Approved. Creating payment entry...');
+                    await createPaymentEntry({
+                        indent_number: selectedItem.indentNo,
+                        vendor_name: selectedItem.vendorName || '',
+                        po_number: selectedItem.poNumber || '',
+                        bill_amount: selectedItem.billAmount || 0,
+                        photo_of_bill: selectedItem.photoOfBill || '',
+                        product_name: selectedItem.productName,
+                        firm_name_match: selectedItem.firmNameMatch,
+                    });
+                }
+            }
 
             toast.success(`HOD ${values.status} for ${selectedItem.liftNumber}`);
             setOpenDialog(false);

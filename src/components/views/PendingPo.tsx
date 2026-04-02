@@ -25,6 +25,7 @@ interface ApprovedPOData {
     poRequiredStatus: 'Yes';
     expectedReqDate: string;
     expectedReqDateRaw: string | null;
+    rawTimestamp: number;
 }
 
 export default function ApprovedPOs() {
@@ -129,18 +130,10 @@ export default function ApprovedPOs() {
                         poRequiredStatus: 'Yes' as const,
                         expectedReqDateRaw: rawExpected,
                         expectedReqDate: formattedExpectedDate,
+                        rawTimestamp: sheet.timestamp ? new Date(sheet.timestamp).getTime() : 0,
                     };
                 })
-                // Sort by expected request date (upcoming first)
-                .sort((a, b) => {
-                    const dateA = a.expectedReqDateRaw ? new Date(a.expectedReqDateRaw).getTime() : Infinity;
-                    const dateB = b.expectedReqDateRaw ? new Date(b.expectedReqDateRaw).getTime() : Infinity;
-                    
-                    if (dateA === dateB) {
-                        return b.indentNo.localeCompare(a.indentNo);
-                    }
-                    return dateA - dateB;
-                });
+                .sort((a, b) => b.rawTimestamp - a.rawTimestamp);
 
             console.log('Final Approved Table Data:', mappedData);
             setApprovedTableData(mappedData);
