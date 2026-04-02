@@ -775,6 +775,8 @@ const CreatePO = () => {
                     deliveryDays: values.deliveryDays || 0,
                     deliveryType: values.deliveryType || '',
                     firmNameMatch: (indent as any)?.firmNameMatch ?? '',
+                    advancePercent: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (values.numberOfDays || 0) : 0,
+                    advanceAmount: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (calculateTotal(v.rate || 0, v.gst, v.discount || 0, v.quantity || 0) * (values.numberOfDays || 0)) / 100 : 0
                 };
             });
 
@@ -1007,22 +1009,52 @@ const CreatePO = () => {
                                     <FormField control={form.control} name="paymentTerms" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Payment Terms</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" placeholder="Enter payment terms" {...field} readOnly />
-                                            </FormControl>
+                                            <Select onValueChange={field.onChange} value={field.value || ""}>
+                                                <FormControl>
+                                                    <SelectTrigger size="sm" className="h-9">
+                                                        <SelectValue placeholder="Select payment terms" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    {details?.paymentTerms?.map((term, index) => (
+                                                        <SelectItem key={index} value={term}>
+                                                            {term}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </FormItem>
                                     )} />
                                 </div>
 
-                                {form.watch('paymentTerms') === 'After Delivery' && (
-                                    <FormField control={form.control} name="numberOfDays" render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Number of Days</FormLabel>
-                                            <FormControl>
-                                                <Input className="h-9" type="number" placeholder="Enter number of days" {...field} />
-                                            </FormControl>
-                                        </FormItem>
-                                    )} />
+                                 {form.watch('paymentTerms') && (form.watch('paymentTerms').toLowerCase().includes('delivery') || (form.watch('paymentTerms').toLowerCase().includes('partly') && (form.watch('paymentTerms').toLowerCase().includes('advance') || form.watch('paymentTerms').toLowerCase().includes('pi')))) && (
+                                    <div className="flex gap-4">
+                                        <FormField control={form.control} name="numberOfDays" render={({ field }) => (
+                                            <FormItem className="flex-1">
+                                                <FormLabel>
+                                                    {form.watch('paymentTerms').toLowerCase().includes('partly') ? 'Advance %' : 'Number of Days'}
+                                                </FormLabel>
+                                                <FormControl>
+                                                    <Input className="h-9" type="number" placeholder={form.watch('paymentTerms').toLowerCase().includes('partly') ? 'Enter advance %' : 'Enter number of days'} {...field} />
+                                                </FormControl>
+                                            </FormItem>
+                                        )} />
+                                        {form.watch('paymentTerms').toLowerCase().includes('partly') && (
+                                            <div className="flex-1">
+                                                <FormLabel>Advance Amount</FormLabel>
+                                                <div className="h-9 flex items-center px-3 border rounded-md bg-muted/50 font-semibold text-sm">
+                                                    ₹{((calculateGrandTotal(
+                                                        form.watch('indents').map((indent) => ({
+                                                            quantity: indent.quantity || 0,
+                                                            rate: indent.rate || 0,
+                                                            discountPercent: indent.discount || 0,
+                                                            gstPercent: indent.gst || 0,
+                                                        }))
+                                                    ) * (form.watch('numberOfDays') || 0)) / 100).toFixed(2)}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
 

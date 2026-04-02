@@ -237,6 +237,8 @@ export async function insertPoRecords(poRecords: any[]) {
             delivery_type: record.deliveryType || '',
             firm_name_match: record.firmNameMatch || '',
             company_email: record.companyEmail || '',
+            advance_percent: record.advancePercent || 0,
+            advance_amount: record.advanceAmount || 0,
         }));
 
         const { data, error } = await supabase

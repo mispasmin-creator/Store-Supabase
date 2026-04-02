@@ -385,7 +385,7 @@ export default ({
                     <View>
                         <View style={styles.tableHeaderRow}>
                             <Text style={[styles.tableHeaderCell, { width: '4%', borderRight: '1 solid #cbd5e1' }]}>S/N</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>Int. Code</Text>
+                            <Text style={[styles.tableHeaderCell, { width: '10%', borderRight: '1 solid #cbd5e1' }]}>Int. Code</Text>
                             <Text style={[styles.tableHeaderCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>Q. No.</Text>
                             <Text style={[styles.tableHeaderCell, { width: '15%', borderRight: '1 solid #cbd5e1' }]}>Product</Text>
                             <Text style={[styles.tableHeaderCell, { width: '20%', borderRight: '1 solid #cbd5e1' }]}>Description</Text>
@@ -400,7 +400,7 @@ export default ({
                         {items.map((item, i) => (
                             <View style={styles.tableRow} key={i}>
                                 <Text style={[styles.tableCell, { width: '4%', borderRight: '1 solid #cbd5e1' }]}>{i + 1}</Text>
-                                <Text style={[styles.tableCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>{item.internalCode}</Text>
+                                <Text style={[styles.tableCell, { width: '10%', borderRight: '1 solid #cbd5e1' }]}>{item.internalCode}</Text>
                                 <Text style={[styles.tableCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>{item.quotationNumber}</Text>
                                 <Text style={[styles.tableCell, { width: '15%', borderRight: '1 solid #cbd5e1' }]}>{item.product}</Text>
                                 <Text style={[styles.tableCell, { width: '20%', borderRight: '1 solid #cbd5e1' }]}>{item.description}</Text>
@@ -426,10 +426,18 @@ export default ({
                                 <Text style={styles.totalLabel}>GST Amount</Text>
                                 <Text style={styles.totalValue}>{gstAmount}</Text>
                             </View>
-                            <View style={styles.grandTotalRow}>
+                             <View style={styles.grandTotalRow}>
                                 <Text style={styles.grandTotalLabel}>Grand Total</Text>
                                 <Text style={styles.grandTotalLabel}>{grandTotal}</Text>
                             </View>
+                            {(paymentTerms?.toLowerCase().includes('partly') && (paymentTerms?.toLowerCase().includes('advance') || paymentTerms?.toLowerCase().includes('pi'))) && (
+                                <View style={[styles.totalRow, { backgroundColor: '#fdf2f2', borderTop: '1 solid #374151' }]}>
+                                    <Text style={[styles.totalLabel, { color: '#991b1b' }]}>Advance ({numberOfDays}%)</Text>
+                                    <Text style={[styles.totalValue, { color: '#991b1b' }]}>
+                                        {((grandTotal * (numberOfDays || 0)) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </Text>
+                                </View>
+                            )}
                         </View>
                     </View>
 
@@ -444,10 +452,12 @@ export default ({
                             paddingLeft: 12
                         }}>
                             <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#334155' }}>Payment Terms : </Text>
-                            <Text style={{ fontSize: 9, color: '#475569', marginLeft: 4 }}>
-                                {paymentTerms === 'After Delivery'
-                                    ? `Payment will be made ${numberOfDays} days after delivery.`
-                                    : paymentTerms || 'N/A'}
+                             <Text style={{ fontSize: 9, color: '#475569', marginLeft: 4 }}>
+                                {(paymentTerms?.toLowerCase().includes('partly') && (paymentTerms?.toLowerCase().includes('advance') || paymentTerms?.toLowerCase().includes('pi')))
+                                    ? `Advance Payment (${numberOfDays}%) of ₹${((grandTotal * (numberOfDays || 0)) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will be made.`
+                                    : paymentTerms === 'After Delivery'
+                                        ? `Payment will be made ${numberOfDays} days after delivery.`
+                                        : paymentTerms || 'N/A'}
                             </Text>
                         </View>
                     )}
