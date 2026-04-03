@@ -143,7 +143,8 @@ export default function GetPurchase() {
                 const receivedQty = (Number(sheet.receivedQuantity) || 0) + storeInRecords
                     .filter(
                         (store) =>
-                            store.indentNo === sheet.indentNumber?.toString()
+                            store.indentNo === sheet.indentNumber?.toString() &&
+                            store.firmNameMatch === sheet.firmNameMatch
                     )
                     .reduce(
                         (sum, store) =>
@@ -240,7 +241,7 @@ export default function GetPurchase() {
 
         const indentDataMap = new Map(
             completedIndents.map((sheet) => [
-                sheet.indentNumber?.toString() || '',
+                `${sheet.indentNumber?.toString() || ''}_${sheet.firmNameMatch || ''}`,
                 {
                     poNumber: sheet.poNumber || '',
                     poDate: sheet.actual4 ? formatDate(parseCustomDate(sheet.actual4)) : '',
@@ -264,19 +265,19 @@ export default function GetPurchase() {
 
         setHistoryData(
             filteredStoreIn
-                .filter((sheet) => indentDataMap.has(sheet.indentNo || ''))
+                .filter((sheet) => indentDataMap.has(`${sheet.indentNo || ''}_${sheet.firmNameMatch || ''}`))
                 .map((sheet) => {
-                    const indentData = indentDataMap.get(sheet.indentNo || '')!;
+                    const indentData = indentDataMap.get(`${sheet.indentNo || ''}_${sheet.firmNameMatch || ''}`)!;
 
                     const indentRecord = completedIndents.find(
-                        (indent) => indent.indentNumber?.toString() === sheet.indentNo
+                        (indent) => indent.indentNumber?.toString() === sheet.indentNo && indent.firmNameMatch === sheet.firmNameMatch
                     );
 
                     const approvedQty =
                         Number(indentRecord?.approvedQuantity) || 0;
 
                     const receivedQty = (Number(indentRecord?.receivedQuantity) || 0) + filteredStoreIn
-                        .filter((store) => store.indentNo === sheet.indentNo)
+                        .filter((store) => store.indentNo === sheet.indentNo && store.firmNameMatch === sheet.firmNameMatch)
                         .reduce(
                             (sum, store) =>
                                 sum + (Number(store.qty) || 0),
