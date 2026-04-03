@@ -272,7 +272,7 @@ export default function ReauditData() {
 
             const currentDateTime = new Date().toISOString();
 
-            await updateTallyEntryRecord(selectedItem.indentNumber, {
+            await updateTallyEntryRecord(selectedItem.id, {
                 actual3: currentDateTime,
                 status3: values.status3,
                 remarks3: values.remarks3

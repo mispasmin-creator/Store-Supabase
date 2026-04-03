@@ -260,7 +260,7 @@ export default function RectifyTheMistake() {
 
             const currentDateTime = new Date().toISOString();
 
-            await updateTallyEntryRecord(selectedItem.indentNumber, {
+            await updateTallyEntryRecord(selectedItem.id, {
                 actual2: currentDateTime,
                 status2: values.status2,
                 remarks2: values.remarks2

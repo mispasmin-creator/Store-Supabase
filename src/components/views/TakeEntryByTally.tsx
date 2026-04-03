@@ -333,7 +333,7 @@ export default function TallyEntry() {
 
             const currentDateTime = new Date().toISOString();
 
-            await updateTallyEntryRecord(selectedItem.indentNumber, {
+            await updateTallyEntryRecord(selectedItem.id, {
                 actual4: currentDateTime,
                 status4: values.status4,
                 remarks4: values.remarks4

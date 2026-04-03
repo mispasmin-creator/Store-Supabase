@@ -109,7 +109,7 @@ export default function AgainAuditingTable() {
     try {
       const currentDateTime = new Date().toISOString();
 
-      await updateTallyEntryRecord(selectedRow.indentNumber, {
+      await updateTallyEntryRecord(selectedRow.id, {
         actual5: currentDateTime,
         status5: values.status,
         remarks5: '', // No remarks field in this UI
@@ -295,8 +295,8 @@ export default function AgainAuditingTable() {
                               <SelectValue placeholder="Select status" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="okay">Okay</SelectItem>
-                                <SelectItem value="not okay">Not Okay</SelectItem>
+                              <SelectItem value="okay">Okay</SelectItem>
+                              <SelectItem value="not okay">Not Okay</SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>
