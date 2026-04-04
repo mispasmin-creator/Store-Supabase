@@ -240,7 +240,7 @@ export default () => {
         // Group by Vendor + Bill No
         const groupedMap = new Map<string, any>();
 
-        const pendingItems = latestRecords.filter((i) => i.planned6 !== '' && i.actual6 === '' && i.billStatus === 'Bill Received');
+        const pendingItems = latestRecords.filter((i) => i.planned6 !== '' && i.actual6 === '' && (i.billStatus === 'Bill Received' || i.billStatus === 'Not Received'));
 
         pendingItems.forEach((i) => {
             const billNo = String(i.billNo || '');
@@ -408,7 +408,18 @@ export default () => {
             }
         },
         { accessorKey: 'firmNameMatch', header: 'Firm Name', cell: textWrapCell },
-        { accessorKey: 'billStatus', header: 'Bill Status', cell: textWrapCell },
+        {
+            accessorKey: 'billStatus',
+            header: 'Bill Status',
+            cell: ({ getValue }) => {
+                const status = getValue() as string;
+                return (
+                    <Pill variant={status === 'Bill Received' ? 'default' : 'secondary'}>
+                        {status || 'Unknown'}
+                    </Pill>
+                );
+            }
+        },
         { accessorKey: 'billAmount', header: 'Bill Amount' },
         { accessorKey: 'discountAmount', header: 'Discount Amount' },
         { accessorKey: 'qty', header: 'Qty' },
@@ -441,7 +452,18 @@ export default () => {
         { accessorKey: 'firmNameMatch', header: 'Firm Name', cell: textWrapCell },
         { accessorKey: 'vendorName', header: 'Vendor Name', cell: textWrapCell },
         { accessorKey: 'productName', header: 'Product Name', cell: textWrapCell },
-        { accessorKey: 'billStatus', header: 'Bill Status', cell: textWrapCell },
+        {
+            accessorKey: 'billStatus',
+            header: 'Bill Status',
+            cell: ({ getValue }) => {
+                const status = getValue() as string;
+                return (
+                    <Pill variant={status === 'Bill Received' ? 'default' : 'secondary'}>
+                        {status || 'Unknown'}
+                    </Pill>
+                );
+            }
+        },
         { accessorKey: 'billNo', header: 'Bill No.', cell: textWrapCell },
         { accessorKey: 'qty', header: 'Qty' },
         { accessorKey: 'leadTimeToLiftMaterial', header: 'Lead Time To Lift', cell: textWrapCell },
