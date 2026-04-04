@@ -633,13 +633,13 @@ export async function uploadDebitNoteCopy(file: File, liftNumber: string): Promi
         const filePath = `debit-notes/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
-            .from('debit_note_copy')
+            .from('store_in_images')
             .upload(filePath, file);
 
         if (uploadError) throw uploadError;
 
         const { data: { publicUrl } } = supabase.storage
-            .from('debit_note_copy')
+            .from('store_in_images')
             .getPublicUrl(filePath);
 
         return publicUrl;
