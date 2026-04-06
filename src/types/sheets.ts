@@ -292,7 +292,6 @@ export type UserPermissions = {
     inventory: boolean;
     pendingPo: boolean;
     fullKiting: boolean;
-    paymentStatus: boolean;
     makePayment: boolean;
 };
 
@@ -361,7 +360,6 @@ export const allPermissionKeys = [
     "inventory",
     "pendingPo",
     "fullKiting",
-    "paymentStatus",
     "makePayment",
 ] as const;
 

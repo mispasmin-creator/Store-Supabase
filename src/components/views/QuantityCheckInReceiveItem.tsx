@@ -57,6 +57,8 @@ interface StoreInPendingData {
     remark?: string;
     planned7Date: string;
     timestamp: string;
+    hodStatus?: string;
+    hodRemark?: string;
 }
 
 interface StoreInHistoryData {
@@ -84,6 +86,8 @@ interface StoreInHistoryData {
     remark?: string;
     planned7Date: string;
     timestamp: string;
+    hodStatus?: string;
+    hodRemark?: string;
 }
 
 // ✅ Safe date formatter
@@ -157,7 +161,8 @@ export default () => {
 
         setPendingData(
             filteredByFirm
-                .filter((i) => i.planned7 !== '' && i.actual7 === '' && i.hodStatus === 'Rejected')
+                .filter((i) => i.planned7 !== '' && i.actual7 === '')
+                .sort((a, b) => (b.liftNumber || '').localeCompare(a.liftNumber || '', undefined, { numeric: true, sensitivity: 'base' }))
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNumber: i.indentNo || '',
@@ -181,12 +186,15 @@ export default () => {
                     firmNameMatch: i.firmNameMatch || '',
                     planned7Date: i.planned7 || '',
                     timestamp: i.timestamp || '',
+                    hodStatus: i.hodStatus || '',
+                    hodRemark: i.hodRemark || '',
                 }))
         );
 
         setHistoryData(
             filteredByFirm
-                .filter((i) => i.planned7 !== '' && i.actual7 !== '' && i.hodStatus === 'Rejected')
+                .filter((i) => i.planned7 !== '' && i.actual7 !== '')
+                .sort((a, b) => (b.liftNumber || '').localeCompare(a.liftNumber || '', undefined, { numeric: true, sensitivity: 'base' }))
                 .map((i) => ({
                     liftNumber: i.liftNumber || '',
                     indentNumber: i.indentNo || '',
@@ -600,6 +608,27 @@ export default () => {
                                                 <Pill variant={selectedItem.priceAsPerPoCheck === 'Yes' ? 'default' : 'reject'}>
                                                     {selectedItem.priceAsPerPoCheck === 'Yes' ? 'Match' : 'Mismatch'}
                                                 </Pill>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* ✅ Added HOD Decision Section */}
+                                    <div className="mt-4 pt-4 border-t border-muted-foreground/10">
+                                        <h4 className="text-sm font-bold mb-2 text-emerald-600 flex items-center gap-2">
+                                            HOD Decision
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <p className="text-xs font-medium text-muted-foreground">Decision Status</p>
+                                                <Pill variant={selectedItem.hodStatus === 'Approved' ? 'default' : 'reject'}>
+                                                    {selectedItem.hodStatus || 'N/A'}
+                                                </Pill>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-xs font-medium text-muted-foreground">HOD Remarks</p>
+                                                <p className="text-sm font-semibold italic text-slate-700">
+                                                    "{selectedItem.hodRemark || 'No remarks provided.'}"
+                                                </p>
                                             </div>
                                         </div>
                                     </div>

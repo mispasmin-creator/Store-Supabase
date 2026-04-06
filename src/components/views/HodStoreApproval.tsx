@@ -173,12 +173,7 @@ export default () => {
             const currentDateTime = new Date().toISOString();
 
             // Trigger stage 7 if rejected by HOD OR if store reports issues
-            const hasStoreIssues =
-                selectedItem.damageOrder === 'No' ||
-                selectedItem.quantityAsPerBill === 'No' ||
-                selectedItem.priceAsPerPoCheck === 'No';
-
-            const triggerStage7 = values.status === 'Rejected' || hasStoreIssues;
+            const triggerStage7 = values.status === 'Rejected';
 
             await updateStoreInHodApproval(selectedItem.liftNumber, {
                 actualHod: currentDateTime,

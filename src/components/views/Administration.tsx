@@ -1,4 +1,4 @@
-import { Eye, EyeClosed, MoreHorizontal, Pencil, ShieldUser, Trash, UserPlus } from 'lucide-react';
+import { Building, ShieldCheck, User as UserIcon, Eye, EyeClosed, MoreHorizontal, Pencil, ShieldUser, Trash, UserPlus } from 'lucide-react';
 import Heading from '../element/Heading';
 import { useEffect, useState } from 'react';
 import { allPermissionKeys, type UserPermissions } from '@/types/sheets';
@@ -37,6 +37,7 @@ interface UsersTableData {
     username: string;
     name: string;
     password: string;
+    firmNameMatch: string;
     permissions: string[];
 }
 
@@ -65,8 +66,9 @@ export default () => {
         setDataLoading(true);
         try {
             const users = await fetchUsers();
+            const sortedUsers = users.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
             setTableData(
-                users.map((user) => {
+                sortedUsers.map((user) => {
                     const permissionKeys = allPermissionKeys.filter(
                         (key) => user[key as keyof UserPermissions] === true
                     );
@@ -76,6 +78,7 @@ export default () => {
                         username: user.username,
                         name: user.name,
                         password: user.password,
+                        firmNameMatch: user.firmNameMatch,
                         permissions: permissionKeys,
                     };
                 })
@@ -93,28 +96,63 @@ export default () => {
     }, []);
 
     const columns: ColumnDef<UsersTableData>[] = [
-        { accessorKey: 'username', header: 'Username' },
-        { accessorKey: 'name', header: 'Name' },
+        {
+            accessorKey: 'name',
+            header: 'User Profile',
+            cell: ({ row }) => (
+                <div className="flex items-center gap-3">
+                    <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        <UserIcon size={16} />
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-sm truncate">{row.original.name}</span>
+                        <span className="text-xs text-muted-foreground truncate italic">@{row.original.username}</span>
+                    </div>
+                </div>
+            )
+        },
+        {
+            accessorKey: 'firmNameMatch',
+            header: 'Firm / Scope',
+            cell: ({ row }) => (
+                <div className="flex items-center gap-2 text-sm">
+                    <Building size={14} className="text-muted-foreground shrink-0" />
+                    <span className={row.original.firmNameMatch.toLowerCase() === 'all' ? "font-semibold text-primary" : ""}>
+                        {row.original.firmNameMatch || "Not Assigned"}
+                    </span>
+                </div>
+            )
+        },
         {
             accessorKey: 'permissions',
-            header: 'Permissions',
+            header: 'Access & Permissions',
             cell: ({ row }) => {
                 const permissions = row.original.permissions;
+                const isAdmin = permissions.includes('administrate');
+                const otherPermissions = permissions.filter(p => p !== 'administrate');
+
                 return (
-                    <div className="grid place-items-center">
-                        <div className="flex flex-wrap gap-1">
-                            {permissions.slice(0, 2).map((perm, i) => (
-                                <Pill key={i}>{camelToTitleCase(perm)}</Pill>
-                            ))}
-                            {permissions.length > 2 && (
+                    <div className="grid place-items-start pl-4">
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                            {isAdmin && (
+                                <Pill variant="primary" className="bg-primary text-secondary border-none animate-pulse-subtle">
+                                    <ShieldCheck size={10} className="mr-1 inline" /> Administrator
+                                </Pill>
+                            )}
+                            {otherPermissions.slice(0, 3).map((perm, i) => {
+                                const variant = perm.toLowerCase().includes('approval') || perm.toLowerCase().includes('action') || perm.toLowerCase().includes('make') ? 'secondary' : 'default';
+                                return <Pill key={i} variant={variant}>{camelToTitleCase(perm)}</Pill>;
+                            })}
+                            {otherPermissions.length > 3 && (
                                 <HoverCard>
                                     <HoverCardTrigger>
-                                        <Pill>...</Pill>
+                                        <Pill className="cursor-pointer">+{otherPermissions.length - 3} more</Pill>
                                     </HoverCardTrigger>
-                                    <HoverCardContent className="min-w-4 max-w-100 flex flex-wrap gap-1 bg-background">
-                                        {permissions.map((perm, i) => (
-                                            <Pill key={i}>{camelToTitleCase(perm)}</Pill>
-                                        ))}
+                                    <HoverCardContent className="min-w-40 max-w-100 flex flex-wrap gap-1.5 bg-background border p-3 shadow-lg">
+                                        {otherPermissions.map((perm, i) => {
+                                            const variant = perm.toLowerCase().includes('approval') || perm.toLowerCase().includes('action') || perm.toLowerCase().includes('make') ? 'secondary' : 'default';
+                                            return <Pill key={i} variant={variant}>{camelToTitleCase(perm)}</Pill>;
+                                        })}
                                     </HoverCardContent>
                                 </HoverCard>
                             )}
@@ -135,7 +173,7 @@ export default () => {
                                 user.username === 'admin' || user.username === currentUser.username
                             }
                         >
-                            <Button variant="ghost" className="h-8 w-8 p-0">
+                            <Button variant="ghost" className="h-8 w-8 p-0 mr-4">
                                 <span className="sr-only">Open menu</span>
                                 <MoreHorizontal className="h-6 w-6" />
                             </Button>
@@ -178,6 +216,7 @@ export default () => {
         name: z.string().min(1, 'Name is required'),
         username: z.string().min(1, 'Username is required'),
         password: z.string().min(1, 'Password is required'),
+        firmNameMatch: z.string().optional(),
         permissions: z.array(z.string()),
     });
 
@@ -187,6 +226,7 @@ export default () => {
             name: '',
             username: '',
             password: '',
+            firmNameMatch: '',
             permissions: [],
         },
     });
@@ -197,6 +237,7 @@ export default () => {
                 username: selectedUser.username,
                 name: selectedUser.name,
                 password: selectedUser.password,
+                firmNameMatch: selectedUser.firmNameMatch,
                 permissions: selectedUser.permissions,
             });
             return;
@@ -205,6 +246,7 @@ export default () => {
             name: '',
             username: '',
             password: '',
+            firmNameMatch: '',
             permissions: [],
         });
     }, [selectedUser]);
@@ -222,6 +264,7 @@ export default () => {
             username: value.username,
             name: value.name,
             password: value.password,
+            firmNameMatch: value.firmNameMatch || '',
         };
 
         allPermissionKeys.forEach((perm) => {
@@ -249,7 +292,7 @@ export default () => {
         toast.error('Please fill all required fields');
     }
     return (
-        <div>
+        <div className="h-full">
             <Dialog open={openDialog} onOpenChange={(open) => setOpenDialog(open)}>
                 <div>
                     <Heading
@@ -262,9 +305,9 @@ export default () => {
                     <DataTable
                         data={tableData}
                         columns={columns}
-                        searchFields={['name', 'username', 'permissions']}
+                        searchFields={['name', 'username', 'permissions', 'firmNameMatch']}
                         dataLoading={dataLoading}
-                        className="h-[80dvh]"
+                        className="h-[calc(100dvh-180px)] overflow-hidden"
                     >
                         <Button
                             className="h-full w-40"
@@ -344,6 +387,21 @@ export default () => {
                                                         </span>
                                                     </Button>
                                                 </div>
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="firmNameMatch"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Firm Name Match</FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    placeholder="Enter Firm Name or 'all'"
+                                                    {...field}
+                                                />
                                             </FormControl>
                                         </FormItem>
                                     )}

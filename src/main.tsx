@@ -136,8 +136,9 @@ const routes: RouteAttributes[] = [
         name: 'Issue Data',
         icon: <ClipboardCheck size={20} />,
         element: <IssueData />,
-        notifications: (issueSheet: any[]) =>
+        notifications: (issueSheet: any[], user: any) =>
             issueSheet.filter((sheet: any) =>
+                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                 sheet.planned1 &&
                 sheet.planned1.toString().trim() !== '' &&
                 (!sheet.actual1 || sheet.actual1.toString().trim() === '')
@@ -185,8 +186,11 @@ const routes: RouteAttributes[] = [
         name: 'Vendor Rate Update',
         icon: <UserCog size={20} />,
         element: <VendorUpdate />,
-        notifications: (sheets: any[]) =>
-            sheets.filter((sheet: any) => sheet.planned2 !== '' && sheet.actual2 === '').length,
+        notifications: (sheets: any[], user: any) =>
+            sheets.filter((sheet: any) => 
+                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
+                sheet.planned2 !== '' && sheet.actual2 === ''
+            ).length,
     },
     {
         path: 'technical-approval',
@@ -194,9 +198,10 @@ const routes: RouteAttributes[] = [
         name: 'Department Approval',
         icon: <Users size={20} />,
         element: <DepartmentApproval />,
-        notifications: (sheets: any[]) =>
+        notifications: (sheets: any[], user: any) =>
             sheets.filter(
                 (sheet: any) =>
+                    (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                     sheet.planned3 !== '' &&
                     sheet.actual3 === '' &&
                     sheet.vendorType === 'Three Party'
@@ -208,9 +213,10 @@ const routes: RouteAttributes[] = [
         name: 'Management Approval',
         icon: <ShieldCheck size={20} />,
         element: <RateApproval />,
-        notifications: (sheets: any[]) =>
+        notifications: (sheets: any[], user: any) =>
             sheets.filter(
                 (sheet: any) =>
+                    (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                     sheet.planned4 &&
                     sheet.planned4 !== '' &&
                     sheet.actual4 === '' &&
@@ -241,13 +247,12 @@ const routes: RouteAttributes[] = [
         name: 'Pending PO to be Created',
         icon: <Clock size={20} />,
         element: <PendingPo />,
-        notifications: (sheets: any[]) => {
+        notifications: (sheets: any[], user: any) => {
             // Count only items that are likely NOT in PO Master yet
-            // This approximates the PO Master filter by checking for pending status indicators
             return sheets.filter((sheet: any) =>
+                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                 sheet.poRequred &&
                 sheet.poRequred.toString().trim() === 'Yes' &&
-                // Additional conditions that typically indicate NOT in PO Master yet
                 sheet.pendingPoQty &&
                 sheet.pendingPoQty > 0 &&
                 sheet.approvedVendorName &&
@@ -271,14 +276,15 @@ const routes: RouteAttributes[] = [
         name: 'PO History',
         icon: <History size={20} />,
         element: <Order />, // Changed from <Order /> to <POHistory />
-        notifications: (sheets: any[]) => {
+        notifications: (sheets: any[], user: any) => {
             if (!Array.isArray(sheets) || sheets.length === 0) {
                 return 0;
             }
 
             try {
-                // Filter sheets with valid PO numbers
+                // Filter by firm and valid PO numbers
                 const sheetsWithPoNumbers = sheets.filter((sheet: any) =>
+                    (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                     sheet?.poNumber &&
                     sheet?.poNumber.toString().trim() !== ''
                 );
@@ -314,9 +320,10 @@ const routes: RouteAttributes[] = [
         name: 'Lifting',
         icon: <ArrowUpCircle size={20} />,
         element: <GetLift />,
-        notifications: (sheets: any[]) =>
+        notifications: (sheets: any[], user: any) =>
             sheets.filter(
                 (sheet: any) =>
+                    (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                     sheet.liftingStatus === 'Pending' &&
                     sheet.planned5 &&
                     sheet.planned5.toString().trim() !== '' &&
@@ -331,8 +338,9 @@ const routes: RouteAttributes[] = [
         name: 'Store Check',
         icon: <CheckCircle2 size={20} />,
         element: <StoreIn />,
-        notifications: (sheets: any[]) =>
+        notifications: (sheets: any[], user: any) =>
             sheets.filter((sheet: any) =>
+                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                 sheet.planned6 &&
                 sheet.planned6.toString().trim() !== '' &&
                 (!sheet.actual6 || sheet.actual6.toString().trim() === '') &&
@@ -366,8 +374,9 @@ const routes: RouteAttributes[] = [
         name: 'Freight Payment',
         icon: <Truck size={20} />,
         element: <FullKiting />,
-        notifications: (sheets: any[]) =>
+        notifications: (sheets: any[], user: any) =>
             sheets.filter((sheet: any) =>
+                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                 sheet.planned &&
                 sheet.planned.toString().trim() !== '' &&
                 (!sheet.actual || sheet.actual.toString().trim() === '')
@@ -378,7 +387,6 @@ const routes: RouteAttributes[] = [
         name: 'Process for Payment / Debit Note',
         icon: <RefreshCw size={20} />,
         element: <PaymentStatus />,
-        gateKey: 'paymentStatus',
         notifications: (sheetsData: any[]) => {
             try {
                 // ✅ IMPORTANT: Expect [poMasterSheet, paymentsSheet, user, storeInSheet] from Sidebar
@@ -575,12 +583,12 @@ const routes: RouteAttributes[] = [
         name: 'Reject For GRN',
         icon: <FileX size={20} />,
         element: <QuantityCheckInReceiveItem />,
-        notifications: (sheets: any[]) =>
+        notifications: (sheets: any[], user: any) =>
             sheets.filter((sheet: any) =>
+                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                 sheet.planned7 &&
                 sheet.planned7.toString().trim() !== '' &&
-                (!sheet.actual7 || sheet.actual7.toString().trim() === '') &&
-                (sheet.hodStatus === 'Rejected' || sheet.hod_status === 'Rejected')
+                (!sheet.actual7 || sheet.actual7.toString().trim() === '')
             ).length,
     },
     {
@@ -589,8 +597,9 @@ const routes: RouteAttributes[] = [
         name: 'Send Debit Note',
         icon: <Send size={20} />,
         element: <SendDebitNote />,
-        notifications: (sheets: any[]) =>
+        notifications: (sheets: any[], user: any) =>
             sheets.filter((sheet: any) =>
+                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                 sheet.planned9 &&
                 sheet.planned9.toString().trim() !== '' &&
                 (!sheet.actual9 || sheet.actual9.toString().trim() === '')
@@ -603,8 +612,9 @@ const routes: RouteAttributes[] = [
         name: 'Audit Data',
         icon: <BarChart size={20} />,
         element: <AuditData />,
-        notifications: (sheets: any[]) =>
+        notifications: (sheets: any[], user: any) =>
             sheets.filter((sheet: any) =>
+                (!user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch) &&
                 sheet.planned1 &&
                 sheet.planned1.toString().trim() !== '' &&
                 (!sheet.actual1 || sheet.actual1.toString().trim() === '')
@@ -748,9 +758,12 @@ const routes: RouteAttributes[] = [
         name: 'Bill Not Received',
         icon: <FileWarning size={20} />,
         element: <BillNotReceived />,
-        notifications: (sheets: any[]) => {
+        notifications: (sheets: any[], user: any) => {
             // Count items where planned11 is set but actual11 is not
             return sheets.filter((sheet: any) => {
+                const firmMatch = !user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch;
+                if (!firmMatch) return false;
+
                 const hasPlanned11 = sheet.planned11 && sheet.planned11.toString().trim() !== '';
                 const noActual11 = !sheet.actual11 || sheet.actual11.toString().trim() === '';
 
