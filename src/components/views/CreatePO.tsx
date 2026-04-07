@@ -145,6 +145,10 @@ interface MasterDetails {
         companyName?: string;
         companyAddress?: string;
         destinationAddress?: string;
+        companyEmail?: string;
+        companyPhone?: string;
+        companyGstin?: string;
+        companyPan?: string;
     }>;
     companyName?: string;
     paymentTerms?: string[];
@@ -206,6 +210,9 @@ const CreatePO = () => {
     const [destinationAddress, setDestinationAddress] = useState('M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)');
     const [firmCompanyName, setFirmCompanyName] = useState('M/S Passary Mineral Madhya Pvt.Ltd');
     const [firmCompanyAddress, setFirmCompanyAddress] = useState('Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
+    const [firmCompanyPhone, setFirmCompanyPhone] = useState('+91 7223844007');
+    const [firmCompanyGstin, setFirmCompanyGstin] = useState('22AAHCP9274B1ZI');
+    const [firmCompanyPan, setFirmCompanyPan] = useState('AACCJ1154B');
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState<POPdfProps | null>(null);
 
@@ -303,7 +310,7 @@ const CreatePO = () => {
         if (selectedVendor) {
             form.setValue('supplierAddress', selectedVendor.address || '', { shouldValidate: true });
             form.setValue('gstin', selectedVendor.gstin || '', { shouldValidate: true });
-            form.setValue('companyEmail', selectedVendor.vendorEmail || '', { shouldValidate: true });
+            form.setValue('companyEmail', selectedVendor.email || selectedVendor.vendorEmail || '', { shouldValidate: true });
         } else {
             console.warn("⚠️ Vendor not found in master list:", vendor);
             form.setValue('supplierAddress', '', { shouldValidate: true });
@@ -335,12 +342,18 @@ const CreatePO = () => {
             if (companyDetails) {
                 setFirmCompanyName(companyDetails.companyName || '');
                 setFirmCompanyAddress(companyDetails.companyAddress || '');
+                setFirmCompanyPhone(companyDetails.companyPhone || '');
+                setFirmCompanyGstin(companyDetails.companyGstin || '');
+                setFirmCompanyPan(companyDetails.companyPan || '');
                 setDestinationAddress(
                     companyDetails.destinationAddress || (details as MasterDetails).destinationAddress || ''
                 );
             } else {
                 setFirmCompanyName((details as MasterDetails).companyName || 'Passary Mineral Madhya Pvt.Ltd');
                 setFirmCompanyAddress((details as MasterDetails).companyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
+                setFirmCompanyPhone((details as MasterDetails).companyPhone || '+91 7223844007');
+                setFirmCompanyGstin((details as MasterDetails).companyGstin || '22AAHCP9274B1ZI');
+                setFirmCompanyPan((details as MasterDetails).companyPan || 'AACCJ1154B');
                 setDestinationAddress((details as MasterDetails).destinationAddress || '');
             }
         }
@@ -554,12 +567,12 @@ const CreatePO = () => {
         );
 
         return {
-            companyName: 'M/S Passary Mineral Madhya Pvt.Ltd',
-            companyPhone: '+91 7223844007',
-            companyGstin: '22AAHCP9274B1ZI',
-            companyPan: 'AACCJ1154B',
-            companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-            billingAddress: 'M/S Passary Mineral Madhya Pvt.Ltd, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+            companyName: firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd',
+            companyPhone: firmCompanyPhone || '+91 7223844007',
+            companyGstin: firmCompanyGstin || '22AAHCP9274B1ZI',
+            companyPan: firmCompanyPan || 'AACCJ1154B',
+            companyAddress: firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+            billingAddress: `${firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd'}, ${firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}`,
             destinationAddress: destinationAddress || 'M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
             supplierName: values.supplierName,
             supplierAddress: values.supplierAddress,
@@ -639,12 +652,12 @@ const CreatePO = () => {
             const logoBase64 = await getLogoBase64();
 
             const pdfProps: POPdfProps = {
-                companyName: 'M/S Passary Mineral Madhya Pvt.Ltd',
-                companyPhone: '+91 7223844007',
-                companyGstin: '22AAHCP9274B1ZI',
-                companyPan: 'AACCJ1154B',
-                companyAddress: 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-                billingAddress: 'M/S Passary Mineral Madhya Pvt.Ltd, Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+                companyName: firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd',
+                companyPhone: firmCompanyPhone || '+91 7223844007',
+                companyGstin: firmCompanyGstin || '22AAHCP9274B1ZI',
+                companyPan: firmCompanyPan || 'AACCJ1154B',
+                companyAddress: firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
+                billingAddress: `${firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd'}, ${firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}`,
                 destinationAddress: destinationAddress || 'M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
                 supplierName: values.supplierName,
                 supplierAddress: values.supplierAddress,
@@ -840,13 +853,13 @@ const CreatePO = () => {
                                 <img src="/Passary.jpeg" alt="Company Logo" className="w-40  object-contain" />
                                 <div className="text-center">
                                     <h1 className="text-2xl font-bold">
-                                        Passary Mineral Madhya Pvt.Ltd
+                                        {firmCompanyName || 'Passary Mineral Madhya Pvt.Ltd'}
                                     </h1>
                                     <div>
                                         <p className="text-sm">
-                                            Shri Ram Business Park , Block - C, 2nd floor , Room No. 212
+                                            {firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}
                                         </p>
-                                        <p className="text-sm">Phone No: +91 7223844007</p>
+                                        <p className="text-sm">Phone No: +91 {firmCompanyPhone || '+91 7223844007'}</p>
                                     </div>
                                 </div>
                             </div>
@@ -978,16 +991,16 @@ const CreatePO = () => {
                                         </FormItem>
                                     )} />
 
-                                    {/* Company Email - Changed to always be editable */}
+                                    {/* Supplier Email */}
                                     <FormField control={form.control} name="companyEmail" render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Company Email</FormLabel>
+                                            <FormLabel>Supplier Email</FormLabel>
                                             <FormControl>
                                                 <Input
                                                     className="h-9"
                                                     type="email"
                                                     readOnly={false}
-                                                    placeholder="Enter company email"
+                                                    placeholder="Enter supplier email"
                                                     {...field}
                                                     value={field.value || ''}
                                                 />
@@ -1027,7 +1040,7 @@ const CreatePO = () => {
                                     )} />
                                 </div>
 
-                                 {form.watch('paymentTerms') && (form.watch('paymentTerms').toLowerCase().includes('delivery') || (form.watch('paymentTerms').toLowerCase().includes('partly') && (form.watch('paymentTerms').toLowerCase().includes('advance') || form.watch('paymentTerms').toLowerCase().includes('pi')))) && (
+                                {form.watch('paymentTerms') && (form.watch('paymentTerms').toLowerCase().includes('delivery') || (form.watch('paymentTerms').toLowerCase().includes('partly') && (form.watch('paymentTerms').toLowerCase().includes('advance') || form.watch('paymentTerms').toLowerCase().includes('pi')))) && (
                                     <div className="flex gap-4">
                                         <FormField control={form.control} name="numberOfDays" render={({ field }) => (
                                             <FormItem className="flex-1">
@@ -1067,8 +1080,8 @@ const CreatePO = () => {
                                         <CardTitle className="text-center">Our Commercial Details</CardTitle>
                                     </CardHeader>
                                     <CardContent className="p-5 text-sm">
-                                        <p><span className="font-semibold">GSTIN:</span> 22AAHCP9274B1ZI</p>
-                                        <p><span className="font-semibold">Pan No.</span> AACCJ1154B</p>
+                                        <p><span className="font-semibold">GSTIN:</span> {firmCompanyGstin || '22AAHCP9274B1ZI'}</p>
+                                        <p><span className="font-semibold">Pan No.</span> {firmCompanyPan || 'AACCJ1154B'}</p>
                                     </CardContent>
                                 </Card>
 
@@ -1079,8 +1092,8 @@ const CreatePO = () => {
                                     <CardContent className="p-5 text-sm">
                                         {vendor ? (
                                             <>
-                                                <p className="font-semibold text-xs">M/S Passary Mineral Madhya Pvt.Ltd</p>
-                                                <p className="text-xs">Shri Ram Business Park , Block - C, 2nd floor , Room No. 212</p>
+                                                <p className="font-semibold text-xs">{firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd'}</p>
+                                                <p className="text-xs">{firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}</p>
                                             </>
                                         ) : (
                                             <p className="text-gray-400 text-center">Select Supplier</p>
@@ -1108,7 +1121,7 @@ const CreatePO = () => {
                                     <CardContent className="p-5 text-sm">
                                         {vendor ? (
                                             <>
-                                                <p className="font-semibold text-xs">M/S Passary Mineral Madhya Pvt.Ltd</p>
+                                                <p className="font-semibold text-xs">{firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd'}</p>
                                                 {isEditingDestination ? (
                                                     <div className="flex items-center gap-2 mt-1">
                                                         <Input value={destinationAddress} onChange={(e) => setDestinationAddress(e.target.value)}

@@ -166,6 +166,10 @@ export async function fetchMasterData() {
                     companyName: r.company_name,
                     companyAddress: r.company_address || '',
                     destinationAddress: r.destination_address || '',
+                    companyEmail: r.company_email || '',
+                    companyPhone: r.company_phone || '',
+                    companyGstin: r.company_gstin || '',
+                    companyPan: r.company_pan || '',
                 };
             }
         });
