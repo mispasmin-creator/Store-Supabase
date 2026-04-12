@@ -94,6 +94,8 @@ export default () => {
     const [selectedHistoryDate, setSelectedHistoryDate] = useState<string>('');
     const [selectedHistoryUOM, setSelectedHistoryUOM] = useState<string>('');
     const [historySearchQuery, setHistorySearchQuery] = useState<string>('');
+    const [vendorSearch, setVendorSearch] = useState<string>('');
+    const [productSearch, setProductSearch] = useState<string>('');
     const [searchTermVendor, setSearchTermVendor] = useState('');
 
     // Fetch pending vendor updates from Supabase
@@ -229,8 +231,20 @@ export default () => {
             );
         }
 
+        if (vendorSearch.trim()) {
+            const query = vendorSearch.toLowerCase();
+            // In pending, we don't have vendor name usually, but if it comes from history we might. 
+            // However, the user asked for this filter "specifically for the vendor rate comparison table" which usually means history/approval.
+            // I'll leave it for now but focus on history.
+        }
+
+        if (productSearch.trim()) {
+            const query = productSearch.toLowerCase();
+            filtered = filtered.filter(item => item.product.toLowerCase().includes(query));
+        }
+
         setFilteredTableData(filtered);
-    }, [selectedDate, selectedUOM, searchQuery, tableData]);
+    }, [selectedDate, selectedUOM, searchQuery, vendorSearch, productSearch, tableData]);
 
     // Filter history data by date, UOM, and search query
     useEffect(() => {
@@ -259,8 +273,22 @@ export default () => {
             );
         }
 
+        if (vendorSearch.trim()) {
+            const query = vendorSearch.toLowerCase();
+            filtered = filtered.filter(item =>
+                (item.vendorName1?.toLowerCase().includes(query)) ||
+                (item.vendorName2?.toLowerCase().includes(query)) ||
+                (item.vendorName3?.toLowerCase().includes(query))
+            );
+        }
+
+        if (productSearch.trim()) {
+            const query = productSearch.toLowerCase();
+            filtered = filtered.filter(item => item.product.toLowerCase().includes(query));
+        }
+
         setFilteredHistoryData(filtered);
-    }, [selectedHistoryDate, selectedHistoryUOM, historySearchQuery, historyData]);
+    }, [selectedHistoryDate, selectedHistoryUOM, historySearchQuery, vendorSearch, productSearch, historyData]);
 
     // Get unique UOMs for filter dropdown
     const uniqueUOMs = Array.from(new Set(tableData.map(item => item.uom))).sort();
@@ -320,6 +348,8 @@ export default () => {
         setSelectedHistoryDate('');
         setSelectedHistoryUOM('');
         setHistorySearchQuery('');
+        setVendorSearch('');
+        setProductSearch('');
     };
 
     // Upload file to Supabase Storage
@@ -1027,14 +1057,36 @@ export default () => {
                                 </div>
                             </div>
 
+                            <div className="w-full sm:w-auto flex-1 max-w-sm">
+                                <div className="flex gap-2 items-center">
+                                    <Input
+                                        type="text"
+                                        value={productSearch}
+                                        onChange={(e) => setProductSearch(e.target.value)}
+                                        placeholder="Filter by Product..."
+                                        className="flex-1"
+                                    />
+                                    {productSearch && (
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => setProductSearch('')}
+                                            className="h-9 w-9"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* Search Filter */}
-                            <div className="w-full sm:w-auto flex-1 max-w-md">
+                            <div className="w-full sm:w-auto flex-1 max-w-sm">
                                 <div className="flex gap-2 items-center">
                                     <Input
                                         type="text"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder="Search..."
+                                        placeholder="Global Search..."
                                         className="flex-1"
                                     />
                                     {searchQuery && (
@@ -1125,8 +1177,54 @@ export default () => {
                                 </div>
                             </div>
 
+                            {/* Vendor Filter */}
+                            <div className="w-full sm:w-auto flex-1 max-w-sm">
+                                <div className="flex gap-2 items-center">
+                                    <Input
+                                        type="text"
+                                        value={vendorSearch}
+                                        onChange={(e) => setVendorSearch(e.target.value)}
+                                        placeholder="Filter by Party..."
+                                        className="flex-1"
+                                    />
+                                    {vendorSearch && (
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => setVendorSearch('')}
+                                            className="h-9 w-9"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Product Filter */}
+                            <div className="w-full sm:w-auto flex-1 max-w-sm">
+                                <div className="flex gap-2 items-center">
+                                    <Input
+                                        type="text"
+                                        value={productSearch}
+                                        onChange={(e) => setProductSearch(e.target.value)}
+                                        placeholder="Filter by Product..."
+                                        className="flex-1"
+                                    />
+                                    {productSearch && (
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => setProductSearch('')}
+                                            className="h-9 w-9"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* Search Filter */}
-                            <div className="w-full sm:w-auto flex-1 max-w-md">
+                            <div className="w-full sm:w-auto flex-1 max-w-sm">
                                 <div className="flex gap-2 items-center">
                                     <Input
                                         type="text"
@@ -1353,9 +1451,7 @@ export default () => {
                                                             <SelectContent>
                                                                 <SelectItem value="0">0%</SelectItem>
                                                                 <SelectItem value="5">5%</SelectItem>
-                                                                <SelectItem value="12">12%</SelectItem>
                                                                 <SelectItem value="18">18%</SelectItem>
-                                                                <SelectItem value="28">28%</SelectItem>
                                                             </SelectContent>
                                                         </Select>
                                                     </FormItem>
@@ -1584,9 +1680,7 @@ export default () => {
                                                                     <SelectContent>
                                                                         <SelectItem value="0">0%</SelectItem>
                                                                         <SelectItem value="5">5%</SelectItem>
-                                                                        <SelectItem value="12">12%</SelectItem>
                                                                         <SelectItem value="18">18%</SelectItem>
-                                                                        <SelectItem value="28">28%</SelectItem>
                                                                     </SelectContent>
                                                                 </Select>
                                                                 <FormMessage />

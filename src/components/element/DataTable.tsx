@@ -5,7 +5,9 @@ import {
     flexRender,
     getCoreRowModel,
     getFilteredRowModel,
+    getSortedRowModel,
     useReactTable,
+    type SortingState,
 } from '@tanstack/react-table';
 
 import {
@@ -18,7 +20,7 @@ import {
 } from '@/components/ui/table';
 import { useState, type ReactNode } from 'react';
 import { Input } from '../ui/input';
-import { Package } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Package } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { ClipLoader } from 'react-spinners';
 import { ScrollArea } from '../ui/scroll-area';
@@ -61,18 +63,22 @@ export default function DataTable<TData, TValue>({
     meta,
 }: DataTableProps<TData, TValue>) {
     const [globalFilter, setGlobalFilter] = useState('');
+    const [sorting, setSorting] = useState<SortingState>([]);
     const table = useReactTable({
         data,
         columns,
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
+        getSortedRowModel: getSortedRowModel(),
         globalFilterFn: (row, _, filterValue) =>
             row?.original ? globalFilterFn(row.original, searchFields || [], filterValue) : false,
         getRowId,
         meta,
+        onSortingChange: setSorting,
         state: {
             globalFilter,
             rowSelection: rowSelection || {},
+            sorting,
         },
         onGlobalFilterChange: setGlobalFilter,
         onRowSelectionChange: onRowSelectionChange,
@@ -102,13 +108,36 @@ export default function DataTable<TData, TValue>({
                                 <TableRow key={headerGroup.id}>
                                     {headerGroup.headers.map((header) => {
                                         return (
-                                            <TableHead key={header.id}>
-                                                {header.isPlaceholder
-                                                    ? null
-                                                    : flexRender(
-                                                        header.column.columnDef.header,
-                                                        header.getContext()
+                                            <TableHead
+                                                key={header.id}
+                                                className={cn(
+                                                    "h-10 px-2 align-middle font-medium text-gray-900 border-b",
+                                                    header.column.getCanSort() ? "cursor-pointer select-none group" : ""
+                                                )}
+                                                onClick={header.column.getToggleSortingHandler()}
+                                            >
+                                                <div className="flex items-center w-full h-full">
+                                                    <div className="flex-1 flex justify-center min-w-0">
+                                                        <span className="truncate text-center font-bold px-1">
+                                                            {header.isPlaceholder
+                                                                ? null
+                                                                : flexRender(
+                                                                    header.column.columnDef.header,
+                                                                    header.getContext()
+                                                                )}
+                                                        </span>
+                                                    </div>
+                                                    {header.column.getCanSort() && (
+                                                        <div className="w-6 shrink-0 flex items-center justify-end">
+                                                            {{
+                                                                asc: <ArrowUp className="h-4 w-4 text-primary" />,
+                                                                desc: <ArrowDown className="h-4 w-4 text-primary" />,
+                                                            }[header.column.getIsSorted() as string] ?? (
+                                                                    <ArrowUpDown className="h-4 w-4 opacity-0 group-hover:opacity-50 transition-opacity" />
+                                                                )}
+                                                        </div>
                                                     )}
+                                                </div>
                                             </TableHead>
                                         );
                                     })}

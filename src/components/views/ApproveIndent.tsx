@@ -32,7 +32,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
     fetchIndentRecords,
     updateIndentApproval,
-    updateIndentSpecifications,
     updateIndentHistoryFields,
     type IndentRecord
 } from '@/services/indentService';
@@ -140,16 +139,7 @@ export default function ApproveIndent() {
         setEditValues(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleSpecificationUpdate = async (id: number, value: string) => {
-        try {
-            await updateIndentSpecifications(id, value);
-            toast.success(`Updated specifications for ID ${id}`);
-            fetchData();
-        } catch (err) {
-            console.error('Error updating specifications:', err);
-            toast.error('Failed to update specifications');
-        }
-    };
+
 
     const columns = useMemo<ColumnDef<IndentRecord>[]>(() => [
         ...(user?.indentApprovalAction
@@ -248,40 +238,11 @@ export default function ApproveIndent() {
         {
             accessorKey: 'specifications',
             header: 'Specifications',
-            cell: ({ row, getValue }) => {
-                const [value, setValue] = useState(getValue() as string);
-                const [isEditing, setIsEditing] = useState(false);
-                const id = row.original.id;
-
-                const handleBlur = async () => {
-                    setIsEditing(false);
-                    if (value !== getValue()) {
-                        await handleSpecificationUpdate(id, value);
-                    }
-                };
-
-                return (
-                    <div className="max-w-[150px]">
-                        {isEditing ? (
-                            <Input
-                                value={value}
-                                onChange={(e) => setValue(e.target.value)}
-                                onBlur={handleBlur}
-                                autoFocus
-                                className="border-1 focus:border-2"
-                            />
-                        ) : (
-                            <div
-                                className="break-words whitespace-normal cursor-pointer p-2 hover:bg-gray-50 rounded"
-                                onClick={() => setIsEditing(true)}
-                                tabIndex={0}
-                            >
-                                {value || 'Click to edit...'}
-                            </div>
-                        )}
-                    </div>
-                );
-            },
+            cell: ({ getValue }) => (
+                <div className="max-w-[150px] break-words whitespace-normal">
+                    {getValue() as string}
+                </div>
+            ),
         },
         {
             accessorKey: 'vendor_type',

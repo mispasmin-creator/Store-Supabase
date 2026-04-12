@@ -665,7 +665,17 @@ export default () => {
                                                             </div>
                                                             <h5 className="font-black text-xs leading-tight line-clamp-2 min-h-[2.5rem]">{vendor[0]}</h5>
                                                             <div className="pt-2 border-t border-primary/10">
-                                                                <p className="text-[12px] font-black text-primary">
+                                                                <p className={`text-[12px] font-black
+                                                                    ${(() => {
+                                                                        const rate = parseFloat(vendor[1]) || 0;
+                                                                        const validRates = selectedIndent.vendors.map(v => parseFloat(v[1]) || 0).filter(r => r > 0);
+                                                                        const minRate = Math.min(...validRates);
+                                                                        const maxRate = Math.max(...validRates);
+                                                                        if (rate === minRate) return 'text-green-600';
+                                                                        if (rate === maxRate && maxRate !== minRate) return 'text-red-600';
+                                                                        return 'text-primary';
+                                                                    })()}
+                                                                `}>
                                                                     &#8377;{(parseFloat(vendor[1]) || 0).toLocaleString('en-IN')}
                                                                 </p>
                                                                 <p className="text-[8px] text-muted-foreground uppercase font-bold tracking-tighter">Effective Rate</p>
@@ -710,7 +720,17 @@ export default () => {
                                                         key={idx}
                                                         draggable
                                                         onDragStart={(e) => handleDragStartBox(e, { type: 'pool', indexOrRank: idx })}
-                                                        className="group flex flex-col gap-1 w-44 p-3 rounded-xl border bg-background shadow-sm cursor-grab active:cursor-grabbing hover:border-primary hover:shadow-md hover:-translate-y-1 transition-all"
+                                                        className={`group flex flex-col gap-1 w-44 p-3 rounded-xl border shadow-sm cursor-grab active:cursor-grabbing hover:border-primary hover:shadow-md hover:-translate-y-1 transition-all
+                                                            ${(() => {
+                                                                const rate = parseFloat(vendor[1]) || 0;
+                                                                const validRates = selectedIndent.vendors.map(v => parseFloat(v[1]) || 0).filter(r => r > 0);
+                                                                const minRate = Math.min(...validRates);
+                                                                const maxRate = Math.max(...validRates);
+                                                                if (rate === minRate) return 'bg-green-300/30';
+                                                                if (rate === maxRate && maxRate !== minRate) return 'bg-red-300/30';
+                                                                return 'bg-background';
+                                                            })()}
+                                                        `}
                                                     >
                                                         <div className="flex items-center justify-between mb-1">
                                                             <span className="text-[10px] font-bold text-muted-foreground">VENDOR {idx + 1}</span>
@@ -720,7 +740,19 @@ export default () => {
                                                         </div>
                                                         <span className="text-xs font-black truncate">{vendor[0]}</span>
                                                         <div className="flex items-center justify-between mt-2 pt-2 border-t">
-                                                            <span className="text-[10px] font-bold text-primary">&#8377;{(parseFloat(vendor[1]) || 0).toLocaleString()}</span>
+                                                            <span className={`text-[10px] font-bold
+                                                                ${(() => {
+                                                                    const rate = parseFloat(vendor[1]) || 0;
+                                                                    const validRates = selectedIndent.vendors.map(v => parseFloat(v[1]) || 0).filter(r => r > 0);
+                                                                    const minRate = Math.min(...validRates);
+                                                                    const maxRate = Math.max(...validRates);
+                                                                    if (rate === minRate) return 'text-green-600';
+                                                                    if (rate === maxRate && maxRate !== minRate) return 'text-red-600';
+                                                                    return 'text-primary';
+                                                                })()}
+                                                            `}>
+                                                                &#8377;{(parseFloat(vendor[1]) || 0).toLocaleString()}
+                                                            </span>
                                                             <span className="text-[8px] bg-muted px-1.5 py-0.5 rounded font-black tracking-tighter uppercase">Rate</span>
                                                         </div>
                                                     </div>
@@ -804,7 +836,20 @@ export default () => {
                                                     }}
                                                     onDragOver={handleDragOver}
                                                     onDrop={(e) => handleHistoryDrop(e, i)}
-                                                    className="group relative flex items-center gap-4 p-5 rounded-2xl border bg-card hover:border-primary shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing border-l-[6px]"
+                                                    className={`group relative flex items-center gap-4 p-5 rounded-2xl border hover:border-primary shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing border-l-[6px]
+                                                        ${(() => {
+                                                            const validTotals = selectedHistory.vendors.map(v => {
+                                                                const r = parseFloat(v[1]) || 0;
+                                                                const t = parseFloat(v[5]) || 0;
+                                                                return v[3] === 'Basic Rate' ? r * (1 + t / 100) : r;
+                                                            }).filter(t => t > 0);
+                                                            const minTotal = Math.min(...validTotals);
+                                                            const maxTotal = Math.max(...validTotals);
+                                                            if (total === minTotal) return 'bg-green-100/30';
+                                                            if (total === maxTotal && maxTotal !== minTotal) return 'bg-red-100/30';
+                                                            return 'bg-card';
+                                                        })()}
+                                                    `}
                                                     style={{ borderLeftColor: i === 0 ? '#eab308' : i === 1 ? '#a1a1aa' : '#fb923c' }}
                                                 >
                                                     <div className="flex flex-col items-center justify-center h-12 w-12 rounded-full border-2 bg-background font-black text-sm text-primary shadow-inner">

@@ -509,12 +509,25 @@ export default () => {
                                                                         const tax = parseFloat(v[5]) || 0;
                                                                         const total = v[3] === 'Basic Rate' ? rate * (1 + tax / 100) : rate;
                                                                         return { vendor: v, originalIndex: i, total };
-                                                                    }).sort((a, b) => a.total - b.total);
+                                                                    });
 
-                                                                    return processedVendors.map(({ vendor, originalIndex, total }) => {
+                                                                    const validTotals = processedVendors.map(v => v.total).filter(t => t > 0);
+                                                                    const minTotal = validTotals.length > 0 ? Math.min(...validTotals) : -1;
+                                                                    const maxTotal = validTotals.length > 0 ? Math.max(...validTotals) : -1;
+
+                                                                    const sortedVendors = [...processedVendors].sort((a, b) => a.total - b.total);
+
+                                                                    return sortedVendors.map(({ vendor, originalIndex, total }) => {
                                                                         const isSelected = field.value?.toString() === originalIndex.toString();
+                                                                        const isMin = total === minTotal && minTotal !== -1;
+                                                                        const isMax = total === maxTotal && maxTotal !== -1 && maxTotal !== minTotal;
+
                                                                         return (
-                                                                            <tr key={originalIndex} className={`transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/10'}`}>
+                                                                            <tr key={originalIndex} className={`transition-colors ${isSelected ? 'bg-primary/30' :
+                                                                                isMin ? 'bg-green-300/10' :
+                                                                                    isMax ? 'bg-red-300/10' :
+                                                                                        'hover:bg-muted/10'
+                                                                                }`}>
                                                                                 <td className="px-4 py-3 text-center">
                                                                                     <RadioGroupItem value={`${originalIndex}`} id={`vendor-${originalIndex}`} className={isSelected ? 'text-primary' : ''} />
                                                                                 </td>
@@ -537,7 +550,7 @@ export default () => {
                                                                                     </span>
                                                                                 </td>
                                                                                 <td className="px-4 py-3 text-right">
-                                                                                    <div className="font-bold text-primary">
+                                                                                    <div className={`font-bold ${isMin ? 'text-green-600' : isMax ? 'text-red-600' : 'text-primary'}`}>
                                                                                         &#8377;{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                                     </div>
                                                                                     <div className="text-[10px] text-muted-foreground">

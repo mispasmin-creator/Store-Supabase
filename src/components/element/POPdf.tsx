@@ -426,7 +426,7 @@ export default ({
                                 <Text style={styles.totalLabel}>GST Amount</Text>
                                 <Text style={styles.totalValue}>{gstAmount}</Text>
                             </View>
-                             <View style={styles.grandTotalRow}>
+                            <View style={styles.grandTotalRow}>
                                 <Text style={styles.grandTotalLabel}>Grand Total</Text>
                                 <Text style={styles.grandTotalLabel}>{grandTotal}</Text>
                             </View>
@@ -452,7 +452,7 @@ export default ({
                             paddingLeft: 12
                         }}>
                             <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#334155' }}>Payment Terms : </Text>
-                             <Text style={{ fontSize: 9, color: '#475569', marginLeft: 4 }}>
+                            <Text style={{ fontSize: 9, color: '#475569', marginLeft: 4 }}>
                                 {(paymentTerms?.toLowerCase().includes('partly') && (paymentTerms?.toLowerCase().includes('advance') || paymentTerms?.toLowerCase().includes('pi')))
                                     ? `Advance Payment (${numberOfDays}%) of ₹${((grandTotal * (numberOfDays || 0)) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will be made.`
                                     : paymentTerms === 'After Delivery'

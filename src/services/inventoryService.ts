@@ -16,6 +16,8 @@ export interface InventoryRecord {
     purchaseQuantity: number;
     outQuantity: number;
     current: number;
+    minStock: number;
+    maxStock: number;
     totalPrice: number;
     status: string;
 }
@@ -32,20 +34,22 @@ export async function fetchInventoryRecords(): Promise<InventoryRecord[]> {
 
         if (error) throw error;
 
-        return (data || []).map((r: any) => ({
-            itemName: r.item_name || '',
-            groupHead: r.group_head || '',
-            uom: r.uom || '',
-            opening: Number(r.opening) || 0,
-            rate: Number(r.rate) || 0,
-            indented: Number(r.indented) || 0,
-            approved: Number(r.approved) || 0,
-            purchaseQuantity: Number(r.purchase_quantity) || 0,
-            outQuantity: Number(r.out_quantity) || 0,
-            current: Number(r.current) || 0,
-            totalPrice: Number(r.total_price) || 0,
-            status: r.status || r.color_code || '',
-        }));
+        return (data || []).map((row: any) => ({
+            itemName: row.item_name || '',
+            groupHead: row.group_head || '',
+            uom: row.uom || '',
+            opening: Number(row.opening) || 0,
+            rate: Number(row.rate) || 0,
+            indented: Number(row.indented) || 0,
+            approved: Number(row.approved) || 0,
+            purchaseQuantity: Number(row.purchase_quantity) || 0,
+            outQuantity: Number(row.out_quantity) || 0,
+            current: Number(row.current) || 0,
+            minStock: Number(row.min_stock) || 0,
+            maxStock: Number(row.max_stock) || 0,
+            totalPrice: Number(row.total_price) || 0,
+            status: row.status || 'In Stock',
+        })) as InventoryRecord[];
     } catch (error) {
         console.error('Error fetching inventory records:', error);
         throw error;
