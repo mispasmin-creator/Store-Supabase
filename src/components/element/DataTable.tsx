@@ -86,18 +86,16 @@ export default function DataTable<TData, TValue>({
 
     return (
         <div className="p-5 grid gap-4">
-            <div className="flex justify-between items-center w-full gap-3">
+            <div className="flex items-center w-full gap-3">
                 {searchFields.length !== 0 && (
-                    <div className="flex items-center w-full">
-                        <Input
-                            placeholder={`Search...`}
-                            value={globalFilter}
-                            onChange={(e) => setGlobalFilter(e.target.value)}
-                            className="w-230"
-                        />
-                    </div>
+                    <Input
+                        placeholder={`Search...`}
+                        value={globalFilter}
+                        onChange={(e) => setGlobalFilter(e.target.value)}
+                        className="max-w-xs w-full"
+                    />
                 )}
-                {extraActions && extraActions}
+                {extraActions && <div className="flex items-center gap-2 ml-auto shrink-0">{extraActions}</div>}
             </div>
 
             <div className="relative max-w-full overflow-x-auto">

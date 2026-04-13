@@ -1,17 +1,18 @@
 import Heading from '../element/Heading';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pill } from '../ui/pill';
 import { Store } from 'lucide-react';
 import DataTable from '../element/DataTable';
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 import { fetchInventoryRecords, type InventoryRecord } from '@/services/inventoryService';
 
 export default () => {
     const [tableData, setTableData] = useState<InventoryRecord[]>([]);
     const [dataLoading, setDataLoading] = useState(true);
+    const [selectedFirm, setSelectedFirm] = useState<string>('');
 
     const fetchData = async () => {
         try {
@@ -28,6 +29,19 @@ export default () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    // Distinct firm names from fetched data
+    const firmNames = useMemo(
+        () => Array.from(new Set(tableData.map(r => r.firmName).filter(Boolean))).sort(),
+        [tableData]
+    );
+
+    // Filtered data based on selected firm
+    const filteredData = useMemo(() => {
+        if (!selectedFirm || selectedFirm === '__all__') return tableData;
+        return tableData.filter(r => r.firmName === selectedFirm);
+    }, [tableData, selectedFirm]);
+
     const columns: ColumnDef<InventoryRecord>[] = [
         {
             accessorKey: 'itemName',
@@ -39,6 +53,7 @@ export default () => {
             },
         },
         { accessorKey: 'groupHead', header: 'Group Head' },
+        { accessorKey: 'firmName', header: 'Firm Name' },
         { accessorKey: 'uom', header: 'UOM' },
         {
             accessorKey: 'rate',
@@ -72,25 +87,42 @@ export default () => {
         {
             accessorKey: 'totalPrice',
             header: 'Total Price',
-
             cell: ({ row }) => {
                 return <>&#8377;{row.original.totalPrice}</>;
             },
         },
     ];
 
+    // Firm filter element — passed as extraActions so it sits right of the search bar
+    const firmFilter = firmNames.length > 0 ? (
+        <Select value={selectedFirm} onValueChange={setSelectedFirm}>
+            <SelectTrigger className="w-48 shrink-0">
+                <SelectValue placeholder="Firm Name" />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="__all__">All</SelectItem>
+                {firmNames.map(firm => (
+                    <SelectItem key={firm} value={firm}>
+                        {firm}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    ) : undefined;
+
     return (
         <div>
-            <Heading heading="Inventory" subtext="View inveontory">
+            <Heading heading="Inventory" subtext="View inventory">
                 <Store size={50} className="text-primary" />
             </Heading>
 
             <DataTable
-                data={tableData}
+                data={filteredData}
                 columns={columns}
                 dataLoading={dataLoading}
                 searchFields={['itemName', 'groupHead', 'uom', 'status']}
                 className="h-[80dvh]"
+                extraActions={firmFilter}
             />
         </div>
     );

@@ -34,7 +34,7 @@ interface RateApprovalData {
     department: string;
     product: string;
     comparisonSheet: string;
-    vendors: [string, string, string, string, string, string, string, string, string, string, string, string][];
+    vendors: [string, string, string, string, string, string, string, string, string, string, string, string, string][];
     date: string;
     firmNameMatch?: string;
     plannedDate: string;
@@ -110,7 +110,8 @@ export default () => {
                                 r.vendor1_rank || '',
                                 r.delivery_time1 || '',
                                 r.make1 || '',
-                                r.advance_percent1 || ''
+                                r.advance_percent1 || '',
+                                r.transport_type1 || '',
                             ],
                             [
                                 r.vendor_name2 || '',
@@ -124,7 +125,8 @@ export default () => {
                                 r.vendor2_rank || '',
                                 r.delivery_time2 || '',
                                 r.make2 || '',
-                                r.advance_percent2 || ''
+                                r.advance_percent2 || '',
+                                r.transport_type2 || '',
                             ],
                             [
                                 r.vendor_name3 || '',
@@ -138,9 +140,10 @@ export default () => {
                                 r.vendor3_rank || '',
                                 r.delivery_time3 || '',
                                 r.make3 || '',
-                                r.advance_percent3 || ''
+                                r.advance_percent3 || '',
+                                r.transport_type3 || '',
                             ],
-                        ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string, string, string, string][],
+                        ].filter(vendor => vendor[0] !== '') as [string, string, string, string, string, string, string, string, string, string, string, string, string][],
                     }))
             );
         } catch (err) {
@@ -539,6 +542,7 @@ export default () => {
                                                                                             {vendor[11] && vendor[2].toLowerCase().includes('advance') ? ` (Advance: ${vendor[11]}%)` : ''}
                                                                                             {vendor[9] ? ` | Delivery: ${vendor[9]} days` : ''}
                                                                                             {vendor[10] ? ` | Make: ${vendor[10]}` : ''}
+                                                                                            {vendor[12] ? ` | Transport: ${vendor[12]}` : ''}
                                                                                         </div>
                                                                                     </label>
                                                                                 </td>

@@ -586,6 +586,7 @@ export default () => {
         quotationDate: z.string().optional(),
         deliveryTime: z.coerce.number().gt(0, "Delivery time must be greater than 0").optional(),
         make: z.string().optional(),
+        transportType: z.string().optional(),
     });
 
     type RegularFormValues = z.infer<typeof regularSchema>;
@@ -600,6 +601,7 @@ export default () => {
             advancePercent: 0,
             deliveryTime: undefined,
             make: '',
+            transportType: '',
         },
     });
 
@@ -622,6 +624,7 @@ export default () => {
                 quotation_date1: values.quotationDate || '',
                 delivery_time1: values.deliveryTime?.toString() || '',
                 make1: values.make || '',
+                transport_type1: values.transportType || '',
                 vendor_type: computedVendorType,
             };
 
@@ -657,6 +660,7 @@ export default () => {
             quotationDate: z.string().optional(),
             deliveryTime: z.coerce.number().optional(),
             make: z.string().optional(),
+            transportType: z.string().optional(),
         })).length(3).superRefine((vendors, ctx) => {
             // Vendors 1 and 2 are mandatory
             [0, 1].forEach(index => {
@@ -716,6 +720,7 @@ export default () => {
                     quotationDate: '',
                     deliveryTime: undefined,
                     make: '',
+                    transportType: '',
                 },
                 {
                     vendorName: '',
@@ -729,6 +734,7 @@ export default () => {
                     quotationDate: '',
                     deliveryTime: undefined,
                     make: '',
+                    transportType: '',
                 },
                 {
                     vendorName: '',
@@ -742,6 +748,7 @@ export default () => {
                     quotationDate: '',
                     deliveryTime: undefined,
                     make: '',
+                    transportType: '',
                 },
             ],
         },
@@ -849,6 +856,7 @@ export default () => {
                 quotation_date1: vendor1Data.quotationDate,
                 delivery_time1: vendor1Data.deliveryTime,
                 make1: vendor1Data.make,
+                transport_type1: values.vendors[0].transportType || '',
 
                 // Vendor 2
                 vendor_name2: values.vendors[1].vendorName,
@@ -864,6 +872,7 @@ export default () => {
                 quotation_date2: vendor2Data.quotationDate,
                 delivery_time2: vendor2Data.deliveryTime,
                 make2: vendor2Data.make,
+                transport_type2: values.vendors[1].transportType || '',
 
                 // Vendor 3
                 vendor_name3: values.vendors[2].vendorName,
@@ -879,6 +888,7 @@ export default () => {
                 quotation_date3: vendor3Data.quotationDate,
                 delivery_time3: vendor3Data.deliveryTime,
                 make3: vendor3Data.make,
+                transport_type3: values.vendors[2].transportType || '',
 
                 comparison_sheet: url,
                 product_code: values.productCode || '',
@@ -1526,6 +1536,29 @@ export default () => {
                                                 )}
                                             />
                                         </div>
+
+                                        <div className="md:col-span-2">
+                                            <FormField
+                                                control={regularForm.control}
+                                                name="transportType"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel>Transport Type</FormLabel>
+                                                        <Select onValueChange={field.onChange} value={field.value}>
+                                                            <FormControl>
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Select transport type" />
+                                                                </SelectTrigger>
+                                                            </FormControl>
+                                                            <SelectContent>
+                                                                <SelectItem value="Ex-Factory">Ex-Factory</SelectItem>
+                                                                <SelectItem value="FOR">FOR</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
                                     </div>
                                     <DialogFooter>
                                         <Button variant="outline" onClick={() => setDialogStep(1)}>Back</Button>
@@ -1787,6 +1820,28 @@ export default () => {
                                                         )}
                                                     />
                                                 </div>
+
+                                                <FormField
+                                                    control={threePartyForm.control}
+                                                    name={`vendors.${index}.transportType`}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel>Transport Type</FormLabel>
+                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                                <FormControl>
+                                                                    <SelectTrigger>
+                                                                        <SelectValue placeholder="Select transport type" />
+                                                                    </SelectTrigger>
+                                                                </FormControl>
+                                                                <SelectContent>
+                                                                    <SelectItem value="Ex-Factory">Ex-Factory</SelectItem>
+                                                                    <SelectItem value="FOR">FOR</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            <FormMessage />
+                                                        </FormItem>
+                                                    )}
+                                                />
                                             </div>
                                         </div>
                                     ))}

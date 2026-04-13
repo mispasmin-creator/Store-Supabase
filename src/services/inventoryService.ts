@@ -20,6 +20,7 @@ export interface InventoryRecord {
     maxStock: number;
     totalPrice: number;
     status: string;
+    firmName: string;
 }
 
 /**
@@ -49,6 +50,7 @@ export async function fetchInventoryRecords(): Promise<InventoryRecord[]> {
             maxStock: Number(row.max_stock) || 0,
             totalPrice: Number(row.total_price) || 0,
             status: row.status || 'In Stock',
+            firmName: row.firm_name || '',
         })) as InventoryRecord[];
     } catch (error) {
         console.error('Error fetching inventory records:', error);
