@@ -96,15 +96,7 @@ function GatedRoute({
     const { user } = useAuth();
     if (!identifier) return children;
 
-    // Check if user is admin
-    const isAdmin = user?.administrate === true || (user?.administrate as any) === "true";
-
-    // If admin, allow access regardless of specific permission
-    if (isAdmin) {
-        return children;
-    }
-
-    // Otherwise check specific permission
+    // Check specific permission only — no blanket admin bypass
     const hasPermission = user && ((user as any)[identifier] === true || (user as any)[identifier] === "true");
 
     if (!hasPermission) {

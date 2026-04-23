@@ -77,15 +77,11 @@ export default ({ items }: SidebarProps) => {
                     <SidebarMenu>
                         {allItems
                             .filter((item) => {
-                                // Check user permission
-                                // Grant access if user is admin or has specific permission
-                                const isAdmin = user.administrate === true || (user.administrate as any) === "true";
-                                if (isAdmin) return true;
-
+                                // Show item only if user has explicit permission for this gateKey
                                 if (item.gateKey) {
-                                    return user[item.gateKey] === true || user[item.gateKey] === "true";
+                                    return user[item.gateKey] === true || (user as any)[item.gateKey] === "true";
                                 }
-                                return true;
+                                return true; // no gateKey = always visible (Dashboard, Training, License)
                             })
                             .map((item, i) => {
                                 // ✅ DETERMINE WHICH SHEET TO USE BASED ON ROUTE PATH

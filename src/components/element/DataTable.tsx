@@ -95,7 +95,12 @@ export default function DataTable<TData, TValue>({
                         className="max-w-xs w-full"
                     />
                 )}
-                {extraActions && <div className="flex items-center gap-2 ml-auto shrink-0">{extraActions}</div>}
+                {(extraActions || _children) && (
+                    <div className="flex items-center gap-2 ml-auto shrink-0">
+                        {extraActions}
+                        {_children}
+                    </div>
+                )}
             </div>
 
             <div className="relative max-w-full overflow-x-auto">
@@ -185,7 +190,7 @@ export default function DataTable<TData, TValue>({
                                         <div className="flex flex-col justify-center items-center w-full gap-1">
                                             <Package className="text-gray-400" size={50} />
                                             <p className="text-muted-foreground font-semibold">
-                                                No Indents Found.
+                                                No Data Found.
                                             </p>
                                         </div>
                                     </TableCell>

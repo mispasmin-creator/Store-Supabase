@@ -30,7 +30,9 @@ import { Checkbox } from '../ui/checkbox';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card';
 import { Pill } from '../ui/pill';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { fetchUsers, createUser, updateUser, deleteUser, type UserRecord } from '@/services/userService';
+import { fetchMasterOptions } from '@/services/masterService';
 
 interface UsersTableData {
     id: number;
@@ -47,6 +49,13 @@ function camelToTitleCase(str: string): string {
         .replace(/^./, (char) => char.toUpperCase()); // capitalize first letter
 }
 
+const PERMISSION_GROUPS = {
+    'Core Access': ['administrate'],
+    'Procurement & PO': ['createIndent', 'indentApprovalView', 'indentApprovalAction', 'pendingIndentsView', 'createPo', 'updateVendorView', 'updateVendorAction', 'threePartyApprovalView', 'threePartyApprovalAction', 'poHistory', 'pendingPo'],
+    'Store & Inventory': ['receiveItemView', 'receiveItemAction', 'storeIn', 'storeOutApprovalView', 'storeOutApprovalAction', 'hodStoreApproval', 'storeIssue', 'issueData', 'inventory', 'fullKiting'],
+    'Audit & Finance': ['againAuditing', 'takeEntryByTelly', 'reauditData', 'rectifyTheMistake', 'auditData', 'sendDebitNote', 'returnMaterialToParty', 'exchangeMaterials', 'insteadOfQualityCheckInReceivedItem', 'dbForPc', 'billNotReceived', 'makePayment']
+};
+
 export default () => {
     const { user: currentUser } = useAuth();
 
@@ -55,6 +64,7 @@ export default () => {
     const [openDialog, setOpenDialog] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UsersTableData | null>(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [firms, setFirms] = useState<string[]>([]);
 
     useEffect(() => {
         if (!openDialog) {
@@ -91,8 +101,14 @@ export default () => {
         }
     }
 
+    async function loadMasterData() {
+        const options = await fetchMasterOptions();
+        setFirms(options.firms);
+    }
+
     useEffect(() => {
         fetchUser();
+        loadMasterData();
     }, []);
 
     const columns: ColumnDef<UsersTableData>[] = [
@@ -308,18 +324,19 @@ export default () => {
                         searchFields={['name', 'username', 'permissions', 'firmNameMatch']}
                         dataLoading={dataLoading}
                         className="h-[calc(100dvh-180px)] overflow-hidden"
-                    >
-                        <Button
-                            className="h-full w-40"
-                            onClick={() => {
-                                setOpenDialog(true);
-                                setSelectedUser(null);
-                            }}
-                        >
-                            <UserPlus />
-                            Create User
-                        </Button>
-                    </DataTable>
+                        extraActions={
+                            <Button
+                                className="h-full px-4"
+                                onClick={() => {
+                                    setOpenDialog(true);
+                                    setSelectedUser(null);
+                                }}
+                            >
+                                <UserPlus className="mr-2 h-4 w-4" />
+                                Add New User
+                            </Button>
+                        }
+                    />
                 </div>
 
                 <DialogContent className="sm:max-w-3xl">
@@ -397,12 +414,25 @@ export default () => {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Firm Name Match</FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    placeholder="Enter Firm Name or 'all'"
-                                                    {...field}
-                                                />
-                                            </FormControl>
+                                            <Select
+                                                onValueChange={field.onChange}
+                                                defaultValue={field.value}
+                                                value={field.value}
+                                            >
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select Firm or 'all'" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All Firms (Universal Access)</SelectItem>
+                                                    {firms.map((firm) => (
+                                                        <SelectItem key={firm} value={firm}>
+                                                            {firm}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </FormItem>
                                     )}
                                 />
@@ -412,47 +442,42 @@ export default () => {
                                 name="permissions"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel className="text-md">Permissions</FormLabel>
-                                        <div className="grid md:grid-cols-3 gap-4 p-4 border rounded-sm">
-                                            {allPermissionKeys.map((perm) => (
-                                                <FormField
-                                                    key={perm}
-                                                    control={form.control}
-                                                    name="permissions"
-                                                    render={() => (
-                                                        <FormItem className="flex gap-2">
-                                                            <FormControl>
-                                                                <Checkbox
-                                                                    id={perm}
-                                                                    checked={field.value?.includes(
-                                                                        perm
-                                                                    )}
-                                                                    onCheckedChange={(checked) => {
-                                                                        const values =
-                                                                            field.value || [];
-                                                                        checked
-                                                                            ? field.onChange([
-                                                                                ...values,
-                                                                                perm,
-                                                                            ])
-                                                                            : field.onChange(
-                                                                                values.filter(
-                                                                                    (p) =>
-                                                                                        p !== perm
-                                                                                )
-                                                                            );
-                                                                    }}
-                                                                />
-                                                            </FormControl>
-                                                            <FormLabel
-                                                                className="font-light"
-                                                                htmlFor={perm}
-                                                            >
-                                                                {camelToTitleCase(perm)}
-                                                            </FormLabel>
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                        <FormLabel className="text-md font-bold">User Permissions & Access Control</FormLabel>
+                                        <div className="space-y-6 mt-4">
+                                            {Object.entries(PERMISSION_GROUPS).map(([groupName, perms]) => (
+                                                <div key={groupName} className="space-y-3">
+                                                    <h3 className="text-sm font-semibold text-muted-foreground border-b pb-1">
+                                                        {groupName}
+                                                    </h3>
+                                                    <div className="grid md:grid-cols-3 gap-4 p-2">
+                                                        {perms.map((perm) => (
+                                                            <FormField
+                                                                key={perm}
+                                                                control={form.control}
+                                                                name="permissions"
+                                                                render={() => (
+                                                                    <FormItem className="flex gap-2 items-center space-y-0">
+                                                                        <FormControl>
+                                                                            <Checkbox
+                                                                                id={perm}
+                                                                                checked={field.value?.includes(perm)}
+                                                                                onCheckedChange={(checked) => {
+                                                                                    const values = field.value || [];
+                                                                                    checked
+                                                                                        ? field.onChange([...values, perm])
+                                                                                        : field.onChange(values.filter((p) => p !== perm));
+                                                                                }}
+                                                                            />
+                                                                        </FormControl>
+                                                                        <FormLabel className="font-medium text-sm cursor-pointer" htmlFor={perm}>
+                                                                            {camelToTitleCase(perm)}
+                                                                        </FormLabel>
+                                                                    </FormItem>
+                                                                )}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
                                     </FormItem>
