@@ -778,7 +778,7 @@ export default function GetPurchase() {
                         vendor: values.vendorName || selectedIndent?.vendorName || '',
                         indentNumber: item.indentNo,
                         product: item.product || '',
-                        quantity: Number(item.liftQty),
+                        quantity: Number(item.quantity),
                         vehicleNo: values.vehicleNo || '',
                         driverName: values.driverName || '',
                         driverMobileNo: values.driverMobileNo || '',

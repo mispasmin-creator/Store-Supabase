@@ -626,7 +626,11 @@ export default function PcReportTable() {
     { accessorKey: 'indentedFor', header: 'Indented For' },
     { accessorKey: 'approvedPartyName', header: 'Approved Party Name' },
     { accessorKey: 'rate', header: 'Rate' },
-    { accessorKey: 'indentQty', header: 'Indent Qty' },
+    { 
+      accessorKey: 'indentQty', 
+      header: 'Indent Qty',
+      cell: ({ row }) => row.original.indentQty || row.original.qtySummarized || row.original.qty
+    },
     { accessorKey: 'totalRate', header: 'Total Rate' },
 
     // Add status and remarks columns for each stage

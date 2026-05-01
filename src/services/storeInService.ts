@@ -81,6 +81,7 @@ export interface StoreInRecord {
     hodStatus: string;
     hodRemark: string;
     paymentTerms: string;
+    indentQty: number;
 }
 
 export interface LocationOption {
@@ -179,6 +180,7 @@ export async function fetchStoreInRecords() {
             actual11: r.actual11 || '',
             billStatusNew: r.bill_status_new || '',
             billImageStatus: r.bill_image_status || '',
+            indentQty: Number(r.indent_qty) || 0,
         }));
     } catch (error) {
         console.error('Error fetching store-in records:', error);

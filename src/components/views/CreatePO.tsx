@@ -207,8 +207,8 @@ const CreatePO = () => {
     const [readOnly, setReadOnly] = useState(-1);
     const [mode, setMode] = useState<'create' | 'revise'>('create');
     const [isEditingDestination, setIsEditingDestination] = useState(false);
-    const [destinationAddress, setDestinationAddress] = useState('M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)');
-    const [firmCompanyName, setFirmCompanyName] = useState('M/S Passary Mineral Madhya Pvt.Ltd');
+    const [destinationAddress, setDestinationAddress] = useState(`${localStorage.getItem('company_name') || 'M/S Passary Mineral Madhya Pvt.Ltd'}, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)`);
+    const [firmCompanyName, setFirmCompanyName] = useState(localStorage.getItem('company_name') || 'M/S Passary Mineral Madhya Pvt.Ltd');
     const [firmCompanyAddress, setFirmCompanyAddress] = useState('Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
     const [firmCompanyPhone, setFirmCompanyPhone] = useState('+91 7223844007');
     const [firmCompanyGstin, setFirmCompanyGstin] = useState('22AAHCP9274B1ZI');
@@ -349,7 +349,7 @@ const CreatePO = () => {
                     companyDetails.destinationAddress || (details as MasterDetails).destinationAddress || ''
                 );
             } else {
-                setFirmCompanyName((details as MasterDetails).companyName || 'Passary Mineral Madhya Pvt.Ltd');
+                setFirmCompanyName((details as MasterDetails).companyName || localStorage.getItem('company_name') || 'M/S Passary Mineral Madhya Pvt.Ltd');
                 setFirmCompanyAddress((details as MasterDetails).companyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212');
                 setFirmCompanyPhone((details as MasterDetails).companyPhone || '+91 7223844007');
                 setFirmCompanyGstin((details as MasterDetails).companyGstin || '22AAHCP9274B1ZI');
@@ -567,13 +567,13 @@ const CreatePO = () => {
         );
 
         return {
-            companyName: firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd',
+            companyName: firmCompanyName || localStorage.getItem('company_name') || 'M/S Passary Mineral Madhya Pvt.Ltd',
             companyPhone: firmCompanyPhone || '+91 7223844007',
             companyGstin: firmCompanyGstin || '22AAHCP9274B1ZI',
             companyPan: firmCompanyPan || 'AACCJ1154B',
             companyAddress: firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-            billingAddress: `${firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd'}, ${firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}`,
-            destinationAddress: destinationAddress || 'M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
+            billingAddress: `${firmCompanyName || localStorage.getItem('company_name') || 'M/S Passary Mineral Madhya Pvt.Ltd'}, ${firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}`,
+            destinationAddress: destinationAddress || `${localStorage.getItem('company_name') || 'M/S Passary Mineral Madhya Pvt.Ltd'}, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)`,
             supplierName: values.supplierName,
             supplierAddress: values.supplierAddress,
             supplierGstin: values.gstin,
@@ -652,13 +652,13 @@ const CreatePO = () => {
             const logoBase64 = await getLogoBase64();
 
             const pdfProps: POPdfProps = {
-                companyName: firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd',
+                companyName: firmCompanyName || localStorage.getItem('company_name') || 'M/S Passary Mineral Madhya Pvt.Ltd',
                 companyPhone: firmCompanyPhone || '+91 7223844007',
                 companyGstin: firmCompanyGstin || '22AAHCP9274B1ZI',
                 companyPan: firmCompanyPan || 'AACCJ1154B',
                 companyAddress: firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212',
-                billingAddress: `${firmCompanyName || 'M/S Passary Mineral Madhya Pvt.Ltd'}, ${firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}`,
-                destinationAddress: destinationAddress || 'M/S Passary Mineral Madhya Pvt.Ltd, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)',
+                billingAddress: `${firmCompanyName || localStorage.getItem('company_name') || 'M/S Passary Mineral Madhya Pvt.Ltd'}, ${firmCompanyAddress || 'Shri Ram Business Park , Block - C, 2nd floor , Room No. 212'}`,
+                destinationAddress: destinationAddress || `${localStorage.getItem('company_name') || 'M/S Passary Mineral Madhya Pvt.Ltd'}, Khasra No 297/2 & 297/6 Village AKoli, Near Tarpongi Toll Plaza, PO- Devri, Raipur - 493221 (CG)`,
                 supplierName: values.supplierName,
                 supplierAddress: values.supplierAddress,
                 supplierGstin: values.gstin,

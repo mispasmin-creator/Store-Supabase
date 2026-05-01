@@ -58,6 +58,7 @@ interface HodPendingData {
     transportationInclude: string;
     billNo?: string;
     paymentTerms: string;
+    indentQty: number;
 }
 
 interface HodHistoryData {
@@ -145,6 +146,7 @@ export default () => {
                     transportationInclude: i.transportationInclude || '',
                     billNo: i.billNo || '',
                     paymentTerms: i.paymentTerms || '',
+                    indentQty: Number(i.indentQty) || 0,
                 }))
         );
 
@@ -222,6 +224,7 @@ export default () => {
                         bill_amt: Number(selectedItem.billAmount || 0),
                         bill_image: selectedItem.photoOfBill || '',
                         bill_no: selectedItem.billNo || '',
+                        indent_qty: Number(selectedItem.indentQty || 0),
                         planned1: formattedDateOnly, // Start Audit stage
                         firm_name_match: selectedItem.firmNameMatch || user?.firmNameMatch || '',
                     } as any);
