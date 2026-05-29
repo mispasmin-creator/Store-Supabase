@@ -156,7 +156,7 @@ export default function DataTable<TData, TValue>({
                                         className="h-50 text-center"
                                     >
                                         <div className="flex justify-center items-center w-full py-20">
-                                            <ClipLoader color="#9333ea" size={40} />
+                                            <ClipLoader color="#0d9e6e" size={40} />
                                         </div>
                                     </TableCell>
                                 </TableRow>

@@ -548,6 +548,74 @@ export default function GetPurchase() {
             header: 'Pending PO Qty',
             cell: ({ getValue }) => <div>{(getValue() as number) || 0}</div>,
         },
+        {
+            accessorKey: 'qty',
+            header: 'Lifted Qty',
+            cell: ({ getValue }) => (
+                <div className="font-semibold text-primary">{(getValue() as number) || 0}</div>
+            ),
+        },
+        {
+            accessorKey: 'billNo',
+            header: 'Bill No.',
+            cell: ({ getValue }) => <div className="font-medium">{(getValue() as string) || '-'}</div>,
+        },
+        {
+            accessorKey: 'billStatus',
+            header: 'Bill Status',
+            cell: ({ getValue }) => {
+                const v = getValue() as string;
+                const isReceived = v === 'Bill Received';
+                return (
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isReceived ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                        {v || '-'}
+                    </span>
+                );
+            },
+        },
+        {
+            accessorKey: 'billAmount',
+            header: 'Bill Amount',
+            cell: ({ getValue }) => {
+                const v = Number(getValue()) || 0;
+                return <div className="font-semibold">₹{v.toLocaleString()}</div>;
+            },
+        },
+        {
+            accessorKey: 'typeOfBill',
+            header: 'Type of Bill',
+            cell: ({ getValue }) => <div className="capitalize">{(getValue() as string) || '-'}</div>,
+        },
+        {
+            id: 'logistics',
+            header: 'Logistics & Transportation',
+            cell: ({ row }) => {
+                const r = row.original;
+                const included = r.transportationInclude;
+                if (!included || included === 'No') {
+                    return <span className="text-muted-foreground text-xs italic">Not Included</span>;
+                }
+                return (
+                    <div className="space-y-0.5 text-xs">
+                        <div className="font-semibold text-primary">Included</div>
+                        {r.transporterName && <div><span className="text-muted-foreground">Transporter: </span>{r.transporterName}</div>}
+                        {r.vehicleNo && <div><span className="text-muted-foreground">Vehicle: </span>{r.vehicleNo}</div>}
+                        {r.driverName && <div><span className="text-muted-foreground">Driver: </span>{r.driverName}</div>}
+                        {r.driverMobileNo && <div><span className="text-muted-foreground">Mobile: </span>{r.driverMobileNo}</div>}
+                        {r.amount ? <div className="font-semibold text-orange-600">Freight: ₹{Number(r.amount).toLocaleString()}</div> : null}
+                    </div>
+                );
+            },
+        },
+        {
+            accessorKey: 'billRemark',
+            header: 'Remark',
+            cell: ({ getValue }) => (
+                <div className="max-w-[150px] truncate text-muted-foreground text-xs" title={(getValue() as string) || ''}>
+                    {(getValue() as string) || '-'}
+                </div>
+            ),
+        },
     ];
 
     // Creating form schema

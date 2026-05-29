@@ -35,6 +35,8 @@ interface ChartDataItem {
 export default function Dashboard() {
     const {
         pcReportSheet,
+        storeInSheet,
+        paymentsSheet,
         allLoading: contextAllLoading
     } = useSheets();
 
@@ -300,6 +302,103 @@ export default function Dashboard() {
 
     }, [startDate, endDate, filteredProducts, filteredVendors, indents, storeIns, issues, isLoading]);
 
+    const partyPendingMaterial = useMemo<PartyMaterialItem[]>(() => {
+        const map: Record<string, PartyMaterialItem> = {};
+        storeInSheet.forEach(item => {
+            const vendor = item.vendorName || 'Unknown';
+            if (!map[vendor]) map[vendor] = { name: vendor, totalLifts: 0, pendingLifts: 0, pendingQty: 0, pendingBillAmt: 0 };
+            map[vendor].totalLifts++;
+            if (!item.actual6) {
+                map[vendor].pendingLifts++;
+                map[vendor].pendingQty += Number(item.qty || 0);
+                map[vendor].pendingBillAmt += Number(item.billAmount || 0);
+            }
+        });
+        return Object.values(map)
+            .filter(v => v.pendingLifts > 0)
+            .sort((a, b) => b.pendingLifts - a.pendingLifts);
+    }, [storeInSheet]);
+
+    const partyPaymentStatus = useMemo<PartyPaymentItem[]>(() => {
+        const map: Record<string, PartyPaymentItem> = {};
+        paymentsSheet.forEach(item => {
+            const party = item.partyName || 'Unknown';
+            if (!map[party]) map[party] = { name: party, totalAmount: 0, paidAmount: 0, pendingAmount: 0, poCount: 0 };
+            map[party].totalAmount += Number(item.totalPoAmount || 0);
+            map[party].paidAmount += Number(item.totalPaidAmount || 0);
+            map[party].pendingAmount += Number(item.outstandingAmount || 0);
+            map[party].poCount++;
+        });
+        return Object.values(map).sort((a, b) => b.pendingAmount - a.pendingAmount);
+    }, [paymentsSheet]);
+
+    const monthlyCostData = useMemo<MonthlyCostItem[]>(() => {
+        const map: Record<string, number> = {};
+        storeInSheet.forEach(item => {
+            const d = item.actual6 || item.timestamp;
+            if (!d || !item.billAmount) return;
+            try {
+                const month = format(new Date(d), 'yyyy-MM');
+                map[month] = (map[month] || 0) + Number(item.billAmount || 0);
+            } catch { /* invalid date */ }
+        });
+        return Object.entries(map)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .slice(-6)
+            .map(([month, amount]) => ({
+                month: format(new Date(month + '-01'), 'MMM yy'),
+                amount
+            }));
+    }, [storeInSheet]);
+
+    // --- Business Overview KPIs (from context) ---
+    const businessKPIs = useMemo(() => {
+        const now = new Date();
+        const currentMonth = format(now, 'yyyy-MM');
+
+        const totalOutstanding = paymentsSheet.reduce((s, p) => s + Number(p.outstandingAmount || 0), 0);
+        const totalPaid = paymentsSheet.reduce((s, p) => s + Number(p.totalPaidAmount || 0), 0);
+        const totalPO = paymentsSheet.reduce((s, p) => s + Number(p.totalPoAmount || 0), 0);
+
+        const pendingToReceive = storeInSheet.filter(s => !s.actual6).length;
+        const receivedThisMonth = storeInSheet.filter(s => {
+            if (!s.actual6) return false;
+            try { return format(new Date(s.actual6), 'yyyy-MM') === currentMonth; } catch { return false; }
+        }).length;
+
+        const thisMonthCost = storeInSheet.reduce((sum, s) => {
+            if (!s.actual6 || !s.billAmount) return sum;
+            try {
+                return format(new Date(s.actual6), 'yyyy-MM') === currentMonth
+                    ? sum + Number(s.billAmount)
+                    : sum;
+            } catch { return sum; }
+        }, 0);
+
+        const vendorSet = new Set(paymentsSheet.map(p => p.partyName).filter(Boolean));
+        const vendorsDue = paymentsSheet.filter(p => Number(p.outstandingAmount || 0) > 0);
+        const uniqueVendorsDue = new Set(vendorsDue.map(p => p.partyName)).size;
+
+        return { totalOutstanding, totalPaid, totalPO, pendingToReceive, receivedThisMonth, thisMonthCost, totalVendors: vendorSet.size, uniqueVendorsDue };
+    }, [paymentsSheet, storeInSheet]);
+
+    // --- Recent Activity (last 5 store-ins received) ---
+    const recentActivity = useMemo(() => {
+        return storeInSheet
+            .filter(s => s.actual6)
+            .sort((a, b) => {
+                try { return new Date(b.actual6).getTime() - new Date(a.actual6).getTime(); } catch { return 0; }
+            })
+            .slice(0, 5)
+            .map(s => ({
+                vendor: s.vendorName,
+                product: s.productName,
+                qty: s.qty,
+                amount: s.billAmount,
+                date: s.actual6,
+            }));
+    }, [storeInSheet]);
+
     const chartConfig = {
         quantity: {
             label: 'Quantity',
@@ -370,6 +469,26 @@ export default function Dashboard() {
                         onChange={setFilteredDepartments}
                         placeholder="Select Departments"
                     />
+                </div>
+
+                {/* ── Business Snapshot Banner ── */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                    {[
+                        { label: 'Total PO Value', value: formatMoney(businessKPIs.totalPO), sub: `${businessKPIs.totalVendors} vendors`, color: 'text-primary', bg: 'bg-primary/5 border-primary/20' },
+                        { label: 'Amount Paid', value: formatMoney(businessKPIs.totalPaid), sub: 'All time', color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
+                        { label: 'Outstanding Due', value: formatMoney(businessKPIs.totalOutstanding), sub: `${businessKPIs.uniqueVendorsDue} vendors due`, color: 'text-red-600', bg: 'bg-red-50 border-red-200' },
+                        { label: 'Pending to Receive', value: String(businessKPIs.pendingToReceive), sub: 'lifts pending', color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' },
+                        { label: 'Received This Month', value: String(businessKPIs.receivedThisMonth), sub: 'lifts received', color: 'text-primary', bg: 'bg-primary/5 border-primary/20' },
+                        { label: 'This Month Cost', value: formatMoney(businessKPIs.thisMonthCost), sub: 'procurement spend', color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' },
+                        { label: 'Indents Approved', value: String(indent.count), sub: `qty: ${indent.quantity}`, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
+                        { label: 'Items Received', value: String(purchase.count), sub: `qty: ${purchase.quantity}`, color: 'text-teal-600', bg: 'bg-teal-50 border-teal-200' },
+                    ].map(({ label, value, sub, color, bg }) => (
+                        <div key={label} className={`rounded-xl border p-3 ${bg}`}>
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">{label}</p>
+                            <p className={`text-xl font-black ${color} leading-tight`}>{value}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">{sub}</p>
+                        </div>
+                    ))}
                 </div>
 
                 <div className="grid md:grid-cols-4 gap-3 lg:grid-cols-5">
@@ -569,6 +688,76 @@ export default function Dashboard() {
                     </Card>
                 </div>
 
+                {/* Recent Activity */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                    <Card className="lg:col-span-2">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-xl">Recent Material Received</CardTitle>
+                            <p className="text-sm text-muted-foreground">Last 5 store-in entries received</p>
+                        </CardHeader>
+                        <CardContent>
+                            {recentActivity.length === 0 ? (
+                                <p className="text-center text-muted-foreground py-6 italic">No recent activity</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {recentActivity.map((r, i) => (
+                                        <div key={i} className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/30">
+                                            <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-sm truncate">{r.product || '—'}</p>
+                                                <p className="text-xs text-muted-foreground truncate">{r.vendor}</p>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-xs font-bold text-primary">Qty: {r.qty}</p>
+                                                {r.amount ? <p className="text-xs text-muted-foreground">{formatMoney(Number(r.amount))}</p> : null}
+                                            </div>
+                                            <div className="text-right shrink-0 text-[10px] text-muted-foreground w-20">
+                                                {r.date ? (() => { try { return format(new Date(r.date), 'dd MMM yy'); } catch { return '—'; } })() : '—'}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-xl">Payment Health</CardTitle>
+                            <p className="text-sm text-muted-foreground">Overall payment collection status</p>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-4">
+                            <div className="text-center py-2">
+                                <p className="text-4xl font-black text-primary">
+                                    {businessKPIs.totalPO > 0 ? Math.round((businessKPIs.totalPaid / businessKPIs.totalPO) * 100) : 0}%
+                                </p>
+                                <p className="text-sm text-muted-foreground mt-1">Payment Completion</p>
+                            </div>
+                            <div className="h-3 bg-muted rounded-full overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${businessKPIs.totalPO > 0 ? Math.min((businessKPIs.totalPaid / businessKPIs.totalPO) * 100, 100) : 0}%` }} />
+                            </div>
+                            <div className="grid grid-cols-1 gap-2 text-sm">
+                                <div className="flex justify-between p-2 rounded-lg bg-primary/5 border border-primary/20">
+                                    <span className="text-muted-foreground">Total PO Value</span>
+                                    <span className="font-bold text-primary">{formatMoney(businessKPIs.totalPO)}</span>
+                                </div>
+                                <div className="flex justify-between p-2 rounded-lg bg-green-50 border border-green-200">
+                                    <span className="text-muted-foreground">Paid</span>
+                                    <span className="font-bold text-green-600">{formatMoney(businessKPIs.totalPaid)}</span>
+                                </div>
+                                <div className="flex justify-between p-2 rounded-lg bg-red-50 border border-red-200">
+                                    <span className="text-muted-foreground">Outstanding</span>
+                                    <span className="font-bold text-red-600">{formatMoney(businessKPIs.totalOutstanding)}</span>
+                                </div>
+                                <div className="flex justify-between p-2 rounded-lg bg-orange-50 border border-orange-200">
+                                    <span className="text-muted-foreground">Vendors Due</span>
+                                    <span className="font-bold text-orange-600">{businessKPIs.uniqueVendorsDue}</span>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
                 {/* PC Reports Section */}
                 <div className="grid grid-cols-1 gap-3">
                     <Card>
@@ -598,6 +787,113 @@ export default function Dashboard() {
                         </CardContent>
                     </Card>
                 </div>
+
+                {/* Party-wise Pending Material & Payment Status */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-xl">
+                                <Truck size={20} className="text-primary shrink-0" />
+                                Party-wise Pending Material
+                            </CardTitle>
+                            <p className="text-sm text-muted-foreground"></p>
+                        </CardHeader>
+                        <CardContent>
+                            {partyPendingMaterial.length === 0 ? (
+                                <p className="text-center text-muted-foreground py-10 italic">Koi pending material nahi hai</p>
+                            ) : (
+                                <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar-thin pr-1">
+                                    {partyPendingMaterial.map((p, i) => (
+                                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-100">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-semibold text-sm truncate">{p.name}</p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                    {p.pendingLifts} lifts pending / {p.totalLifts} total
+                                                </p>
+                                            </div>
+                                            <div className="text-right shrink-0 ml-3">
+                                                <p className="font-bold text-orange-600">{p.pendingQty} units</p>
+                                                <p className="text-xs text-muted-foreground">{formatMoney(p.pendingBillAmt)}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-xl">
+                                <CreditCard size={20} className="text-primary shrink-0" />
+                                Payment Status by Party
+                            </CardTitle>
+                            <p className="text-sm text-muted-foreground"></p>
+                        </CardHeader>
+                        <CardContent>
+                            {partyPaymentStatus.length === 0 ? (
+                                <p className="text-center text-muted-foreground py-10 italic">No Data</p>
+                            ) : (
+                                <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar-thin pr-1">
+                                    {partyPaymentStatus.map((p, i) => (
+                                        <div key={i} className="p-3 rounded-lg border">
+                                            <div className="flex justify-between items-center mb-1.5">
+                                                <p className="font-semibold text-sm truncate flex-1">{p.name}</p>
+                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ml-2 shrink-0 ${p.pendingAmount > 0 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                                                    {p.pendingAmount > 0 ? 'Due' : 'Cleared'}
+                                                </span>
+                                            </div>
+                                            <div className="flex gap-4 text-xs mb-2 flex-wrap">
+                                                <span className="text-muted-foreground">Total: <span className="font-bold text-foreground">{formatMoney(p.totalAmount)}</span></span>
+                                                <span className="text-green-600">Paid: <span className="font-bold">{formatMoney(p.paidAmount)}</span></span>
+                                                <span className="text-red-600">Due: <span className="font-bold">{formatMoney(p.pendingAmount)}</span></span>
+                                            </div>
+                                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-green-500 rounded-full transition-all"
+                                                    style={{ width: `${p.totalAmount > 0 ? Math.min((p.paidAmount / p.totalAmount) * 100, 100) : 0}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Monthly Procurement Cost */}
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-xl">
+                            Monthly Procurement Cost
+                            <span className="text-sm font-normal text-muted-foreground ml-2">(Last 6 months)</span>
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground">Har month kitna purchase hua</p>
+                    </CardHeader>
+                    <CardContent className="h-[270px]">
+                        {monthlyCostData.length === 0 ? (
+                            <div className="flex items-center justify-center h-full text-muted-foreground italic">Cost data available nahi hai</div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={monthlyCostData} margin={{ top: 24, right: 16, left: 8, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                    <XAxis dataKey="month" axisLine={false} tickLine={false} />
+                                    <YAxis axisLine={false} tickLine={false} tickFormatter={v => formatMoney(Number(v))} width={65} />
+                                    <Tooltip formatter={(v: any) => [`₹${Number(v).toLocaleString()}`, 'Procurement Cost']} />
+                                    <Bar dataKey="amount" fill="var(--color-primary)" radius={[4, 4, 0, 0]}>
+                                        <LabelList
+                                            dataKey="amount"
+                                            position="top"
+                                            formatter={(v: any) => formatMoney(Number(v))}
+                                            style={{ fontSize: '10px', fill: 'var(--color-foreground)' }}
+                                        />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );
@@ -635,4 +931,32 @@ interface DeptDataItem {
 interface StatusDataItem {
     name: string;
     value: number;
+}
+
+interface PartyMaterialItem {
+    name: string;
+    totalLifts: number;
+    pendingLifts: number;
+    pendingQty: number;
+    pendingBillAmt: number;
+}
+
+interface PartyPaymentItem {
+    name: string;
+    totalAmount: number;
+    paidAmount: number;
+    pendingAmount: number;
+    poCount: number;
+}
+
+interface MonthlyCostItem {
+    month: string;
+    amount: number;
+}
+
+function formatMoney(amount: number): string {
+    if (amount >= 10000000) return '₹' + (amount / 10000000).toFixed(1) + 'Cr';
+    if (amount >= 100000) return '₹' + (amount / 100000).toFixed(1) + 'L';
+    if (amount >= 1000) return '₹' + (amount / 1000).toFixed(0) + 'k';
+    return '₹' + amount.toLocaleString();
 }

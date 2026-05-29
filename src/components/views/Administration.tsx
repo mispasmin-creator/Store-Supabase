@@ -44,18 +44,80 @@ interface UsersTableData {
 }
 
 function camelToTitleCase(str: string): string {
-    if (str === 'ordersView') return 'Lifting';
-    if (str === 'poHistory') return 'PO History';
+    const nameMap: Record<string, string> = {
+        administrate: 'Administration (Full Access)',
+        createIndent: 'Create Indent',
+        indentApprovalView: 'Department Indent Approval — View',
+        indentApprovalAction: 'Department Indent Approval — Approve/Reject',
+        updateVendorView: 'Vendor Rate Update — View',
+        updateVendorAction: 'Vendor Rate Update — Edit/Submit',
+        threePartyApprovalView: 'Dept & Management Approval — View',
+        threePartyApprovalAction: 'Dept & Management Approval — Approve',
+        pendingPo: 'Pending PO to be Created',
+        createPo: 'Create PO',
+        poHistory: 'PO History',
+        ordersView: 'Lifting',
+        storeIn: 'Store Check (Receive Items)',
+        receiveItemView: 'Store In — View Only',
+        receiveItemAction: 'Store In — Receive Action',
+        hodStoreApproval: 'HOD Check',
+        storeIssue: 'Store Issue',
+        issueData: 'Issue Data',
+        inventory: 'Inventory',
+        fullKiting: 'Freight Payment',
+        makePayment: 'Make Payment',
+        insteadOfQualityCheckInReceivedItem: 'Reject For GRN',
+        sendDebitNote: 'Send Debit Note',
+        billNotReceived: 'Bill Not Received',
+        auditData: 'Audit Data',
+        dbForPc: 'DB For PC',
+    };
+    if (nameMap[str]) return nameMap[str];
     return str
-        .replace(/([a-z])([A-Z])/g, '$1 $2') // insert space before capitals
-        .replace(/^./, (char) => char.toUpperCase()); // capitalize first letter
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/^./, (char) => char.toUpperCase());
 }
 
-const PERMISSION_GROUPS = {
-    'Core Access': ['administrate'],
-    'Procurement & PO': ['createIndent', 'indentApprovalView', 'indentApprovalAction', 'pendingIndentsView', 'createPo', 'updateVendorView', 'updateVendorAction', 'threePartyApprovalView', 'threePartyApprovalAction', 'poHistory', 'pendingPo', 'ordersView'],
-    'Store & Inventory': ['receiveItemView', 'receiveItemAction', 'storeIn', 'storeOutApprovalView', 'storeOutApprovalAction', 'hodStoreApproval', 'storeIssue', 'issueData', 'inventory', 'fullKiting'],
-    'Audit & Finance': ['againAuditing', 'takeEntryByTelly', 'reauditData', 'rectifyTheMistake', 'auditData', 'sendDebitNote', 'returnMaterialToParty', 'exchangeMaterials', 'insteadOfQualityCheckInReceivedItem', 'dbForPc', 'billNotReceived', 'makePayment']
+// Only active pages are listed here. Commented-out routes are excluded.
+const PERMISSION_GROUPS: Record<string, string[]> = {
+    'Core Access': [
+        'administrate',
+    ],
+    'Procurement & Indent': [
+        'createIndent',
+        'indentApprovalView',
+        'indentApprovalAction',
+        'updateVendorView',
+        'updateVendorAction',
+        'threePartyApprovalView',
+        'threePartyApprovalAction',
+        'pendingPo',
+        'createPo',
+        'poHistory',
+        'ordersView',
+    ],
+    'Store & Inventory': [
+        'storeIn',
+        'receiveItemView',
+        'receiveItemAction',
+        'hodStoreApproval',
+        'storeIssue',
+        'issueData',
+        'inventory',
+        'fullKiting',
+    ],
+    'Finance & Payment': [
+        'makePayment',
+    ],
+    'Quality & Dispatch': [
+        'insteadOfQualityCheckInReceivedItem',
+        'sendDebitNote',
+        'billNotReceived',
+    ],
+    'Audit': [
+        'auditData',
+        'dbForPc',
+    ],
 };
 
 export default () => {
@@ -292,10 +354,15 @@ export default () => {
         try {
             if (selectedUser) {
                 await updateUser(selectedUser.id, userData);
-                toast.success('Updated user settings');
+                toast.success(`Permissions updated for ${value.name}`, {
+                    description: 'User must refresh their browser (F5) to see the new pages.',
+                    duration: 6000,
+                });
             } else {
                 await createUser(userData);
-                toast.success('Created user successfully');
+                toast.success(`User "${value.name}" created successfully`, {
+                    description: 'They can now log in with the provided username and password.',
+                });
             }
             setOpenDialog(false);
             fetchUser();
