@@ -27,6 +27,7 @@ import Heading from '../element/Heading';
 import { formatDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
 import { fetchIndentRecords, updateIndentStoreOutApproval, type IndentRecord } from '@/services/indentService';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 
 interface StoreOutTableData {
     id: number;
@@ -54,6 +55,7 @@ interface HistoryData {
     uom: string;
     issuedStatus: string;
     requestedQuantity: number;
+    attachment: string;
 }
 
 export default () => {
@@ -118,6 +120,7 @@ export default () => {
                     requestedQuantity: sheet.quantity,
                     uom: sheet.uom,
                     issuedStatus: sheet.indent_status || 'Pending',
+                    attachment: sheet.attachment || ''
                 }));
 
             setHistoryData(history);
@@ -205,12 +208,25 @@ export default () => {
             header: 'Attachment',
             cell: ({ row }) => {
                 const attachment = row.original.attachment;
-                return attachment ? (
-                    <a href={attachment} target="_blank">
-                        Attachment
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {attachment ? (
+                            <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                Attachment
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="indent"
+                            columnName="attachment"
+                            rowIdColumn="id"
+                            rowIdValue={row.original.id}
+                            bucketName="indent_attachment"
+                            currentFileUrl={attachment}
+                            onUpdate={fetchData}
+                        />
+                    </div>
                 );
             },
         },
@@ -228,6 +244,33 @@ export default () => {
         { accessorKey: 'requestedQuantity', header: 'Requested Quantity' },
         { accessorKey: 'date', header: 'Requuest Date' },
         { accessorKey: 'approvalDate', header: 'Approval Date' },
+        {
+            accessorKey: 'attachment',
+            header: 'Attachment',
+            cell: ({ row }) => {
+                const attachment = row.original.attachment;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {attachment ? (
+                            <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                Attachment
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="indent"
+                            columnName="attachment"
+                            rowIdColumn="id"
+                            rowIdValue={row.original.id}
+                            bucketName="indent_attachment"
+                            currentFileUrl={attachment}
+                            onUpdate={fetchData}
+                        />
+                    </div>
+                );
+            },
+        },
         {
             accessorKey: 'issuedStatus',
             header: 'Issued Status',

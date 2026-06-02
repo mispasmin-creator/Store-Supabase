@@ -26,6 +26,7 @@ import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
 import { formatDateTime, parseCustomDate } from '@/lib/utils';
 import { fetchStoreInRecords, updateStoreInReturnToParty } from '@/services/storeInService';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 
 interface StoreInPendingData {
     liftNumber: string;
@@ -191,12 +192,25 @@ export default () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Bill
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Bill
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchData}
+                        />
+                    </div>
                 );
             },
         },
@@ -227,12 +241,25 @@ export default () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Bill
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Bill
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchData}
+                        />
+                    </div>
                 );
             },
         },

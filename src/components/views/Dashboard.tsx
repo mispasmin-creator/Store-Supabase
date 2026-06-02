@@ -17,14 +17,12 @@ import { Button } from '../ui/button';
 import { format } from 'date-fns';
 import { Calendar } from '../ui/calendar';
 import { ComboBox } from '../ui/combobox';
-import { fetchIndentRecords, type IndentRecord } from '@/services/indentService';
-import { fetchStoreInRecords, type StoreInRecord } from '@/services/storeInService';
-import { fetchIssueRecords, type IssueRecord } from '@/services/issueService';
-import { fetchMasterOptions } from '@/services/masterService';
-import { fetchPoMaster } from '@/services/poService';
-import { fetchInventoryRecords } from '@/services/inventoryService';
+import type { IndentRecord } from '@/services/indentService';
+import type { StoreInRecord } from '@/services/storeInService';
+import type { IssueRecord } from '@/services/issueService';
 import { Line, LineChart, Pie, PieChart, Cell, ResponsiveContainer, Tooltip, Area, AreaChart } from 'recharts';
 import { useSheets } from '@/context/SheetsContext';
+import { HashLoader } from 'react-spinners';
 
 interface ChartDataItem {
     name: string;
@@ -37,22 +35,72 @@ export default function Dashboard() {
         pcReportSheet,
         storeInSheet,
         paymentsSheet,
+        indentSheet,
+        issueSheet,
+        masterSheet,
+        poMasterSheet,
+        inventorySheet,
         allLoading: contextAllLoading
     } = useSheets();
 
-    const [indents, setIndents] = useState<IndentRecord[]>([]);
-    const [storeIns, setStoreIns] = useState<StoreInRecord[]>([]);
-    const [issues, setIssues] = useState<IssueRecord[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const indents = useMemo<IndentRecord[]>(() => {
+        if (!indentSheet) return [];
+        return indentSheet.map((item: any) => ({
+            ...item,
+            product_name: item.productName,
+            vendor_name: item.approvedVendorName,
+            approved_quantity: item.approvedQuantity,
+        })) as unknown as IndentRecord[];
+    }, [indentSheet]);
+
+    const storeIns = storeInSheet || [];
+
+    const issues = useMemo<IssueRecord[]>(() => {
+        if (!issueSheet) return [];
+        return issueSheet.map((item: any) => ({
+            ...item,
+            product_name: item.productName,
+            given_qty: item.givenQty,
+        })) as unknown as IssueRecord[];
+    }, [issueSheet]);
+
+    const poMasterData = poMasterSheet || [];
+
+    const allVendors = useMemo<string[]>(() => {
+        return masterSheet?.vendorNames || [];
+    }, [masterSheet]);
+
+    const allDepartments = useMemo<string[]>(() => {
+        return masterSheet?.departments || [];
+    }, [masterSheet]);
+
+    const poTotal = useMemo(() => {
+        return poMasterData.reduce((sum, p) => sum + (Number(p.totalPoAmount) || 0), 0);
+    }, [poMasterData]);
+
+    const alerts = useMemo(() => {
+        const low = inventorySheet.filter(i => (i.current || 0) < 5 && (i.current || 0) > 0).length;
+        const outOf = inventorySheet.filter(i => (i.current || 0) <= 0).length;
+        return { lowStock: low, outOfStock: outOf };
+    }, [inventorySheet]);
+
+    const allProducts = useMemo(() => {
+        return Array.from(
+            new Set(
+                indents
+                    .filter((item) => item.product_name)
+                    .map((item) => item.product_name || '')
+            )
+        );
+    }, [indents]);
+
+    const isLoading = contextAllLoading;
 
     const [chartData, setChartData] = useState<ChartDataItem[]>([]);
     const [topVendorsData, setTopVendors] = useState<VendorDataItem[]>([]);
     const [indent, setIndent] = useState<StatsData>({ count: 0, quantity: 0 });
     const [purchase, setPurchase] = useState<StatsData>({ count: 0, quantity: 0 });
     const [out, setOut] = useState<StatsData>({ count: 0, quantity: 0 });
-    const [poTotal, setPoTotal] = useState<number>(0);
-    const [poMasterData, setPoMasterData] = useState<any[]>([]);
-    const [alerts, setAlerts] = useState<AlertsData>({ lowStock: 0, outOfStock: 0 });
 
     const [trendData, setTrendData] = useState<TrendDataItem[]>([]);
     const [deptData, setDeptData] = useState<DeptDataItem[]>([]);
@@ -63,60 +111,9 @@ export default function Dashboard() {
     const [filteredVendors, setFilteredVendors] = useState<string[]>([]);
     const [filteredProducts, setFilteredProducts] = useState<string[]>([]);
     const [filteredDepartments, setFilteredDepartments] = useState<string[]>([]);
-    const [allVendors, setAllVendors] = useState<string[]>([]);
-    const [allProducts, setAllProducts] = useState<string[]>([]);
-    const [allDepartments, setAllDepartments] = useState<string[]>([]);
-
-    useEffect(() => {
-        const loadData = async () => {
-            try {
-                setIsLoading(true);
-                const [iData, sData, issueData, mData, poData, invData] = await Promise.all([
-                    fetchIndentRecords(),
-                    fetchStoreInRecords(),
-                    fetchIssueRecords(),
-                    fetchMasterOptions(),
-                    fetchPoMaster(),
-                    fetchInventoryRecords()
-                ]);
-                setIndents(iData);
-                setStoreIns(sData);
-                setIssues(issueData);
-                setAllVendors(mData.vendorNames);
-                setAllDepartments(mData.departments);
-                setPoMasterData(poData);
-
-                // Initial total PO calculations
-                const totalVal = poData.reduce((sum, p) => sum + (Number(p.totalPoAmount) || 0), 0);
-                setPoTotal(totalVal);
-
-                // Calculate stock alerts from inventory
-                const low = invData.filter(i => (i.current || 0) < 5 && (i.current || 0) > 0).length;
-                const outOf = invData.filter(i => (i.current || 0) <= 0).length;
-                setAlerts({ lowStock: low, outOfStock: outOf });
-
-            } catch (error) {
-                console.error("Error loading dashboard data:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        loadData();
-    }, []);
 
     useEffect(() => {
         if (isLoading) return;
-
-        // Get unique products from Indents
-
-        const products = Array.from(
-            new Set(
-                indents
-                    .filter((item) => item.product_name)
-                    .map((item) => item.product_name || '')
-            )
-        );
-        setAllProducts(products);
 
         // Filter data by date range, vendors, and products
         const filterByDateAndSelection = (item: IndentRecord) => {
@@ -158,7 +155,7 @@ export default function Dashboard() {
         setIndent({ count: approvedIndents.length, quantity: totalApprovedQuantity });
 
         // Calculate Purchases (Store In - Received items)
-        const filterStoreIn = (item: StoreInRecord) => {
+        const filterStoreIn = (item: any) => {
             let valid = true;
 
             // Date filtering
@@ -405,6 +402,15 @@ export default function Dashboard() {
             color: 'var(--color-primary)',
         },
     } satisfies ChartConfig;
+
+    if (isLoading) {
+        return (
+            <div className="h-[calc(100vh-100px)] w-full flex flex-col justify-center items-center gap-4">
+                <HashLoader color="#3b82f6" aria-label="Loading Spinner" />
+                <p className="text-sm text-muted-foreground animate-pulse font-medium">Loading Dashboard Data...</p>
+            </div>
+        );
+    }
 
     return (
         <div>

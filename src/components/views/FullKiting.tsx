@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { fetchFullkittingRecords, updateFullkittingRecord, uploadBiltyImage, type FullkittingRecord } from '@/services/fullkittingService';
 import { createPaymentEntry } from '@/services/storeInService';
 import { formatDateTime, parseCustomDate } from '@/lib/utils';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 
 // Helper function to format date as "YYYY-MM-DD"
 function formatDate(date: Date): string {
@@ -139,13 +140,28 @@ export default function FullKiting() {
         {
             accessorKey: 'biltyImage',
             header: 'Bilty Image',
-            cell: ({ getValue }) => {
-                const url = getValue() as string;
-                return url ? (
-                    <Button variant="ghost" size="sm" onClick={() => window.open(url, '_blank')}>
-                        <ExternalLink className="h-4 w-4 mr-1" /> View
-                    </Button>
-                ) : '-';
+            cell: ({ row }) => {
+                const url = row.original.biltyImage;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {url ? (
+                            <Button variant="ghost" size="sm" onClick={() => window.open(url, '_blank')}>
+                                <ExternalLink className="h-4 w-4 mr-1" /> View
+                            </Button>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="fullkitting"
+                            columnName="bilty_image"
+                            rowIdColumn="indent_number"
+                            rowIdValue={row.original.indentNumber}
+                            bucketName="fullkitting-photos"
+                            currentFileUrl={url}
+                            onUpdate={fetchData}
+                        />
+                    </div>
+                );
             }
         }
     ];

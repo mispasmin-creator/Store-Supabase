@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { uploadFile } from '@/lib/fetchers';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 import {
     Dialog,
     DialogContent,
@@ -59,6 +60,8 @@ interface PIPendingData {
     outstandingAmount: number;
     status: string;
     pdf?: string;
+    file?: string;
+    isPaymentRecord?: boolean;
     paymentForm?: string;
     billNo?: string;
     billAmount?: number;
@@ -215,6 +218,8 @@ export default function PIApprovals() {
                         outstandingAmount: totalPo - totalPaid,
                         status: record.status || 'Pending',
                         pdf: record.pdf || '',
+                        file: '',
+                        isPaymentRecord: false,
                         billNo: linkedStoreIn?.billNo || linkedStoreIn?.bill_no || '',
                         billAmount: Number(linkedStoreIn?.billAmount || linkedStoreIn?.bill_amount || 0),
                         advanceAmount: Number(record.advanceAmount || record.advance_amount || 0),
@@ -294,7 +299,9 @@ export default function PIApprovals() {
                         totalPaidAmount: Number(payment?.totalPaidAmount || payment?.total_paid_amount || 0),
                         outstandingAmount: Number(payment?.outstandingAmount || payment?.outstanding_amount || payment?.payAmount || payment?.pay_amount || 0),
                         status: payment?.status || 'Pending',
-                        pdf: payment?.pdf || payment?.file || '',
+                        pdf: payment?.pdf || '',
+                        file: payment?.file || '',
+                        isPaymentRecord: true,
                         billNo: payment?.billNo || payment?.bill_no || linkedStoreIn?.billNo || linkedStoreIn?.bill_no || '',
                         billAmount: Number(payment?.billAmount || payment?.bill_amount || linkedStoreIn?.billAmount || linkedStoreIn?.bill_amount || 0),
                         rowIds: [payment?.id || 0],
@@ -346,6 +353,9 @@ export default function PIApprovals() {
                         status: 'Pending',
                         billNo: record.billNo || '',
                         billAmount: billAmt,
+                        pdf: '',
+                        file: '',
+                        isPaymentRecord: false,
                         rowIds: [record.id || 0],
                         liftNumber: record.liftNumber || '',
                     } as PIPendingData;
@@ -589,6 +599,80 @@ export default function PIApprovals() {
                     ₹{row.original.outstandingAmount?.toLocaleString('en-IN')}
                 </div>
             ),
+        },
+        {
+            accessorKey: 'pdf',
+            header: 'PO/PI PDF',
+            cell: ({ row }) => {
+                const pdf = row.original.pdf;
+                const poNumber = row.original.poNumber;
+                const id = row.original.rowIndex;
+                const isPayment = row.original.isPaymentRecord;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {pdf ? (
+                            <a href={pdf} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        {isPayment ? (
+                            <AdminFileUpdater
+                                tableName="payments"
+                                columnName="pdf"
+                                rowIdColumn="id"
+                                rowIdValue={id}
+                                bucketName="po_image"
+                                currentFileUrl={pdf}
+                                onUpdate={updateAll}
+                            />
+                        ) : (
+                            poNumber && (
+                                <AdminFileUpdater
+                                    tableName="po_master"
+                                    columnName="pdf"
+                                    rowIdColumn="po_number"
+                                    rowIdValue={poNumber}
+                                    bucketName="po_image"
+                                    currentFileUrl={pdf}
+                                    onUpdate={updateAll}
+                                />
+                            )
+                        )}
+                    </div>
+                );
+            },
+        },
+        {
+            accessorKey: 'file',
+            header: 'Payment File',
+            cell: ({ row }) => {
+                const file = row.original.file;
+                const id = row.original.rowIndex;
+                const isPayment = row.original.isPaymentRecord;
+                if (!isPayment) return <span className="text-gray-400">-</span>;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {file ? (
+                            <a href={file} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="payments"
+                            columnName="file"
+                            rowIdColumn="id"
+                            rowIdValue={id}
+                            bucketName="po_image"
+                            currentFileUrl={file}
+                            onUpdate={updateAll}
+                        />
+                    </div>
+                );
+            },
         },
         {
             accessorKey: 'status',

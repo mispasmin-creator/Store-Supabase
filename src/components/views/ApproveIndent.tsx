@@ -26,6 +26,7 @@ import { ClipboardCheck, PenSquare, CheckSquare } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 import { Pill } from '../ui/pill';
 import { Input } from '../ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -291,11 +292,26 @@ export default function ApproveIndent() {
             header: 'Attachment',
             cell: ({ row }: { row: Row<IndentRecord> }) => {
                 const attachment = row.original.attachment;
-                return attachment ? (
-                    <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                        Attachment
-                    </a>
-                ) : null;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {attachment ? (
+                            <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Attachment
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="indent"
+                            columnName="attachment"
+                            rowIdColumn="id"
+                            rowIdValue={row.original.id}
+                            bucketName="indent_attachment"
+                            currentFileUrl={attachment}
+                            onUpdate={fetchData}
+                        />
+                    </div>
+                );
             },
         },
         {

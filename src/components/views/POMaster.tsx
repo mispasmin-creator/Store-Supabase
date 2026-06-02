@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { formatDate } from '@/lib/utils';
 import DataTable from '../element/DataTable';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 
 interface PendingIndentsData {
     timestamp: string;
@@ -144,17 +145,31 @@ export default () => {
             accessorKey: 'pdf',
             header: 'PDF',
             cell: ({ row }) => {
-                return row.original.pdf ? (
-                    <a
-                        href={row.original.pdf}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline"
-                    >
-                        View PDF
-                    </a>
-                ) : (
-                    <span className="text-gray-400">No PDF</span>
+                const pdf = row.original.pdf;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {pdf ? (
+                            <a
+                                href={pdf}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 underline"
+                            >
+                                View PDF
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">No PDF</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="po_master"
+                            columnName="pdf"
+                            rowIdColumn="po_number"
+                            rowIdValue={row.original.poNumber}
+                            bucketName="po_image"
+                            currentFileUrl={pdf}
+                            onUpdate={fetchData}
+                        />
+                    </div>
                 );
             },
         },

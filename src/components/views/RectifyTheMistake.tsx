@@ -32,6 +32,7 @@ import {
 } from '@/services/tallyEntryService';
 
 import { formatDate, formatDateTime } from '@/lib/utils';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 
 export default function RectifyTheMistake() {
     const { user } = useAuth();
@@ -114,11 +115,26 @@ export default function RectifyTheMistake() {
             header: 'Bill Image',
             cell: ({ row }) => {
                 const image = row.original.billImage;
-                return image ? (
-                    <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                        View
-                    </a>
-                ) : null;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {image ? (
+                            <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="tally_entry"
+                            columnName="bill_image"
+                            rowIdColumn="id"
+                            rowIdValue={row.original.id}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={image}
+                            onUpdate={fetchData}
+                        />
+                    </div>
+                );
             },
         },
         { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
@@ -129,11 +145,26 @@ export default function RectifyTheMistake() {
             header: 'Product Image',
             cell: ({ row }) => {
                 const image = row.original.productImage;
-                return image ? (
-                    <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                        View
-                    </a>
-                ) : null;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {image ? (
+                            <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="tally_entry"
+                            columnName="product_image"
+                            rowIdColumn="id"
+                            rowIdValue={row.original.id}
+                            bucketName="photo_of_product"
+                            currentFileUrl={image}
+                            onUpdate={fetchData}
+                        />
+                    </div>
+                );
             },
         },
         { accessorKey: 'area', header: 'Area' },
@@ -164,11 +195,26 @@ export default function RectifyTheMistake() {
             header: 'Bill Image',
             cell: ({ row }) => {
                 const image = row.original.billImage;
-                return image ? (
-                    <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                        View
-                    </a>
-                ) : null;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {image ? (
+                            <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="tally_entry"
+                            columnName="bill_image"
+                            rowIdColumn="id"
+                            rowIdValue={row.original.id}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={image}
+                            onUpdate={fetchData}
+                        />
+                    </div>
+                );
             },
         },
         { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
@@ -179,11 +225,26 @@ export default function RectifyTheMistake() {
             header: 'Product Image',
             cell: ({ row }) => {
                 const image = row.original.productImage;
-                return image ? (
-                    <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                        View
-                    </a>
-                ) : null;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {image ? (
+                            <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="tally_entry"
+                            columnName="product_image"
+                            rowIdColumn="id"
+                            rowIdValue={row.original.id}
+                            bucketName="photo_of_product"
+                            currentFileUrl={image}
+                            onUpdate={fetchData}
+                        />
+                    </div>
+                );
             },
         },
         { accessorKey: 'area', header: 'Area' },

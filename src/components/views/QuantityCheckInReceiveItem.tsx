@@ -31,6 +31,7 @@ import { Truck } from 'lucide-react';
 import { Tabs, TabsContent } from '../ui/tabs';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 import { formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
 
@@ -334,12 +335,25 @@ export default () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Bill
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Bill
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
                 );
             },
         },
@@ -406,12 +420,25 @@ export default () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Bill
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Bill
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
                 );
             },
         },
@@ -430,12 +457,25 @@ export default () => {
             header: 'Bill Copy Attached',
             cell: ({ row }) => {
                 const billCopy = row.original.billCopyAttached;
-                return billCopy ? (
-                    <a href={billCopy} target="_blank" rel="noopener noreferrer">
-                        View
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {billCopy ? (
+                            <a href={billCopy} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="bill_copy_attached"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={billCopy}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
                 );
             },
         },

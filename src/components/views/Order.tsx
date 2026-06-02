@@ -1,5 +1,6 @@
 import { Package2 } from 'lucide-react';
 import Heading from '../element/Heading';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 import { useEffect, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
@@ -44,6 +45,7 @@ export default function POHistory() {
     const [historyData, setHistoryData] = useState<HistoryData[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
     const [statusFilter, setStatusFilter] = useState<string>('All');
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     useEffect(() => {
         async function fetchPOHistory() {
@@ -142,7 +144,7 @@ export default function POHistory() {
         }
 
         fetchPOHistory();
-    }, [user?.firmNameMatch]);
+    }, [user?.firmNameMatch, refreshTrigger]);
 
     const filteredData = statusFilter === 'All'
         ? historyData
@@ -161,12 +163,25 @@ export default function POHistory() {
             header: 'PO Copy',
             cell: ({ row }) => {
                 const attachment = row.original.poCopy;
-                return attachment ? (
-                    <a href={attachment} target="_blank" rel="noopener noreferrer">
-                        PDF
-                    </a>
-                ) : (
-                    <span className="text-gray-400">No PDF</span>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {attachment ? (
+                            <a href={attachment} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                PDF
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">No PDF</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="po_master"
+                            columnName="pdf"
+                            rowIdColumn="po_number"
+                            rowIdValue={row.original.poNumber}
+                            bucketName="po_image"
+                            currentFileUrl={attachment}
+                            onUpdate={() => setRefreshTrigger(prev => prev + 1)}
+                        />
+                    </div>
                 );
             },
         },

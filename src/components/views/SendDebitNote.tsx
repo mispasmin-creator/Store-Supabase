@@ -32,6 +32,7 @@ import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
 import { formatDateTime, parseCustomDate } from '@/lib/utils';
 import { Pill } from '../ui/pill';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 
 function formatDateDisplay(dateString: string): string {
     if (!dateString) return '';
@@ -301,12 +302,25 @@ export default () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Bill
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Bill
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
                 );
             },
         },
@@ -343,12 +357,25 @@ export default () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Bill
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Bill
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
                 );
             },
         },
@@ -378,12 +405,25 @@ export default () => {
             header: 'Debit Note Copy',
             cell: ({ row }) => {
                 const file = row.original.debitNoteCopy;
-                return file ? (
-                    <a href={file} target="_blank" rel="noopener noreferrer">
-                        View
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {file ? (
+                            <a href={file} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="debit_note_copy"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="store_in_images"
+                            currentFileUrl={file}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
                 );
             },
         },
@@ -392,12 +432,25 @@ export default () => {
             header: 'Bill Copy',
             cell: ({ row }) => {
                 const file = row.original.billCopy;
-                return file ? (
-                    <a href={file} target="_blank" rel="noopener noreferrer">
-                        View
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {file ? (
+                            <a href={file} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="bill_copy"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={file}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
                 );
             },
         },
@@ -406,12 +459,25 @@ export default () => {
             header: 'Return Copy',
             cell: ({ row }) => {
                 const file = row.original.returnCopy;
-                return file ? (
-                    <a href={file} target="_blank" rel="noopener noreferrer">
-                        View
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {file ? (
+                            <a href={file} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="return_copy"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="store_in_images"
+                            currentFileUrl={file}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
                 );
             },
         },

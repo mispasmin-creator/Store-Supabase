@@ -114,7 +114,7 @@ export default function DataTable<TData, TValue>({
                                             <TableHead
                                                 key={header.id}
                                                 className={cn(
-                                                    "h-10 px-2 align-middle font-medium text-gray-900 border-b",
+                                                    "h-10 px-2 align-middle font-medium text-gray-900 border-b bg-muted sticky top-0 z-10",
                                                     header.column.getCanSort() ? "cursor-pointer select-none group" : ""
                                                 )}
                                                 onClick={header.column.getToggleSortingHandler()}

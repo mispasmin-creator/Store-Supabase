@@ -1,5 +1,6 @@
 import { Package2, Calculator, FileCheck, AlertTriangle, RotateCcw, ShieldCheck, CheckSquare, BarChart, ChevronDown, ChevronUp } from 'lucide-react';
 import Heading from '../element/Heading';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 import { useEffect, useState, useMemo } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
@@ -599,11 +600,26 @@ export default function PcReportTable() {
       header: 'Bill Image',
       cell: ({ row }) => {
         const image = row.original.billImage;
-        return image ? (
-          <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-            View
-          </a>
-        ) : null;
+        return (
+          <div className="flex flex-col items-center justify-center gap-1">
+            {image ? (
+              <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                View
+              </a>
+            ) : (
+              <span className="text-gray-400">-</span>
+            )}
+            <AdminFileUpdater
+              tableName="tally_entry"
+              columnName="bill_image"
+              rowIdColumn="id"
+              rowIdValue={row.original.id}
+              bucketName="photo_of_bill"
+              currentFileUrl={image}
+              onUpdate={updateAll}
+            />
+          </div>
+        );
       },
     },
     { accessorKey: 'billReceivedLater', header: 'Bill Received Later' },
@@ -615,11 +631,26 @@ export default function PcReportTable() {
       header: 'Product Image',
       cell: ({ row }) => {
         const image = row.original.productImage;
-        return image ? (
-          <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-            View
-          </a>
-        ) : null;
+        return (
+          <div className="flex flex-col items-center justify-center gap-1">
+            {image ? (
+              <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                View
+              </a>
+            ) : (
+              <span className="text-gray-400">-</span>
+            )}
+            <AdminFileUpdater
+              tableName="tally_entry"
+              columnName="product_image"
+              rowIdColumn="id"
+              rowIdValue={row.original.id}
+              bucketName="photo_of_product"
+              currentFileUrl={image}
+              onUpdate={updateAll}
+            />
+          </div>
+        );
       },
     },
     { accessorKey: 'area', header: 'Area' },
@@ -1310,15 +1341,26 @@ export default function PcReportTable() {
                                 </div>
 
                                 <div className="mt-8 pt-4 border-t border-gray-200 flex items-center justify-between">
-                                  <div className="flex gap-3">
-                                    {item.billImage && (
+                                  <div className="flex items-center gap-3">
+                                    {item.billImage ? (
                                       <Button variant="outline" size="sm" asChild className="h-8 text-xs font-semibold bg-white">
                                         <a href={item.billImage} target="_blank" rel="noopener noreferrer">
                                           <CheckSquare className="w-3.5 h-3.5 mr-2 text-primary" />
                                           Invoice Copy
                                         </a>
                                       </Button>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground italic">No Invoice Copy</span>
                                     )}
+                                    <AdminFileUpdater
+                                      tableName="tally_entry"
+                                      columnName="bill_image"
+                                      rowIdColumn="id"
+                                      rowIdValue={item.id}
+                                      bucketName="photo_of_bill"
+                                      currentFileUrl={item.billImage}
+                                      onUpdate={updateAll}
+                                    />
                                   </div>
                                 </div>
                               </div>

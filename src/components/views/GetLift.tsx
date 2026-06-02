@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ShoppingCart, X, Truck, FileText, IndianRupee, CreditCard, User, Phone, CheckCircle2, Package, Info, Upload } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import Heading from '../element/Heading';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 import { formatDate, formatDateTime, parseCustomDate } from '@/lib/utils';
 import {
     fetchIndentRecords,
@@ -124,6 +125,7 @@ export default function GetPurchase() {
     const [loading, setLoading] = useState(false);
     const [indentRecords, setIndentRecords] = useState<GetLiftIndentRecord[]>([]);
     const [storeInRecords, setStoreInRecords] = useState<GetLiftStoreInRecord[]>([]);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Fetch all data from Supabase
     useEffect(() => {
@@ -148,7 +150,7 @@ export default function GetPurchase() {
         };
 
         fetchAllData();
-    }, []);
+    }, [refreshTrigger]);
 
     // Process pending table data
     useEffect(() => {
@@ -501,19 +503,31 @@ export default function GetPurchase() {
         {
             accessorKey: 'photoOfBill',
             header: 'Photo Of Bill',
-            cell: ({ getValue }) => {
-                const photoUrl = getValue() as string;
-                if (!photoUrl) return <div className="text-muted-foreground">-</div>;
-
+            cell: ({ row }) => {
+                const item = row.original;
+                const photoUrl = item.photoOfBill;
                 return (
-                    <div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(photoUrl, '_blank')}
-                        >
-                            View Bill
-                        </Button>
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photoUrl ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(photoUrl, '_blank')}
+                            >
+                                View Bill
+                            </Button>
+                        ) : (
+                            <div className="text-muted-foreground">-</div>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={item.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photoUrl}
+                            onUpdate={() => setRefreshTrigger(prev => prev + 1)}
+                        />
                     </div>
                 );
             },

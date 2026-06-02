@@ -26,6 +26,7 @@ import Heading from '../element/Heading';
 import { Pill } from '../ui/pill';
 import { fetchStoreInRecords, updateStoreInExchange, type StoreInRecord } from '@/services/storeInService';
 import { formatDate } from '@/lib/utils';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 
 interface ExchangePendingData {
     liftNumber: string;
@@ -244,12 +245,25 @@ const ExchangeMaterials = () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Bill
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Bill
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchData}
+                        />
+                    </div>
                 );
             },
         },
@@ -263,12 +277,25 @@ const ExchangeMaterials = () => {
             header: 'Photo Of Product',
             cell: ({ row }) => {
                 const photo = row.original.photoOfProduct;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Product
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Product
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_product"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_product"
+                            currentFileUrl={photo}
+                            onUpdate={fetchData}
+                        />
+                    </div>
                 );
             },
         },
@@ -302,12 +329,25 @@ const ExchangeMaterials = () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Bill
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Bill
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchData}
+                        />
+                    </div>
                 );
             },
         },
@@ -321,12 +361,25 @@ const ExchangeMaterials = () => {
             header: 'Photo Of Product',
             cell: ({ row }) => {
                 const photo = row.original.photoOfProduct;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer">
-                        Product
-                    </a>
-                ) : (
-                    <></>
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                Product
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_product"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_product"
+                            currentFileUrl={photo}
+                            onUpdate={fetchData}
+                        />
+                    </div>
                 );
             },
         },

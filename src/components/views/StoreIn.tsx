@@ -35,6 +35,7 @@ import {
     createPaymentEntry,
     type StoreInRecord,
 } from '@/services/storeInService';
+import AdminFileUpdater from '../element/AdminFileUpdater';
 
 interface StoreInPendingData {
     liftNumber: string;
@@ -432,11 +433,26 @@ export default () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                        View
-                    </a>
-                ) : null;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
+                );
             },
         },
         { accessorKey: 'transportationInclude', header: 'Trans. Include', cell: textWrapCell },
@@ -477,11 +493,26 @@ export default () => {
             header: 'Photo Of Bill',
             cell: ({ row }) => {
                 const photo = row.original.photoOfBill;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                        View
-                    </a>
-                ) : null;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_bill"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_bill"
+                            currentFileUrl={photo}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
+                );
             },
         },
         { accessorKey: 'transportationInclude', header: 'Trans. Include', cell: textWrapCell },
@@ -494,11 +525,26 @@ export default () => {
             header: 'Product Photo',
             cell: ({ row }) => {
                 const photo = row.original.photoOfProduct;
-                return photo ? (
-                    <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                        View
-                    </a>
-                ) : null;
+                return (
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        {photo ? (
+                            <a href={photo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                View
+                            </a>
+                        ) : (
+                            <span className="text-gray-400">-</span>
+                        )}
+                        <AdminFileUpdater
+                            tableName="store_in"
+                            columnName="photo_of_product"
+                            rowIdColumn="lift_number"
+                            rowIdValue={row.original.liftNumber}
+                            bucketName="photo_of_product"
+                            currentFileUrl={photo}
+                            onUpdate={fetchAllData}
+                        />
+                    </div>
+                );
             },
         },
         {
