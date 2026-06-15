@@ -8,7 +8,6 @@ import { useSheets } from '@/context/SheetsContext';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { uploadFile } from '@/lib/fetchers';
 import AdminFileUpdater from '../element/AdminFileUpdater';
 import {
     Dialog,
@@ -757,38 +756,6 @@ export default function PIApprovals() {
         }
     }, [openDialog, selectedItem, form]);
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-        if (!allowedTypes.includes(file.type)) {
-            toast.error('Only PDF, JPG, and PNG files are allowed');
-            return;
-        }
-
-        const maxSize = 10 * 1024 * 1024;
-        if (file.size > maxSize) {
-            toast.error('File size must be less than 10MB');
-            return;
-        }
-
-        try {
-            setUploadingFile(true);
-            const driveLink = await uploadFile({
-                file: file,
-                folderId: 'photo_of_bill'
-            });
-
-            form.setValue('file', driveLink);
-            toast.success('File uploaded successfully');
-        } catch (error) {
-            toast.error('Failed to upload file');
-            console.error('Upload error:', error);
-        } finally {
-            setUploadingFile(false);
-        }
-    };
 
     function generateUniqueNo(): string {
         const existingCount = Array.isArray(paymentsSheet) ? paymentsSheet.length : 0;
