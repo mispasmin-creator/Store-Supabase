@@ -737,16 +737,12 @@ export default function PIApprovals() {
     // ✅ UPDATED SCHEMA - Pay Amount, File, Remarks
     const schema = z.object({
         payAmount: z.coerce.number().min(1, 'Amount must be greater than 0'),
-        file: z.string().optional(),
-        remark: z.string().min(1, 'Remarks are required'),
     });
 
     const form = useForm({
         resolver: zodResolver(schema),
         defaultValues: {
             payAmount: 0,
-            file: '',
-            remark: '',
         },
     });
 
@@ -811,8 +807,8 @@ export default function PIApprovals() {
             const newOutstanding = (selectedItem.outstandingAmount || 0) - payAmount;
             const newStatus = newOutstanding <= 0 ? 'Complete' : 'Pending';
             const finalRemark = selectedItem.billNo
-                ? `${values.remark} | Bill: ${selectedItem.billNo}`
-                : values.remark;
+                ? `Bill: ${selectedItem.billNo}`
+                : '';
 
             const uniqueNo = generateUniqueNo();
 
@@ -829,7 +825,7 @@ export default function PIApprovals() {
                 number_of_days: String(selectedItem.numberOfDays || '0'),
                 pdf: selectedItem.pdf || '',
                 pay_amount: String(payAmount),
-                file: values.file || '',
+                file: '',
                 remark: finalRemark,
                 total_paid_amount: String((selectedItem.totalPaidAmount || 0) + payAmount),
                 outstanding_amount: String(newOutstanding),
@@ -1101,76 +1097,6 @@ export default function PIApprovals() {
                                             )}
                                         />
 
-                                        <FormField
-                                            control={form.control}
-                                            name="remark"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="font-medium">Remarks *</FormLabel>
-                                                    <FormControl>
-                                                        <Input
-                                                            type="text"
-                                                            placeholder="Enter payment remarks"
-                                                            className="border-gray-300 focus:border-purple-500"
-                                                            {...field}
-                                                        />
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-
-                                        <FormField
-                                            control={form.control}
-                                            name="file"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="font-medium flex items-center gap-2">
-                                                        <Upload className="h-4 w-4" />
-                                                        Upload Payment Proof
-                                                    </FormLabel>
-                                                    <FormControl>
-                                                        <div className="space-y-2">
-                                                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-purple-400 transition-colors">
-                                                                <Input
-                                                                    type="file"
-                                                                    accept=".pdf,.jpg,.jpeg,.png"
-                                                                    onChange={handleFileUpload}
-                                                                    disabled={uploadingFile}
-                                                                    className="border-0 cursor-pointer"
-                                                                />
-                                                                <p className="text-xs text-gray-500 mt-2">
-                                                                    Upload payment proof (PDF, JPG, PNG - Max 10MB)
-                                                                </p>
-                                                            </div>
-                                                            {uploadingFile && (
-                                                                <div className="flex items-center gap-2 text-sm text-blue-600">
-                                                                    <Loader size={16} color="blue" />
-                                                                    Uploading...
-                                                                </div>
-                                                            )}
-                                                            {field.value && !uploadingFile && (
-                                                                <div className="space-y-1">
-                                                                    <p className="text-sm text-green-600 flex items-center gap-2">
-                                                                        <CheckCircle className="h-4 w-4" />
-                                                                        File uploaded successfully
-                                                                    </p>
-                                                                    <a
-                                                                        href={field.value}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                                                                    >
-                                                                        View uploaded file →
-                                                                    </a>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
                                     </div>
 
                                     <Separator />
