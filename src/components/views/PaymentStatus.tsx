@@ -762,6 +762,18 @@ export default function PIApprovals() {
         return `PAY-${(existingCount + 1).toString().padStart(4, '0')}`;
     }
 
+    function toIsoDate(value: unknown): string | null {
+        const str = String(value || '').trim();
+        if (!str) return null;
+        const ddmmyyyy = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+        if (ddmmyyyy) {
+            const [, day, month, year] = ddmmyyyy;
+            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+        const parsed = new Date(str);
+        return isNaN(parsed.getTime()) ? null : parsed.toISOString().split('T')[0];
+    }
+
     async function onSubmit(values: z.infer<typeof schema>) {
         try {
             if (!selectedItem) {
@@ -787,7 +799,7 @@ export default function PIApprovals() {
                 total_po_amount: String(selectedItem.totalPoAmount || ''),
                 internal_code: selectedItem.internalCode,
                 product: selectedItem.product,
-                delivery_date: selectedItem.deliveryDate || '',
+                delivery_date: toIsoDate(selectedItem.deliveryDate),
                 payment_terms: selectedItem.paymentTerms || '',
                 number_of_days: String(selectedItem.numberOfDays || '0'),
                 pdf: selectedItem.pdf || '',
@@ -814,7 +826,7 @@ export default function PIApprovals() {
             setOpenDialog(false);
             setTimeout(() => updateAll(), 1000);
         } catch (error) {
-            toast.error('Failed to process payment');
+            toast.error(`Failed to process payment: ${(error as Error)?.message || 'Unknown error'}`);
             console.error('Payment error:', error);
         }
     }
@@ -1052,6 +1064,7 @@ export default function PIApprovals() {
                                                     <FormControl>
                                                         <Input
                                                             type="number"
+                                                            step="0.01"
                                                             placeholder="Enter amount to pay"
                                                             className="border-gray-300 focus:border-purple-500 text-lg font-semibold"
                                                             min={1}
