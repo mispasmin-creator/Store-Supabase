@@ -1,4 +1,4 @@
-import { Package2, FileText, Building, DollarSign, Calendar, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Package2, FileText, Building, DollarSign, Calendar as CalendarIcon, Upload, CheckCircle, AlertCircle, Download, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
@@ -34,6 +34,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '../ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
+import { format } from 'date-fns';
+
 
 // ✅ UPDATED INTERFACE
 interface PIPendingData {
@@ -108,18 +112,104 @@ export default function PIApprovals() {
     const [openDialog, setOpenDialog] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
     const [filterTerm, setFilterTerm] = useState('Advance Terms');
+    const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+    const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
-    // ✅ Memoized filtered data
+    // ✅ Memoized filtered data with Date range filtering
     const filteredData = useMemo(() => {
-        if (filterTerm === 'All') return pendingData;
+        let data = pendingData;
+
+        // 1. Filter by Payment Terms
         if (filterTerm === 'Advance Terms') {
-            return pendingData.filter(item => {
+            data = data.filter(item => {
                 const pt = (item.paymentTerms || '').toLowerCase();
                 return pt.includes('advance') || pt.includes('pi');
             });
+        } else if (filterTerm !== 'All') {
+            data = data.filter(item => item.paymentTerms === filterTerm);
         }
-        return pendingData.filter(item => item.paymentTerms === filterTerm);
-    }, [pendingData, filterTerm]);
+
+        // 2. Filter by Date Range (using item.timestamp)
+        if (startDate || endDate) {
+            data = data.filter(item => {
+                if (!item.timestamp) return false;
+                const itemDate = new Date(item.timestamp);
+                if (isNaN(itemDate.getTime())) return false;
+
+                if (startDate) {
+                    const start = new Date(startDate);
+                    start.setHours(0, 0, 0, 0);
+                    if (itemDate < start) return false;
+                }
+
+                if (endDate) {
+                    const end = new Date(endDate);
+                    end.setHours(23, 59, 59, 999);
+                    if (itemDate > end) return false;
+                }
+
+                return true;
+            });
+        }
+
+        return data;
+    }, [pendingData, filterTerm, startDate, endDate]);
+
+    // ✅ Handle CSV Export
+    const handleDownload = (data: PIPendingData[]) => {
+        if (!data || data.length === 0) {
+            toast.error('No data to export');
+            return;
+        }
+
+        const headers = [
+            'Bill No.',
+            'PO Number',
+            'Party Name',
+            'Indent No.',
+            'Product',
+            'Total PO Amount',
+            'Bill Amount',
+            'Total Paid',
+            'Outstanding',
+            'Payment Terms',
+            'Delivery Date',
+            'Firm',
+            'Status',
+            'Date Entered'
+        ];
+
+        const csvRows = [
+            headers.join(','),
+            ...data.map((row) => [
+                `"${String(row.billNo ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.poNumber ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.partyName ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.internalCode ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.product ?? '').replace(/"/g, '""')}"`,
+                row.totalPoAmount || 0,
+                row.billAmount || 0,
+                row.totalPaidAmount || 0,
+                row.outstandingAmount || 0,
+                `"${String(row.paymentTerms ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.deliveryDate ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.firmNameMatch ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.status ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.timestamp ?? '').replace(/"/g, '""')}"`
+            ].join(','))
+        ];
+
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `process-for-payment-debit-note-${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
 
     // ✅ Get unique payment terms for the filter
     const uniquePaymentTerms = useMemo(() => {
@@ -924,33 +1014,108 @@ export default function PIApprovals() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {filteredData.length > 0 ? (
-                            <DataTable
-                                data={filteredData}
-                                columns={pendingColumns}
-                                searchFields={['poNumber', 'partyName', 'product', 'internalCode', 'firmNameMatch']}
-                                dataLoading={poMasterLoading}
-                                className="border rounded-lg"
-                                extraActions={
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm font-medium text-slate-600 whitespace-nowrap mr-2">Payment Terms:</span>
-                                        <Select value={filterTerm} onValueChange={setFilterTerm}>
-                                            <SelectTrigger className="w-[180px] h-9 bg-white border-slate-200">
-                                                <SelectValue placeholder="Select Term" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="All">All Terms</SelectItem>
-                                                <SelectItem value="Advance Terms">Advance Terms (PI/Advance)</SelectItem>
-                                                {uniquePaymentTerms.map(term => (
-                                                    <SelectItem key={term} value={term}>
-                                                        {term}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                        {pendingData.length > 0 ? (
+                            <div className="space-y-4">
+                                {/* Date Range Filters Bar */}
+                                <div className="flex flex-wrap items-center gap-3 bg-purple-50/50 p-3 rounded-lg border border-purple-100/50 mb-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-sm font-semibold text-slate-700">Filter by Date Range:</span>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    data-empty={!startDate}
+                                                    className="data-[empty=true]:text-muted-foreground min-w-[130px] justify-start text-left font-normal bg-white border-slate-200 h-9"
+                                                >
+                                                    <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
+                                                    {startDate ? format(startDate, 'dd-MM-yyyy') : <span>From Date</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar mode="single" selected={startDate} onSelect={setStartDate} />
+                                            </PopoverContent>
+                                        </Popover>
+
+                                        <span className="text-slate-400 text-sm">to</span>
+
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    data-empty={!endDate}
+                                                    className="data-[empty=true]:text-muted-foreground min-w-[130px] justify-start text-left font-normal bg-white border-slate-200 h-9"
+                                                >
+                                                    <CalendarIcon className="mr-2 h-4 w-4 text-slate-500" />
+                                                    {endDate ? format(endDate, 'dd-MM-yyyy') : <span>To Date</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar mode="single" selected={endDate} onSelect={setEndDate} />
+                                            </PopoverContent>
+                                        </Popover>
+
+                                        {(startDate || endDate) && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => {
+                                                    setStartDate(undefined);
+                                                    setEndDate(undefined);
+                                                }}
+                                                className="h-9 w-9 text-slate-500 hover:text-slate-800"
+                                                title="Clear Dates"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                     </div>
-                                }
-                            />
+                                </div>
+
+                                <DataTable
+                                    data={filteredData}
+                                    columns={pendingColumns}
+                                    searchFields={['poNumber', 'partyName', 'product', 'internalCode', 'firmNameMatch']}
+                                    dataLoading={poMasterLoading}
+                                    className="border rounded-lg"
+                                    extraActions={
+                                        <div className="flex items-center gap-3">
+                                            {/* Payment Terms Filter */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm font-medium text-slate-600 whitespace-nowrap">Payment Terms:</span>
+                                                <Select value={filterTerm} onValueChange={setFilterTerm}>
+                                                    <SelectTrigger className="w-[180px] h-9 bg-white border-slate-200">
+                                                        <SelectValue placeholder="Select Term" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="All">All Terms</SelectItem>
+                                                        <SelectItem value="Advance Terms">Advance Terms (PI/Advance)</SelectItem>
+                                                        {uniquePaymentTerms.map(term => (
+                                                            <SelectItem key={term} value={term}>
+                                                                {term}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <Separator orientation="vertical" className="h-6" />
+
+                                            {/* Export Button */}
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleDownload(filteredData)}
+                                                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 h-9 font-medium flex items-center gap-2"
+                                            >
+                                                <Download className="h-4 w-4" />
+                                                Export CSV
+                                            </Button>
+                                        </div>
+                                    }
+                                />
+                            </div>
                         ) : (
                             <div className="text-center py-12">
                                 <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
