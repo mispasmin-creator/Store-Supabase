@@ -40,6 +40,7 @@ import {
     type GetLiftIndentRecord,
     type GetLiftStoreInRecord,
 } from '@/services/getLiftService';
+import { fetchPoMaster } from '@/services/poService';
 
 interface GetPurchaseData {
     indentNo: string;
@@ -125,6 +126,7 @@ export default function GetPurchase() {
     const [loading, setLoading] = useState(false);
     const [indentRecords, setIndentRecords] = useState<GetLiftIndentRecord[]>([]);
     const [storeInRecords, setStoreInRecords] = useState<GetLiftStoreInRecord[]>([]);
+    const [poMasterRecords, setPoMasterRecords] = useState<any[]>([]);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Fetch all data from Supabase
@@ -132,15 +134,17 @@ export default function GetPurchase() {
         const fetchAllData = async () => {
             setLoading(true);
             try {
-                const [vendors, indents, storeIns] = await Promise.all([
+                const [vendors, indents, storeIns, poMaster] = await Promise.all([
                     fetchVendorOptions(),
                     fetchIndentRecords(),
                     fetchStoreInRecords(),
+                    fetchPoMaster(),
                 ]);
 
                 setVendorOptions(vendors);
                 setIndentRecords(indents);
                 setStoreInRecords(storeIns);
+                setPoMasterRecords(poMaster);
             } catch (error) {
                 console.error('Failed to fetch data:', error);
                 toast.error('Failed to load data');
@@ -678,6 +682,9 @@ export default function GetPurchase() {
             withTax: z.string(),
             uom: z.string().optional(),
             liftQty: z.coerce.number().min(0),
+            discountPercent: z.coerce.number().default(0).optional(),
+            packaging: z.coerce.number().default(0).optional(),
+            forwarding: z.coerce.number().default(0).optional(),
         })).superRefine((items, ctx) => {
             items.forEach((item, index) => {
                 const numericLiftQty = Number(item.liftQty) || 0;
@@ -792,20 +799,34 @@ export default function GetPurchase() {
                 driverMobileNo: '',
                 amount: 0,
                 cancelPendingQty: 0,
-                items: allIndividualItems.map(item => ({
-                    indentNo: item.indentNumber?.toString() || '',
-                    product: item.productName || '',
-                    poNumber: item.poNumber || '',
-                    quantity: Number(item.approvedQuantity) || 0,
-                    pendingLiftQty: item.pendingPoQty || 0,
-                    receivedQty: item.receivedQty || 0,
-                    pendingPoQty: item.pendingPoQty || 0,
-                    approvedRate: item.approvedRate || '0',
-                    taxValue: item.taxValue || 0,
-                    withTax: item.withTax || 'No',
-                    uom: item.uom || '',
-                    liftQty: item.pendingPoQty || 0,
-                })),
+                items: allIndividualItems.map(item => {
+                    const matchedPo = poMasterRecords.find(p => 
+                        p.poNumber === item.poNumber && 
+                        p.internalCode === item.indentNumber?.toString() && 
+                        p.product === item.productName
+                    );
+                    const discountPercent = matchedPo ? Number(matchedPo.discount) || Number(matchedPo.discountPercent) || 0 : 0;
+                    const packaging = matchedPo ? Number(matchedPo.packaging) || 0 : 0;
+                    const forwarding = matchedPo ? Number(matchedPo.forwarding) || 0 : 0;
+
+                    return {
+                        indentNo: item.indentNumber?.toString() || '',
+                        product: item.productName || '',
+                        poNumber: item.poNumber || '',
+                        quantity: Number(item.approvedQuantity) || 0,
+                        pendingLiftQty: item.pendingPoQty || 0,
+                        receivedQty: item.receivedQty || 0,
+                        pendingPoQty: item.pendingPoQty || 0,
+                        approvedRate: item.approvedRate || '0',
+                        taxValue: item.taxValue || 0,
+                        withTax: item.withTax || 'No',
+                        uom: item.uom || '',
+                        liftQty: item.pendingPoQty || 0,
+                        discountPercent,
+                        packaging,
+                        forwarding,
+                    };
+                }),
             });
 
             // Immediately calculate and set initial bill amount
@@ -813,18 +834,44 @@ export default function GetPurchase() {
                 const rate = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
                 const tax = item.taxValue || 0;
                 const withTax = item.withTax || 'No';
-                const effectiveRate = withTax === 'No' ? rate * (1 + tax / 100) : rate;
                 const qty = item.pendingPoQty || 0;
-                return sum + (effectiveRate * qty);
+
+                const matchedPo = poMasterRecords.find(p => 
+                    p.poNumber === item.poNumber && 
+                    p.internalCode === item.indentNumber?.toString() && 
+                    p.product === item.productName
+                );
+                const discountPercent = matchedPo ? Number(matchedPo.discount) || Number(matchedPo.discountPercent) || 0 : 0;
+                const packaging = matchedPo ? Number(matchedPo.packaging) || 0 : 0;
+                const forwarding = matchedPo ? Number(matchedPo.forwarding) || 0 : 0;
+                const totalApprovedQty = Number(item.approvedQuantity) || 1;
+
+                const base = rate * qty;
+                const discounted = base - (base * discountPercent / 100);
+                const proRatedPkg = totalApprovedQty > 0 ? (packaging * qty) / totalApprovedQty : 0;
+                const proRatedFwd = totalApprovedQty > 0 ? (forwarding * qty) / totalApprovedQty : 0;
+                const taxable = discounted + proRatedPkg + proRatedFwd;
+                const effectiveAmount = withTax === 'No' ? taxable * (1 + tax / 100) : taxable;
+
+                return sum + effectiveAmount;
             }, 0);
             form.setValue('billAmount', initialTotal);
 
             setVendorSearch('');
         }
-    }, [selectedIndent, form, tableData]);
+    }, [selectedIndent, form, tableData, poMasterRecords]);
 
     useEffect(() => {
         if (selectedHistory) {
+            const matchedPo = poMasterRecords.find(p => 
+                p.poNumber === selectedHistory.poNumber && 
+                p.internalCode === selectedHistory.indentNo && 
+                p.product === selectedHistory.product
+            );
+            const discountPercent = matchedPo ? Number(matchedPo.discount) || Number(matchedPo.discountPercent) || 0 : 0;
+            const packaging = matchedPo ? Number(matchedPo.packaging) || 0 : 0;
+            const forwarding = matchedPo ? Number(matchedPo.forwarding) || 0 : 0;
+
             form.reset({
                 billStatus: selectedHistory.billStatus === 'Not Received' ? 'Bill Not Received' : selectedHistory.billStatus || '',
                 billNo: selectedHistory.billNo || '',
@@ -854,12 +901,15 @@ export default function GetPurchase() {
                         withTax: selectedHistory.withTax || 'No',
                         uom: '',
                         liftQty: selectedHistory.qty || 0,
+                        discountPercent,
+                        packaging,
+                        forwarding,
                     }
                 ],
             });
             setVendorSearch('');
         }
-    }, [selectedHistory, form]);
+    }, [selectedHistory, form, poMasterRecords]);
 
     const typeOfBillWatcher = useWatch({ control: form.control, name: 'typeOfBill' }) || 'independent';
     const itemsWatcher = useWatch({ control: form.control, name: 'items' }) || [];
@@ -870,8 +920,19 @@ export default function GetPurchase() {
             const rate = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
             const tax = Number(item.taxValue) || 0;
             const withTax = item.withTax || 'No';
-            const effectiveRate = withTax === 'No' ? rate * (1 + tax / 100) : rate;
-            return sum + (qty * effectiveRate);
+            const discountPercent = Number(item.discountPercent) || 0;
+            const packaging = Number(item.packaging) || 0;
+            const forwarding = Number(item.forwarding) || 0;
+            const totalApprovedQty = Number(item.quantity) || 1;
+
+            const base = rate * qty;
+            const discounted = base - (base * discountPercent / 100);
+            const proRatedPkg = totalApprovedQty > 0 ? (packaging * qty) / totalApprovedQty : 0;
+            const proRatedFwd = totalApprovedQty > 0 ? (forwarding * qty) / totalApprovedQty : 0;
+            const taxable = discounted + proRatedPkg + proRatedFwd;
+            const effectiveAmount = withTax === 'No' ? taxable * (1 + tax / 100) : taxable;
+
+            return sum + effectiveAmount;
         }, 0);
     };
 
@@ -1030,6 +1091,10 @@ export default function GetPurchase() {
                 for (const item of values.items) {
                     if (Number(item.liftQty) <= 0) continue;
 
+                    const rateVal = parseFloat(String(item.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
+                    const discountPercent = Number(item.discountPercent) || 0;
+                    const calcDiscount = (Number(item.liftQty) * rateVal * discountPercent) / 100;
+
                     const newStoreInRecord = {
                         timestamp: currentDateTime,
                         indentNo: item.indentNo,
@@ -1037,7 +1102,7 @@ export default function GetPurchase() {
                         vendorName: values.vendorName || selectedIndent?.vendorName || '',
                         productName: item.product || '',
                         qty: Number(item.liftQty),
-                        discountAmount: 0,
+                        discountAmount: calcDiscount,
                         typeOfBill: values.typeOfBill || '',
                         billAmount: Number(values.billAmount) || 0,
                         paymentType: '',
@@ -1222,7 +1287,18 @@ export default function GetPurchase() {
                                                 const rate = parseFloat(String(field.approvedRate).replace(/[^0-9.-]/g, '')) || 0;
                                                 const tax = Number(field.taxValue) || 0;
                                                 const withTax = field.withTax || 'No';
-                                                const effectiveRate = withTax === 'No' ? rate * (1 + tax / 100) : rate;
+                                                
+                                                const discountPercent = Number(itemsWatcher?.[index]?.discountPercent) || 0;
+                                                const packaging = Number(itemsWatcher?.[index]?.packaging) || 0;
+                                                const forwarding = Number(itemsWatcher?.[index]?.forwarding) || 0;
+                                                const totalApprovedQty = Number(field.quantity) || 1;
+
+                                                const basePerUnit = rate * (1 - discountPercent / 100);
+                                                const pkgPerUnit = totalApprovedQty > 0 ? packaging / totalApprovedQty : 0;
+                                                const fwdPerUnit = totalApprovedQty > 0 ? forwarding / totalApprovedQty : 0;
+                                                const taxablePerUnit = basePerUnit + pkgPerUnit + fwdPerUnit;
+                                                const effectiveRate = withTax === 'No' ? taxablePerUnit * (1 + tax / 100) : taxablePerUnit;
+
                                                 const liftQty = Number(itemsWatcher?.[index]?.liftQty) || 0;
                                                 const amount = effectiveRate * liftQty;
                                                 return (
@@ -1230,6 +1306,23 @@ export default function GetPurchase() {
                                                         <td className="px-4 py-3">
                                                             <div className="font-medium">{field.product}</div>
                                                             <div className="text-[10px] text-muted-foreground">PO: {field.poNumber} | Indent: {field.indentNo}</div>
+                                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                                {discountPercent > 0 && (
+                                                                    <span className="bg-red-50 text-red-600 text-[9px] px-1.5 py-0.5 rounded border border-red-100 font-semibold">
+                                                                        Disc: {discountPercent}%
+                                                                    </span>
+                                                                )}
+                                                                {packaging > 0 && (
+                                                                    <span className="bg-blue-50 text-blue-600 text-[9px] px-1.5 py-0.5 rounded border border-blue-100 font-semibold">
+                                                                        Pkg: ₹{packaging}
+                                                                    </span>
+                                                                )}
+                                                                {forwarding > 0 && (
+                                                                    <span className="bg-teal-50 text-teal-600 text-[9px] px-1.5 py-0.5 rounded border border-teal-100 font-semibold">
+                                                                        Fwd: ₹{forwarding}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-muted-foreground whitespace-nowrap">
                                                             ₹ {rate.toLocaleString()}
@@ -1266,7 +1359,7 @@ export default function GetPurchase() {
                                                             />
                                                         </td>
                                                         <td className="px-4 py-3 text-right font-medium whitespace-nowrap text-primary">
-                                                            ₹ {amount.toLocaleString()}
+                                                            ₹ {amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </td>
                                                         <td className="px-4 py-3 text-center">
                                                             <Button
