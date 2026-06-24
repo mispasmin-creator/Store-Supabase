@@ -7,6 +7,7 @@ import {
     Truck,
     Warehouse,
     CreditCard,
+    Plus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { ChartContainer, ChartTooltip, type ChartConfig } from '../ui/chart';
@@ -23,6 +24,12 @@ import type { IssueRecord } from '@/services/issueService';
 import { Line, LineChart, Pie, PieChart, Cell, ResponsiveContainer, Tooltip, Area, AreaChart } from 'recharts';
 import { useSheets } from '@/context/SheetsContext';
 import { HashLoader } from 'react-spinners';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 interface ChartDataItem {
     name: string;
@@ -40,8 +47,89 @@ export default function Dashboard() {
         masterSheet,
         poMasterSheet,
         inventorySheet,
-        allLoading: contextAllLoading
+        allLoading: contextAllLoading,
+        updateAll
     } = useSheets();
+
+    // State for Add Data Dialog
+    const [isAddDataOpen, setIsAddDataOpen] = useState(false);
+    const [dataType, setDataType] = useState<'product' | 'vendor'>('product');
+    const [newGroupHead, setNewGroupHead] = useState('');
+    const [newItemName, setNewItemName] = useState('');
+    
+    // Vendor state variables
+    const [newVendorName, setNewVendorName] = useState('');
+
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const existingGroupHeads = useMemo(() => masterSheet?.allGroupHeads || [], [masterSheet]);
+
+    const handleAddDataSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+
+        try {
+            if (dataType === 'product') {
+                const trimmedGroupHead = newGroupHead.trim();
+                const trimmedItemName = newItemName.trim();
+
+                if (!trimmedGroupHead || !trimmedItemName) {
+                    toast.error('Group Head and Item Name are required');
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                const { error } = await supabase
+                    .from('master')
+                    .insert([
+                        {
+                            group_head: trimmedGroupHead,
+                            item_name: trimmedItemName,
+                        }
+                    ]);
+
+                if (error) throw error;
+
+                toast.success(`Successfully added Product "${trimmedItemName}" under "${trimmedGroupHead}"`);
+                
+                // Reset state
+                setNewGroupHead('');
+                setNewItemName('');
+            } else {
+                const trimmedVendorName = newVendorName.trim();
+
+                if (!trimmedVendorName) {
+                    toast.error('Vendor Name is required');
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                const { error } = await supabase
+                    .from('master')
+                    .insert([
+                        {
+                            vendor_name: trimmedVendorName,
+                        }
+                    ]);
+
+                if (error) throw error;
+
+                toast.success(`Successfully added Vendor "${trimmedVendorName}"`);
+                
+                // Reset state
+                setNewVendorName('');
+            }
+
+            setIsAddDataOpen(false);
+            // Refresh sheets context data so dropdowns are updated immediately
+            updateAll();
+        } catch (error: any) {
+            console.error('Error adding data to master table:', error);
+            toast.error(error.message || 'Failed to add data to master table');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const indents = useMemo<IndentRecord[]>(() => {
         if (!indentSheet) return [];
@@ -412,9 +500,19 @@ export default function Dashboard() {
         );
     }
 
+    const headingActions = (
+        <Button 
+            onClick={() => setIsAddDataOpen(true)}
+            className="flex items-center gap-1.5 font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md border-0"
+        >
+            <Plus size={16} />
+            <span>Add Data</span>
+        </Button>
+    );
+
     return (
         <div>
-            <Heading heading="Dashboard" subtext="View your analytics">
+            <Heading heading="Dashboard" subtext="View your analytics" actions={headingActions}>
                 <LayoutDashboard size={50} className="text-primary" />
             </Heading>
 
@@ -901,6 +999,99 @@ export default function Dashboard() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Add Data Dialog */}
+            <Dialog open={isAddDataOpen} onOpenChange={setIsAddDataOpen}>
+                <DialogContent className="sm:max-w-[450px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                            <Plus className="text-primary" size={20} />
+                            Add Master Data
+                        </DialogTitle>
+                        <DialogDescription>
+                            Insert new product items or vendors directly into the master database.
+                        </DialogDescription>
+                    </DialogHeader>
+                    
+                    <Tabs value={dataType} onValueChange={(val) => setDataType(val as 'product' | 'vendor')} className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="product">Product</TabsTrigger>
+                            <TabsTrigger value="vendor">Vendor</TabsTrigger>
+                        </TabsList>
+                        
+                        <form onSubmit={handleAddDataSubmit} className="space-y-4 py-4">
+                            <TabsContent value="product" className="space-y-4 mt-0">
+                                <div className="space-y-2">
+                                    <Label htmlFor="groupHead" className="text-sm font-semibold">
+                                        Group Head <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                        id="groupHead"
+                                        list="existing-group-heads"
+                                        placeholder="e.g. HARDWARE, ELECTRICAL"
+                                        value={newGroupHead}
+                                        onChange={(e) => setNewGroupHead(e.target.value)}
+                                        required={dataType === 'product'}
+                                        autoComplete="off"
+                                    />
+                                    <datalist id="existing-group-heads">
+                                        {existingGroupHeads.map((gh) => (
+                                            <option key={gh} value={gh} />
+                                        ))}
+                                    </datalist>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="itemName" className="text-sm font-semibold">
+                                        Item Name (Product Name) <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                        id="itemName"
+                                        placeholder="e.g. Laminated sheet, Copper Cable"
+                                        value={newItemName}
+                                        onChange={(e) => setNewItemName(e.target.value)}
+                                        required={dataType === 'product'}
+                                        autoComplete="off"
+                                    />
+                                </div>
+                            </TabsContent>
+                            
+                            <TabsContent value="vendor" className="space-y-4 mt-0">
+                                <div className="space-y-2">
+                                    <Label htmlFor="vendorName" className="text-sm font-semibold">
+                                        Vendor Name <span className="text-destructive">*</span>
+                                    </Label>
+                                    <Input
+                                        id="vendorName"
+                                        placeholder="e.g. Rajshakti China Clay, Acme Corp"
+                                        value={newVendorName}
+                                        onChange={(e) => setNewVendorName(e.target.value)}
+                                        required={dataType === 'vendor'}
+                                        autoComplete="off"
+                                    />
+                                </div>
+                            </TabsContent>
+                            
+                            <DialogFooter className="pt-4 border-t flex gap-2">
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    onClick={() => setIsAddDataOpen(false)}
+                                    disabled={isSubmitting}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button 
+                                    type="submit" 
+                                    disabled={isSubmitting}
+                                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md border-0 min-w-[80px]"
+                                >
+                                    {isSubmitting ? 'Adding...' : 'Add'}
+                                </Button>
+                            </DialogFooter>
+                        </form>
+                    </Tabs>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
