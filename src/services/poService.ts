@@ -82,6 +82,7 @@ export async function fetchPoMaster() {
             totalPoAmount: Number(r.total_po_amount) || 0,
             packaging: Number(r.packaging) || 0,
             forwarding: Number(r.forwarding) || 0,
+            serviceCharge: Number(r.service_charge) || 0,
             packagingAndForwarding: Number(r.packaging_and_forwarding) || ((Number(r.packaging) || 0) + (Number(r.forwarding) || 0)),
             pdf: r.pdf || '',
             quotationNumber: r.quotation_number || '',
@@ -260,6 +261,7 @@ export async function insertPoRecords(poRecords: any[]) {
             advance_amount: record.advanceAmount || 0,
             packaging: String(record.packaging || 0),
             forwarding: String(record.forwarding || 0),
+            service_charge: String(record.serviceCharge || 0),
         }));
 
         const { data, error } = await supabase
@@ -268,14 +270,15 @@ export async function insertPoRecords(poRecords: any[]) {
             .select();
 
         if (error) {
-            // Check if packaging or forwarding column error
+            // Check if packaging, forwarding or service_charge column error
             if (error.code === 'PGRST204' || (error.message && (
                 error.message.includes('packaging') || 
-                error.message.includes('forwarding')
+                error.message.includes('forwarding') ||
+                error.message.includes('service_charge')
             ))) {
-                console.warn('packaging or forwarding columns not found, retrying insert without them');
+                console.warn('packaging, forwarding or service_charge columns not found, retrying insert without them');
                 const cleanedRecords = mappedRecords.map((r) => {
-                    const { packaging, forwarding, ...rest } = r as any;
+                    const { packaging, forwarding, service_charge, ...rest } = r as any;
                     return rest;
                 });
                 const { data: retryData, error: retryError } = await supabase

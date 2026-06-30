@@ -188,6 +188,7 @@ export type PoMasterSheet = {
     packaging?: number;
     forwarding?: number;
     packagingAndForwarding?: number;
+    serviceCharge?: number;
     // preparedBy: string;
     // approvedBy: string;
     pdf: string;

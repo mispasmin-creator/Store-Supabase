@@ -252,6 +252,7 @@ interface Item {
     packaging?: number;
     forwarding?: number;
     packagingAndForwarding?: number;
+    serviceCharge?: number;
     gst: number;
     discount: number;
     amount: number;
@@ -390,36 +391,38 @@ export default ({
                     {/* Items Table */}
                     <View>
                         <View style={styles.tableHeaderRow}>
-                            <Text style={[styles.tableHeaderCell, { width: '4%', borderRight: '1 solid #cbd5e1' }]}>S/N</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '10%', borderRight: '1 solid #cbd5e1' }]}>Int. Code</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '10%', borderRight: '1 solid #cbd5e1' }]}>Q. No.</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '13%', borderRight: '1 solid #cbd5e1' }]}>Product</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '14%', borderRight: '1 solid #cbd5e1' }]}>Description</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '6%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Qty</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '6%', borderRight: '1 solid #cbd5e1', textAlign: 'center' }]}>Unit</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '7%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Rate</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Pkg</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Fwd</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>GST</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Disc</Text>
-                            <Text style={[styles.tableHeaderCell, { width: '10%', textAlign: 'right' }]}>Amount</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '4%', borderRight: '1 solid #cbd5e1' }]}>S/N</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '9%', borderRight: '1 solid #cbd5e1' }]}>Int. Code</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '9%', borderRight: '1 solid #cbd5e1' }]}>Q. No.</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>Product</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>Description</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '6%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Qty</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'center' }]}>Unit</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '7%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Rate</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Pkg</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Fwd</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Srv</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>GST</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>Disc</Text>
+                        <Text style={[styles.tableHeaderCell, { width: '11%', textAlign: 'right' }]}>Amount</Text>
                         </View>
 
                         {items.map((item, i) => (
                             <View style={styles.tableRow} key={i}>
                                 <Text style={[styles.tableCell, { width: '4%', borderRight: '1 solid #cbd5e1' }]}>{i + 1}</Text>
-                                <Text style={[styles.tableCell, { width: '10%', borderRight: '1 solid #cbd5e1' }]}>{item.internalCode}</Text>
-                                <Text style={[styles.tableCell, { width: '10%', borderRight: '1 solid #cbd5e1' }]}>{item.quotationNumber}</Text>
-                                <Text style={[styles.tableCell, { width: '13%', borderRight: '1 solid #cbd5e1' }]}>{item.product}</Text>
-                                <Text style={[styles.tableCell, { width: '14%', borderRight: '1 solid #cbd5e1' }]}>{item.description}</Text>
+                                <Text style={[styles.tableCell, { width: '9%', borderRight: '1 solid #cbd5e1' }]}>{item.internalCode}</Text>
+                                <Text style={[styles.tableCell, { width: '9%', borderRight: '1 solid #cbd5e1' }]}>{item.quotationNumber}</Text>
+                                <Text style={[styles.tableCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>{item.product}</Text>
+                                <Text style={[styles.tableCell, { width: '12%', borderRight: '1 solid #cbd5e1' }]}>{item.description}</Text>
                                 <Text style={[styles.tableCell, { width: '6%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.quantity}</Text>
-                                <Text style={[styles.tableCell, { width: '6%', borderRight: '1 solid #cbd5e1', textAlign: 'center' }]}>{item.unit}</Text>
+                                <Text style={[styles.tableCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'center' }]}>{item.unit}</Text>
                                 <Text style={[styles.tableCell, { width: '7%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.rate}</Text>
                                 <Text style={[styles.tableCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.packaging || 0}</Text>
                                 <Text style={[styles.tableCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.forwarding || 0}</Text>
+                                <Text style={[styles.tableCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.serviceCharge || 0}</Text>
                                 <Text style={[styles.tableCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.gst}%</Text>
                                 <Text style={[styles.tableCell, { width: '5%', borderRight: '1 solid #cbd5e1', textAlign: 'right' }]}>{item.discount}%</Text>
-                                <Text style={[styles.tableCell, { width: '10%', textAlign: 'right' }]}>{item.amount}</Text>
+                                <Text style={[styles.tableCell, { width: '11%', textAlign: 'right' }]}>{item.amount}</Text>
                             </View>
                         ))}
                     </View>

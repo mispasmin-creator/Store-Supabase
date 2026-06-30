@@ -186,6 +186,7 @@ const schema = z.object({
             packaging: z.coerce.number().default(0).optional(),
             forwarding: z.coerce.number().default(0).optional(),
             packagingAndForwarding: z.coerce.number().default(0).optional(),
+            serviceCharge: z.coerce.number().default(0).optional(),
         })
     ),
     terms: z.array(z.string().nonempty()).max(10),
@@ -393,6 +394,7 @@ const CreatePO = () => {
                     packaging: 0,
                     forwarding: 0,
                     packagingAndForwarding: 0,
+                    serviceCharge: 0,
                 };
             })
         );
@@ -521,6 +523,7 @@ const CreatePO = () => {
                         packaging: poItem.packaging || 0,
                         forwarding: poItem.forwarding || 0,
                         packagingAndForwarding: poItem.packagingAndForwarding || ((poItem.packaging || 0) + (poItem.forwarding || 0)),
+                        serviceCharge: poItem.serviceCharge || 0,
                     };
                 });
                 form.setValue('indents', poIndents);
@@ -574,6 +577,10 @@ const CreatePO = () => {
             (sum, item) => sum + (item.forwarding || 0),
             0
         );
+        const totalServiceCharge = values.indents.reduce(
+            (sum, item) => sum + (item.serviceCharge || 0),
+            0
+        );
         const totalPackagingAndForwarding = totalPackaging + totalForwarding;
 
         const subtotal = values.indents.reduce((sum, item) => {
@@ -581,7 +588,8 @@ const CreatePO = () => {
             const discounted = base - (base * (item.discount || 0)) / 100;
             const pkg = item.packaging || 0;
             const fwd = item.forwarding || 0;
-            return sum + discounted + pkg + fwd;
+            const service = item.serviceCharge || 0;
+            return sum + discounted + pkg + fwd + service;
         }, 0);
 
         const totalGst = values.indents.reduce((sum, item) => {
@@ -589,7 +597,8 @@ const CreatePO = () => {
             const discounted = base - (base * (item.discount || 0)) / 100;
             const pkg = item.packaging || 0;
             const fwd = item.forwarding || 0;
-            const taxable = discounted + pkg + fwd;
+            const service = item.serviceCharge || 0;
+            const taxable = discounted + pkg + fwd + service;
             return sum + (taxable * (item.gst || 0)) / 100;
         }, 0);
 
@@ -624,6 +633,7 @@ const CreatePO = () => {
                     rate: item.rate || 0,
                     packaging: item.packaging || 0,
                     forwarding: item.forwarding || 0,
+                    serviceCharge: item.serviceCharge || 0,
                     packagingAndForwarding: (item.packaging || 0) + (item.forwarding || 0),
                     gst: item.gst || 0,
                     discount: item.discount || 0,
@@ -632,7 +642,8 @@ const CreatePO = () => {
                         const discounted = base - (base * (item.discount || 0)) / 100;
                         const pkg = item.packaging || 0;
                         const fwd = item.forwarding || 0;
-                        const taxable = discounted + pkg + fwd;
+                        const service = item.serviceCharge || 0;
+                        const taxable = discounted + pkg + fwd + service;
                         const itemAmount = taxable + (taxable * (item.gst || 0)) / 100;
                         return parseFloat(itemAmount.toFixed(2));
                     })(),
@@ -673,6 +684,10 @@ const CreatePO = () => {
                 (sum, item) => sum + (item.forwarding || 0),
                 0
             );
+            const totalServiceCharge = values.indents.reduce(
+                (sum, item) => sum + (item.serviceCharge || 0),
+                0
+            );
             const totalPackagingAndForwarding = totalPackaging + totalForwarding;
 
             const subtotal = values.indents.reduce((sum, item) => {
@@ -680,7 +695,8 @@ const CreatePO = () => {
                 const discounted = base - (base * (item.discount || 0)) / 100;
                 const pkg = item.packaging || 0;
                 const fwd = item.forwarding || 0;
-                return sum + discounted + pkg + fwd;
+                const service = item.serviceCharge || 0;
+                return sum + discounted + pkg + fwd + service;
             }, 0);
 
             const totalGst = values.indents.reduce((sum, item) => {
@@ -688,7 +704,8 @@ const CreatePO = () => {
                 const discounted = base - (base * (item.discount || 0)) / 100;
                 const pkg = item.packaging || 0;
                 const fwd = item.forwarding || 0;
-                const taxable = discounted + pkg + fwd;
+                const service = item.serviceCharge || 0;
+                const taxable = discounted + pkg + fwd + service;
                 return sum + (taxable * (item.gst || 0)) / 100;
             }, 0);
 
@@ -726,6 +743,7 @@ const CreatePO = () => {
                         rate: item.rate || 0,
                         packaging: item.packaging || 0,
                         forwarding: item.forwarding || 0,
+                        serviceCharge: item.serviceCharge || 0,
                         packagingAndForwarding: (item.packaging || 0) + (item.forwarding || 0),
                         gst: item.gst || 0,
                         discount: item.discount || 0,
@@ -734,7 +752,8 @@ const CreatePO = () => {
                             const discounted = base - (base * (item.discount || 0)) / 100;
                             const pkg = item.packaging || 0;
                             const fwd = item.forwarding || 0;
-                            const taxable = discounted + pkg + fwd;
+                            const service = item.serviceCharge || 0;
+                            const taxable = discounted + pkg + fwd + service;
                             const itemAmount = taxable + (taxable * (item.gst || 0)) / 100;
                             return parseFloat(itemAmount.toFixed(2));
                         })(),
@@ -783,8 +802,15 @@ const CreatePO = () => {
 
             const rows: PoMasterSheet[] = values.indents.map((v) => {
                 const indent = indentSheet.find((i: IndentSheetItem) => i.indentNumber === v.indentNumber);
-
-
+                const itemAmount = (() => {
+                    const base = (v.rate || 0) * (v.quantity || 0);
+                    const discounted = base - (base * (v.discount || 0)) / 100;
+                    const pkg = v.packaging || 0;
+                    const fwd = v.forwarding || 0;
+                    const service = v.serviceCharge || 0;
+                    const taxable = discounted + pkg + fwd + service;
+                    return parseFloat((taxable + (taxable * (v.gst || 0)) / 100).toFixed(2));
+                })();
 
                 return {
                     timestamp: values.poDate.toISOString(),
@@ -799,18 +825,11 @@ const CreatePO = () => {
                     gst: v.gst,
                     companyEmail: values.companyEmail || '',
                     discount: v.discount || 0,
-                    amount: (() => {
-                        const base = (v.rate || 0) * (v.quantity || 0);
-                        const discounted = base - (base * (v.discount || 0)) / 100;
-                        const pkg = v.packaging || 0;
-                        const fwd = v.forwarding || 0;
-                        const taxable = discounted + pkg + fwd;
-                        const itemAmount = taxable + (taxable * (v.gst || 0)) / 100;
-                        return parseFloat(itemAmount.toFixed(2));
-                    })(),
+                    amount: itemAmount,
                     totalPoAmount: grandTotal,
                     packaging: v.packaging || 0,
                     forwarding: v.forwarding || 0,
+                    serviceCharge: v.serviceCharge || 0,
                     packagingAndForwarding: (v.packaging || 0) + (v.forwarding || 0),
                     pdf: url,
                     quotationNumber: v.quotationNumber || '',
@@ -836,7 +855,7 @@ const CreatePO = () => {
                     deliveryType: values.deliveryType || '',
                     firmNameMatch: (indent as any)?.firmNameMatch ?? '',
                     advancePercent: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (values.numberOfDays || 0) : 0,
-                    advanceAmount: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (calculateTotal(v.rate || 0, v.gst, v.discount || 0, v.quantity || 0) * (values.numberOfDays || 0)) / 100 : 0
+                    advanceAmount: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (itemAmount * (values.numberOfDays || 0)) / 100 : 0
                 };
             });
 
@@ -1110,14 +1129,16 @@ const CreatePO = () => {
                                                             const discounted = base - (base * (item.discount || 0)) / 100;
                                                             const pkg = item.packaging || 0;
                                                             const fwd = item.forwarding || 0;
-                                                            return sum + discounted + pkg + fwd;
+                                                            const service = item.serviceCharge || 0;
+                                                            return sum + discounted + pkg + fwd + service;
                                                         }, 0);
                                                         const gst = indents.reduce((sum, item) => {
                                                             const base = (item.rate || 0) * (item.quantity || 0);
                                                             const discounted = base - (base * (item.discount || 0)) / 100;
                                                             const pkg = item.packaging || 0;
                                                             const fwd = item.forwarding || 0;
-                                                            const taxable = discounted + pkg + fwd;
+                                                            const service = item.serviceCharge || 0;
+                                                            const taxable = discounted + pkg + fwd + service;
                                                             return sum + (taxable * (item.gst || 0)) / 100;
                                                         }, 0);
                                                         const grandTotal = subtotal + gst;
@@ -1241,6 +1262,7 @@ const CreatePO = () => {
                                                 <TableHead>Rate</TableHead>
                                                 <TableHead>Packaging (₹)</TableHead>
                                                 <TableHead>Forwarding (₹)</TableHead>
+                                                <TableHead>Service Charge (₹)</TableHead>
                                                 <TableHead>GST (%)</TableHead>
                                                 <TableHead>Discount (%)</TableHead>
                                                 <TableHead>Amount</TableHead>
@@ -1255,7 +1277,8 @@ const CreatePO = () => {
                                                     const discounted = base - (base * (formValue?.discount || 0)) / 100;
                                                     const pkg = formValue?.packaging || 0;
                                                     const fwd = formValue?.forwarding || 0;
-                                                    const taxable = discounted + pkg + fwd;
+                                                    const service = formValue?.serviceCharge || 0;
+                                                    const taxable = discounted + pkg + fwd + service;
                                                     return taxable + (taxable * (formValue?.gst || 0)) / 100;
                                                 })();
 
@@ -1278,7 +1301,15 @@ const CreatePO = () => {
                                                             <FormField control={form.control} name={`indents.${index}.quantity`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-20 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
+                                                                        <Input 
+                                                                            type="number" 
+                                                                            className="h-9 w-20 text-center" 
+                                                                            value={field.value === undefined || field.value === null ? '' : field.value} 
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value;
+                                                                                field.onChange(val === '' ? '' : Number(val));
+                                                                            }} 
+                                                                        />
                                                                     </FormControl>
                                                                 </FormItem>
                                                             )} />
@@ -1320,6 +1351,23 @@ const CreatePO = () => {
                                                         </TableCell>
                                                         <TableCell>
                                                             <FormField control={form.control} name={`indents.${index}.forwarding`} render={({ field }) => (
+                                                                <FormItem className="flex justify-center">
+                                                                    <FormControl>
+                                                                        <Input 
+                                                                             type="number" 
+                                                                             className="h-9 w-24 text-center" 
+                                                                             value={field.value === undefined || field.value === null ? '' : field.value} 
+                                                                             onChange={(e) => {
+                                                                                 const val = e.target.value;
+                                                                                 field.onChange(val === '' ? '' : Number(val));
+                                                                             }} 
+                                                                         />
+                                                                    </FormControl>
+                                                                </FormItem>
+                                                            )} />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <FormField control={form.control} name={`indents.${index}.serviceCharge`} render={({ field }) => (
                                                                 <FormItem className="flex justify-center">
                                                                     <FormControl>
                                                                         <Input 
@@ -1379,7 +1427,8 @@ const CreatePO = () => {
                                                     const discounted = base - (base * (item.discount || 0)) / 100;
                                                     const pkg = item.packaging || 0;
                                                     const fwd = item.forwarding || 0;
-                                                    return sum + discounted + pkg + fwd;
+                                                    const service = item.serviceCharge || 0;
+                                                    return sum + discounted + pkg + fwd + service;
                                                 }, 0).toFixed(2)}
                                             </span>
                                         </p>
@@ -1392,7 +1441,8 @@ const CreatePO = () => {
                                                     const discounted = base - (base * (item.discount || 0)) / 100;
                                                     const pkg = item.packaging || 0;
                                                     const fwd = item.forwarding || 0;
-                                                    const taxable = discounted + pkg + fwd;
+                                                    const service = item.serviceCharge || 0;
+                                                    const taxable = discounted + pkg + fwd + service;
                                                     return sum + (taxable * (item.gst || 0)) / 100;
                                                 }, 0).toFixed(2)}
                                             </span>
@@ -1409,14 +1459,16 @@ const CreatePO = () => {
                                                          const discounted = base - (base * (item.discount || 0)) / 100;
                                                          const pkg = item.packaging || 0;
                                                          const fwd = item.forwarding || 0;
-                                                         return sum + discounted + pkg + fwd;
+                                                         const service = item.serviceCharge || 0;
+                                                         return sum + discounted + pkg + fwd + service;
                                                      }, 0);
                                                      const gst = indents.reduce((sum, item) => {
                                                          const base = (item.rate || 0) * (item.quantity || 0);
                                                          const discounted = base - (base * (item.discount || 0)) / 100;
                                                          const pkg = item.packaging || 0;
                                                          const fwd = item.forwarding || 0;
-                                                         const taxable = discounted + pkg + fwd;
+                                                         const service = item.serviceCharge || 0;
+                                                         const taxable = discounted + pkg + fwd + service;
                                                          return sum + (taxable * (item.gst || 0)) / 100;
                                                      }, 0);
                                                      return (subtotal + gst).toFixed(2);
