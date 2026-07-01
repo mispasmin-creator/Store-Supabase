@@ -281,8 +281,16 @@ export default () => {
             header: 'Department',
         },
         {
+            accessorKey: 'group_head',
+            header: 'Group Head',
+        },
+        {
             accessorKey: 'product_name',
             header: 'Product',
+        },
+        {
+            accessorKey: 'specifications',
+            header: 'Specification',
         },
         {
             accessorKey: 'quantity',
