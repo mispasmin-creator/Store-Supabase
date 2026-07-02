@@ -317,12 +317,13 @@ const routes: RouteAttributes[] = [
         icon: <ArrowUpCircle size={20} />,
         element: <GetLift />,
         notifications: (sheetsData: any[], user: any) => {
-            const sheets = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            const indentSheet = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
+            const poMasterSheet = Array.isArray(sheetsData[1]) ? sheetsData[1] : [];
 
             // Unique PO numbers that satisfy the criteria
             const uniquePOs = new Set<string>();
 
-            sheets.forEach((sheet: any) => {
+            indentSheet.forEach((sheet: any) => {
                 const isFirmMatch = !user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch;
                 const hasPlanned5 = sheet.planned5 && sheet.planned5.toString().trim() !== '';
                 const hasNoActual5 = !sheet.actual5 || sheet.actual5.toString().trim() === '';
@@ -332,7 +333,13 @@ const routes: RouteAttributes[] = [
                 const hasPendingQty = (sheet.pendingLiftQty || (Number(sheet.approvedQuantity) - Number(sheet.receivedQuantity))) > 0;
 
                 if (isFirmMatch && hasPlanned5 && hasNoActual5 && isPending && hasPendingQty) {
-                    uniquePOs.add(sheet.poNumber || `NO_PO_${sheet.indentNumber}`);
+                    const matchedPo = poMasterSheet.find((p: any) => (p.poNumber || p.po_number) === sheet.poNumber);
+                    const terms = (matchedPo?.paymentTerms || matchedPo?.payment_terms || '').toLowerCase();
+                    const is100Advance = terms.includes('100% advance') || (terms.includes('100%') && terms.includes('advance'));
+
+                    if (!is100Advance) {
+                        uniquePOs.add(sheet.poNumber || `NO_PO_${sheet.indentNumber}`);
+                    }
                 }
             });
 

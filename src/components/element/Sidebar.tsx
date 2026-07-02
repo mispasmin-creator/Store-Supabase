@@ -123,6 +123,9 @@ export default ({ items }: SidebarProps) => {
                                         case 'pending-poss':
                                             sheetData = indentSheet || [];
                                             break;
+                                        case 'get-lift':
+                                            sheetData = [indentSheet || [], poMasterSheet || []];
+                                            break;
                                         case 'Bill-Not-Received':
                                         case 'Quality-Check-In-Received-Item':
                                         case 'Send-Debit-Note':

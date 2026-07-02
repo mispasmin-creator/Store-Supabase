@@ -450,12 +450,12 @@ export default function PIApprovals() {
                     } as PIPendingData;
                 });
 
-            // Combine all three lists and remove duplicates by Party Name + billNo
+            // Combine all three lists and remove duplicates by Party Name + billNo (or PO Number if bill is missing)
             const uniqueBillMap = new Map<string, PIPendingData>();
 
             // Process poBasedPendingItems first
             poBasedPendingItems.forEach(item => {
-                const billKey = item.billNo || 'NoBill';
+                const billKey = item.billNo || `NoBill-${item.poNumber}`;
                 const uniqueKey = `${item.partyName || 'NoVendor'}-${billKey}`;
 
                 if (!uniqueBillMap.has(uniqueKey)) {
@@ -474,7 +474,7 @@ export default function PIApprovals() {
 
             // Process paymentBasedItems
             paymentBasedItems.forEach(paymentItem => {
-                const billKey = paymentItem.billNo || 'NoBill';
+                const billKey = paymentItem.billNo || (paymentItem.poNumber ? `NoBill-${paymentItem.poNumber}` : 'NoBill');
                 const uniqueKey = `${paymentItem.partyName || 'NoVendor'}-${billKey}`;
 
                 if (!uniqueBillMap.has(uniqueKey)) {
@@ -494,7 +494,7 @@ export default function PIApprovals() {
 
             // Process storeInBasedItems (Get Purchase history)
             storeInBasedItems.forEach(storeItem => {
-                const billKey = storeItem.billNo || 'NoBill';
+                const billKey = storeItem.billNo || (storeItem.poNumber ? `NoBill-${storeItem.poNumber}` : 'NoBill');
                 const uniqueKey = `${storeItem.partyName || 'NoVendor'}-${billKey}`;
 
                 if (!uniqueBillMap.has(uniqueKey)) {
