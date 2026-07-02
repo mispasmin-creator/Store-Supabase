@@ -276,10 +276,19 @@ export async function insertPoRecords(poRecords: any[]) {
                 error.message.includes('forwarding') ||
                 error.message.includes('service_charge')
             ))) {
-                console.warn('packaging, forwarding or service_charge columns not found, retrying insert without them');
+                console.warn('Column error during insert, trying to drop missing columns and retry');
                 const cleanedRecords = mappedRecords.map((r) => {
-                    const { packaging, forwarding, service_charge, ...rest } = r as any;
-                    return rest;
+                    const cleanRow = { ...r } as any;
+                    if (error.message.includes('service_charge')) {
+                        delete cleanRow.service_charge;
+                    }
+                    if (error.message.includes('packaging')) {
+                        delete cleanRow.packaging;
+                    }
+                    if (error.message.includes('forwarding')) {
+                        delete cleanRow.forwarding;
+                    }
+                    return cleanRow;
                 });
                 const { data: retryData, error: retryError } = await supabase
                     .from('po_master')
