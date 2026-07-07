@@ -111,7 +111,8 @@ export async function createIssueRecords(rows: Partial<IssueRecord>[]) {
             planned1: r.planned1,
             actual1: r.actual1,
             status: r.status || 'Pending',
-            given_qty: r.given_qty ? String(r.given_qty) : '0'
+            given_qty: r.given_qty ? String(r.given_qty) : '0',
+            firm_name_match: r.firm_name_match || null
         }));
 
         const { data, error } = await supabase
