@@ -191,14 +191,7 @@ export default function GetPurchase() {
                 const hasActual5 = item.actual5 && item.actual5.toString().trim() !== '';
                 const isPending = item.liftingStatus === 'Pending' || item.liftingStatus === '' || item.liftingStatus === null;
 
-                // Hide 100% Advance POs from the Lifting page entirely
-                const matchedPo = poMasterRecords.find((p: any) => p.poNumber === item.poNumber);
-                const terms = (matchedPo?.paymentTerms || '').toLowerCase();
-                const is100Advance = terms.includes('100% advance') || (terms.includes('100%') && terms.includes('advance'));
-                
-                if (is100Advance) {
-                    return false;
-                }
+
 
                 // ✅ Hide if no quantity left to lift
                 return isPending && hasPlanned5 && !hasActual5 && item.pendingPoQty > 0;

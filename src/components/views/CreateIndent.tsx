@@ -14,7 +14,7 @@ import {
     SelectItem,
 } from '@/components/ui/select';
 import { ClipLoader as Loader } from 'react-spinners';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import DataTable from '../element/DataTable';
 import type { ColumnDef } from '@tanstack/react-table';
 import { formatDate } from '@/lib/utils';
-import { ClipboardList, Trash, Search, PlusCircle, History } from 'lucide-react';
+import { ClipboardList, Trash, Search, PlusCircle, History, Pencil } from 'lucide-react';
 import { useSheets } from '@/context/SheetsContext';
 import Heading from '../element/Heading';
 
@@ -258,7 +258,45 @@ export default () => {
         fetchHistory();
     }, [user?.firmNameMatch]);
 
-    const historyColumns: ColumnDef<any>[] = [
+    const [editingRow, setEditingRow] = useState<number | null>(null);
+    const [editValues, setEditValues] = useState<{ quantity?: number; uom?: string }>({});
+
+    const handleEditClick = (row: any) => {
+        setEditingRow(row.id);
+        setEditValues({
+            quantity: row.quantity,
+            uom: row.uom,
+        });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingRow(null);
+        setEditValues({});
+    };
+
+    const handleSaveEdit = async (id: number) => {
+        try {
+            const { error } = await supabase
+                .from('indent')
+                .update({
+                    quantity: Number(editValues.quantity),
+                    uom: editValues.uom,
+                })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            toast.success(`Updated record ID ${id}`);
+            fetchHistory();
+            setEditingRow(null);
+            setEditValues({});
+        } catch (err) {
+            console.error('Error updating indent:', err);
+            toast.error('Failed to update indent');
+        }
+    };
+
+    const historyColumns = useMemo<ColumnDef<any>[]>(() => [
         {
             accessorKey: 'timestamp',
             header: 'Date',
@@ -295,10 +333,67 @@ export default () => {
         {
             accessorKey: 'quantity',
             header: 'Qty',
+            cell: ({ row }) => {
+                const id = row.original.id;
+                const isEditing = editingRow === id;
+                const val = isEditing ? (editValues.quantity ?? row.original.quantity) : row.original.quantity;
+                const isAdmin = user?.administrate || user?.username?.toLowerCase().startsWith('admin');
+
+                return isEditing ? (
+                    <Input
+                        type="number"
+                        value={val}
+                        onChange={(e) => setEditValues(prev => ({ ...prev, quantity: Number(e.target.value) }))}
+                        className="w-20 h-8"
+                    />
+                ) : (
+                    <div className="flex items-center gap-2">
+                        {row.original.quantity}
+                        {isAdmin && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 p-0"
+                                onClick={() => handleEditClick(row.original)}
+                            >
+                                <Pencil className="h-3 w-3" />
+                            </Button>
+                        )}
+                    </div>
+                );
+            }
         },
         {
             accessorKey: 'uom',
             header: 'UOM',
+            cell: ({ row }) => {
+                const id = row.original.id;
+                const isEditing = editingRow === id;
+                const val = isEditing ? (editValues.uom ?? row.original.uom) : row.original.uom;
+                const isAdmin = user?.administrate || user?.username?.toLowerCase().startsWith('admin');
+
+                return isEditing ? (
+                    <Input
+                        value={val}
+                        onChange={(e) => setEditValues(prev => ({ ...prev, uom: e.target.value }))}
+                        className="w-20 h-8"
+                    />
+                ) : (
+                    <div className="flex items-center gap-2">
+                        {row.original.uom}
+                        {isAdmin && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 p-0"
+                                onClick={() => handleEditClick(row.original)}
+                            >
+                                <Pencil className="h-3 w-3" />
+                            </Button>
+                        )}
+                    </div>
+                );
+            }
         },
         {
             accessorKey: 'indent_status',
@@ -308,7 +403,35 @@ export default () => {
             accessorKey: 'status',
             header: 'Process Status',
         },
-    ];
+        ...((user?.administrate || user?.username?.toLowerCase().startsWith('admin')) ? [
+            {
+                id: 'editActions',
+                cell: ({ row }: { row: any }) => {
+                    const id = row.original.id;
+                    const isEditing = editingRow === id;
+                    return isEditing ? (
+                        <div className="flex gap-2">
+                            <Button
+                                size="sm"
+                                className="h-8 px-2"
+                                onClick={() => handleSaveEdit(id)}
+                            >
+                                Save
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 px-2"
+                                onClick={handleCancelEdit}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    ) : null;
+                },
+            }
+        ] : []),
+    ], [editingRow, editValues, user?.username]);
 
     function onError(e: any) {
         console.log(e);

@@ -333,13 +333,7 @@ const routes: RouteAttributes[] = [
                 const hasPendingQty = (sheet.pendingLiftQty || (Number(sheet.approvedQuantity) - Number(sheet.receivedQuantity))) > 0;
 
                 if (isFirmMatch && hasPlanned5 && hasNoActual5 && isPending && hasPendingQty) {
-                    const matchedPo = poMasterSheet.find((p: any) => (p.poNumber || p.po_number) === sheet.poNumber);
-                    const terms = (matchedPo?.paymentTerms || matchedPo?.payment_terms || '').toLowerCase();
-                    const is100Advance = terms.includes('100% advance') || (terms.includes('100%') && terms.includes('advance'));
-
-                    if (!is100Advance) {
-                        uniquePOs.add(sheet.poNumber || `NO_PO_${sheet.indentNumber}`);
-                    }
+                    uniquePOs.add(sheet.poNumber || `NO_PO_${sheet.indentNumber}`);
                 }
             });
 

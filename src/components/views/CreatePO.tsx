@@ -515,7 +515,7 @@ const CreatePO = () => {
                         quotationNumber: poItem.quotationNumber || '',
                         productName: poItem.product || '',
                         specifications: poItem.description || '',
-                        gst: poItem.gstPercent || 18,
+                        gst: poItem.gstPercent ?? 18,
                         discount: poItem.discountPercent || 0,
                         quantity: poItem.quantity || 0,
                         unit: poItem.unit || '',
@@ -1386,10 +1386,21 @@ const CreatePO = () => {
                                                         <TableCell>
                                                             <FormField control={form.control} name={`indents.${index}.gst`} render={({ field }) => (
                                                                 <FormItem className="flex items-center justify-center gap-1">
-                                                                    <FormControl>
-                                                                        <Input type="number" readOnly className="h-9 w-16 text-center bg-gray-50 cursor-not-allowed" value={field.value || 0} onChange={field.onChange} />
-                                                                    </FormControl>
-                                                                    <span>%</span>
+                                                                    <Select
+                                                                        onValueChange={(val) => field.onChange(Number(val))}
+                                                                        value={field.value !== undefined && field.value !== null ? field.value.toString() : ""}
+                                                                    >
+                                                                        <FormControl>
+                                                                            <SelectTrigger className="h-9 w-20 text-center">
+                                                                                <SelectValue placeholder="Select" />
+                                                                            </SelectTrigger>
+                                                                        </FormControl>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="0">0%</SelectItem>
+                                                                            <SelectItem value="5">5%</SelectItem>
+                                                                            <SelectItem value="18">18%</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
                                                                 </FormItem>
                                                             )} />
                                                         </TableCell>
