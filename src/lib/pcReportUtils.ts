@@ -58,9 +58,16 @@ export const calculatePcReportCounts = (
         ),
         calculateCounts(
             indentSheet || [],
-            (item) => item.planned4 && !item.actual4,
-            (item) => !!item.actual4,
-            'Department Approval'
+            (item) =>
+                item.planned4 && item.planned4 !== '' &&
+                (!item.approvedVendorName && !item.approved_vendor_name) &&
+                ['Three Party', 'Regular'].includes(item.vendorType || item.vendor_type) &&
+                !!(item.vendor1_rank || item.vendor2_rank || item.vendor3_rank),
+            (item) =>
+                item.planned4 && item.planned4 !== '' &&
+                !!(item.approvedVendorName || item.approved_vendor_name) &&
+                ['Three Party', 'Regular'].includes(item.vendorType || item.vendor_type),
+            'Management Approval'
         ),
         calculateCounts(
             indentSheet || [],

@@ -222,7 +222,8 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     actual2: r.actual2,
                     planned3: r.planned3,
                     actual3: r.actual3,
-                    approvedVendorName: r.vendor_name || '',
+                    approvedVendorName: r.approved_vendor_name || '',
+                    vendorName: r.vendor_name || '',
                     planned4: r.planned4,
                     actual4: r.actual4,
                     poNumber: r.po_number,
@@ -234,6 +235,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     poQty: r.po_qty || 0,
                     pendingPoQty: (r.approved_quantity || 0) - (Number(r.po_qty) || 0),
                     pendingLiftQty: (r.approved_quantity || 0) - (Number(r.received_quantity) || 0),
+                    vendor1_rank: r.vendor1_rank,
+                    vendor2_rank: r.vendor2_rank,
+                    vendor3_rank: r.vendor3_rank,
                 }));
                 setIndentSheet(mapped as unknown as IndentSheet[]);
                 setIndentLoading(false);

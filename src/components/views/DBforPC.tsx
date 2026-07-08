@@ -1,7 +1,7 @@
 import {
     PackageCheck, ClipboardList, CheckSquare, UserCog, Users, Clock,
     ArrowUpCircle, CheckCircle2, UserCheck, Truck, CreditCard, FileX,
-    Send, BarChart2, FileWarning, RefreshCw, Activity,
+    Send, BarChart2, FileWarning, RefreshCw, Activity, ShieldCheck
 } from 'lucide-react';
 import Heading from '../element/Heading';
 import type { PcReportSheet } from '@/types/sheets';
@@ -16,6 +16,7 @@ const STAGE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: s
     'Department Indent Approval':         { icon: <CheckSquare size={18} />,    color: 'text-indigo-600',  bg: 'bg-indigo-50',  border: 'border-indigo-200'  },
     'Vendor Rate Update':                 { icon: <UserCog size={18} />,        color: 'text-violet-600',  bg: 'bg-violet-50',  border: 'border-violet-200'  },
     'Department Approval':                { icon: <Users size={18} />,          color: 'text-purple-600',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
+    'Management Approval':                { icon: <ShieldCheck size={18} />,    color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200' },
     'Pending PO':                         { icon: <Clock size={18} />,          color: 'text-amber-600',   bg: 'bg-amber-50',   border: 'border-amber-200'   },
     'Lifting':                            { icon: <ArrowUpCircle size={18} />,  color: 'text-orange-600',  bg: 'bg-orange-50',  border: 'border-orange-200'  },
     'Store Check':                        { icon: <CheckCircle2 size={18} />,   color: 'text-primary',     bg: 'bg-primary/5',  border: 'border-primary/30'  },

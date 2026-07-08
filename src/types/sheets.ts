@@ -46,6 +46,9 @@ export type IndentSheet = {
     timeDelay4: string;
     poNumber: string;
     poCopy: string;
+    vendor1_rank?: string;
+    vendor2_rank?: string;
+    vendor3_rank?: string;
     planned5: string;
     actual5: string;
     timeDelay5: string;

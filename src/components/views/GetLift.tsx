@@ -782,9 +782,8 @@ export default function GetPurchase() {
     // Add this useEffect to set form values when selectedIndent changes
     useEffect(() => {
         if (selectedIndent) {
-            // Find ALL individual items for this VENDOR across all pending POs
-            const allVendorGroups = tableData.filter(group => group.vendorName === selectedIndent.vendorName);
-            const allIndividualItems = allVendorGroups.flatMap(group => group.originalItems || []);
+            // Get ONLY the items for the selected PO number (do not combine other POs for the same vendor)
+            const allIndividualItems = selectedIndent.originalItems || [];
 
             form.reset({
                 billStatus: '',
