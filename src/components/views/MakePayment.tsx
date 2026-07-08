@@ -1,4 +1,4 @@
-import { FileText, Building, DollarSign, CheckCircle, AlertCircle, ExternalLink, CheckSquare, XSquare, History } from 'lucide-react';
+import { FileText, Building, DollarSign, CheckCircle, AlertCircle, ExternalLink, CheckSquare, XSquare, History, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
@@ -551,6 +551,136 @@ export default function MakePayment() {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleExportPending = (data: DisplayPayment[]) => {
+        if (!data || data.length === 0) {
+            toast.error('No data to export');
+            return;
+        }
+
+        const headers = [
+            'Planned Date',
+            'Payment No.',
+            'PO Number',
+            'Party Name',
+            'Payment Terms',
+            'Indent No.',
+            'Product',
+            'Total PO Amount',
+            'Pay Amount',
+            'Outstanding',
+            'Status',
+            'Bill No.',
+            'Bill Image Status'
+        ];
+
+        const csvRows = [
+            headers.join(','),
+            ...data.map((row) => [
+                `"${String(row.planned ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.uniqueNo ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.poNumber ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.partyName ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.paymentTerms ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.internalCode ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.product ?? '').replace(/"/g, '""')}"`,
+                row.totalPoAmount || 0,
+                row.payAmount || 0,
+                row.outstandingAmount || 0,
+                `"${String(row.status ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.billNo ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.billImageStatus ?? '').replace(/"/g, '""')}"`
+            ].join(','))
+        ];
+
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `pending-payments-${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleExportHistory = (data: DisplayPaymentHistory[]) => {
+        if (!data || data.length === 0) {
+            toast.error('No data to export');
+            return;
+        }
+
+        const headers = [
+            'Timestamp',
+            'Unique Number',
+            'AP Payment No.',
+            'Pay To',
+            'Amount To Be Paid',
+            'Payment Terms',
+            'Status',
+            'Planned Date',
+            'Remarks',
+            'Indent No.',
+            'PO Number',
+            'Product Name',
+            'Bill No.',
+            'Qty',
+            'Type of Bill',
+            'Bill Amount',
+            'Discount Amount',
+            'Payment Type',
+            'Advance Amount If Any',
+            'Transportation Include',
+            'Transporter Name',
+            'Amount',
+            'Bill Remark',
+            'Vehicle No',
+            'Driver Name',
+            'Driver Mobile No'
+        ];
+
+        const csvRows = [
+            headers.join(','),
+            ...data.map((row) => [
+                `"${String(row.timestamp ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.uniqueNumber ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.apPaymentNumber ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.payTo ?? '').replace(/"/g, '""')}"`,
+                row.amountToBePaid || 0,
+                `"${String(row.paymentTerms ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.status ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.planned ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.remarks ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.indentNo ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.poNumber ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.productName ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.billNo ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.qty ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.typeOfBill ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.billAmount ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.discountAmount ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.paymentType ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.advanceAmountIfAny ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.transportationInclude ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.transporterName ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.amount ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.billRemark ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.vehicle_no ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.driver_name ?? '').replace(/"/g, '""')}"`,
+                `"${String(row.driver_mobile_no ?? '').replace(/"/g, '""')}"`
+            ].join(','))
+        ];
+
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `payment-history-${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const pendingColumns: ColumnDef<DisplayPayment>[] = [
@@ -1186,6 +1316,17 @@ export default function MakePayment() {
                                             searchFields={['uniqueNo', 'poNumber', 'partyName', 'product', 'internalCode', 'firmNameMatch']}
                                             dataLoading={false}
                                             className="border rounded-lg"
+                                            extraActions={
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleExportPending(pendingData)}
+                                                    className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 h-9 font-medium flex items-center gap-2"
+                                                >
+                                                    <Download className="h-4 w-4" />
+                                                    Export CSV
+                                                </Button>
+                                            }
                                         />
                                     </>
                                 ) : (
@@ -1237,6 +1378,17 @@ export default function MakePayment() {
                                             searchFields={['apPaymentNumber', 'uniqueNumber', 'fmsName', 'payTo', 'remarks']}
                                             dataLoading={false}
                                             className="border rounded-lg"
+                                            extraActions={
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleExportHistory(historyData)}
+                                                    className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 h-9 font-medium flex items-center gap-2"
+                                                >
+                                                    <Download className="h-4 w-4" />
+                                                    Export CSV
+                                                </Button>
+                                            }
                                         />
                                     </>
                                 ) : (
