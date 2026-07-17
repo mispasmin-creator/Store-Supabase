@@ -687,6 +687,7 @@ export default function GetPurchase() {
             discountPercent: z.coerce.number().default(0).optional(),
             packaging: z.coerce.number().default(0).optional(),
             forwarding: z.coerce.number().default(0).optional(),
+            serviceCharge: z.coerce.number().default(0).optional(),
         })).superRefine((items, ctx) => {
             items.forEach((item, index) => {
                 const numericLiftQty = Number(item.liftQty) || 0;
@@ -809,6 +810,7 @@ export default function GetPurchase() {
                     const discountPercent = matchedPo ? Number(matchedPo.discount) || Number(matchedPo.discountPercent) || 0 : 0;
                     const packaging = matchedPo ? Number(matchedPo.packaging) || 0 : 0;
                     const forwarding = matchedPo ? Number(matchedPo.forwarding) || 0 : 0;
+                    const serviceCharge = matchedPo ? Number(matchedPo.serviceCharge) || 0 : 0;
 
                     return {
                         indentNo: item.indentNumber?.toString() || '',
@@ -826,6 +828,7 @@ export default function GetPurchase() {
                         discountPercent,
                         packaging,
                         forwarding,
+                        serviceCharge,
                     };
                 }),
             });
@@ -845,13 +848,15 @@ export default function GetPurchase() {
                 const discountPercent = matchedPo ? Number(matchedPo.discount) || Number(matchedPo.discountPercent) || 0 : 0;
                 const packaging = matchedPo ? Number(matchedPo.packaging) || 0 : 0;
                 const forwarding = matchedPo ? Number(matchedPo.forwarding) || 0 : 0;
+                const serviceCharge = matchedPo ? Number(matchedPo.serviceCharge) || 0 : 0;
                 const totalApprovedQty = Number(item.approvedQuantity) || 1;
 
                 const base = rate * qty;
                 const discounted = base - (base * discountPercent / 100);
                 const proRatedPkg = totalApprovedQty > 0 ? (packaging * qty) / totalApprovedQty : 0;
                 const proRatedFwd = totalApprovedQty > 0 ? (forwarding * qty) / totalApprovedQty : 0;
-                const taxable = discounted + proRatedPkg + proRatedFwd;
+                const proRatedSvc = totalApprovedQty > 0 ? (serviceCharge * qty) / totalApprovedQty : 0;
+                const taxable = discounted + proRatedPkg + proRatedFwd + proRatedSvc;
                 const effectiveAmount = withTax === 'No' ? taxable * (1 + tax / 100) : taxable;
 
                 return sum + effectiveAmount;
@@ -872,6 +877,7 @@ export default function GetPurchase() {
             const discountPercent = matchedPo ? Number(matchedPo.discount) || Number(matchedPo.discountPercent) || 0 : 0;
             const packaging = matchedPo ? Number(matchedPo.packaging) || 0 : 0;
             const forwarding = matchedPo ? Number(matchedPo.forwarding) || 0 : 0;
+            const serviceCharge = matchedPo ? Number(matchedPo.serviceCharge) || 0 : 0;
 
             form.reset({
                 billStatus: selectedHistory.billStatus === 'Not Received' ? 'Bill Not Received' : selectedHistory.billStatus || '',
@@ -905,6 +911,7 @@ export default function GetPurchase() {
                         discountPercent,
                         packaging,
                         forwarding,
+                        serviceCharge,
                     }
                 ],
             });
@@ -924,13 +931,15 @@ export default function GetPurchase() {
             const discountPercent = Number(item.discountPercent) || 0;
             const packaging = Number(item.packaging) || 0;
             const forwarding = Number(item.forwarding) || 0;
+            const serviceCharge = Number(item.serviceCharge) || 0;
             const totalApprovedQty = Number(item.quantity) || 1;
 
             const base = rate * qty;
             const discounted = base - (base * discountPercent / 100);
             const proRatedPkg = totalApprovedQty > 0 ? (packaging * qty) / totalApprovedQty : 0;
             const proRatedFwd = totalApprovedQty > 0 ? (forwarding * qty) / totalApprovedQty : 0;
-            const taxable = discounted + proRatedPkg + proRatedFwd;
+            const proRatedSvc = totalApprovedQty > 0 ? (serviceCharge * qty) / totalApprovedQty : 0;
+            const taxable = discounted + proRatedPkg + proRatedFwd + proRatedSvc;
             const effectiveAmount = withTax === 'No' ? taxable * (1 + tax / 100) : taxable;
 
             return sum + effectiveAmount;
@@ -1292,12 +1301,14 @@ export default function GetPurchase() {
                                                 const discountPercent = Number(itemsWatcher?.[index]?.discountPercent) || 0;
                                                 const packaging = Number(itemsWatcher?.[index]?.packaging) || 0;
                                                 const forwarding = Number(itemsWatcher?.[index]?.forwarding) || 0;
+                                                const serviceCharge = Number(itemsWatcher?.[index]?.serviceCharge) || 0;
                                                 const totalApprovedQty = Number(field.quantity) || 1;
 
                                                 const basePerUnit = rate * (1 - discountPercent / 100);
                                                 const pkgPerUnit = totalApprovedQty > 0 ? packaging / totalApprovedQty : 0;
                                                 const fwdPerUnit = totalApprovedQty > 0 ? forwarding / totalApprovedQty : 0;
-                                                const taxablePerUnit = basePerUnit + pkgPerUnit + fwdPerUnit;
+                                                const svcPerUnit = totalApprovedQty > 0 ? serviceCharge / totalApprovedQty : 0;
+                                                const taxablePerUnit = basePerUnit + pkgPerUnit + fwdPerUnit + svcPerUnit;
                                                 const effectiveRate = withTax === 'No' ? taxablePerUnit * (1 + tax / 100) : taxablePerUnit;
 
                                                 const liftQty = Number(itemsWatcher?.[index]?.liftQty) || 0;
@@ -1321,6 +1332,11 @@ export default function GetPurchase() {
                                                                 {forwarding > 0 && (
                                                                     <span className="bg-teal-50 text-teal-600 text-[9px] px-1.5 py-0.5 rounded border border-teal-100 font-semibold">
                                                                         Fwd: ₹{forwarding}
+                                                                    </span>
+                                                                )}
+                                                                {serviceCharge > 0 && (
+                                                                    <span className="bg-purple-50 text-purple-600 text-[9px] px-1.5 py-0.5 rounded border border-purple-100 font-semibold">
+                                                                        Svc: ₹{serviceCharge}
                                                                     </span>
                                                                 )}
                                                             </div>
