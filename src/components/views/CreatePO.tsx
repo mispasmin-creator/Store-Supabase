@@ -912,7 +912,7 @@ const CreatePO = () => {
                     </Tabs>
                 </div>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit, onError)} className="flex flex-col items-center">
+                    <form onSubmit={form.handleSubmit(onSubmit, onError)} noValidate className="flex flex-col items-center">
                         <div className="space-y-4 p-4 w-full bg-white shadow-md rounded-sm">
                             {/* Header Section */}
                             <div className="flex items-center justify-center gap-4 bg-blue-50 p-2 h-25 rounded">
@@ -1114,7 +1114,7 @@ const CreatePO = () => {
                                                     {form.watch('paymentTerms').toLowerCase().includes('partly') ? 'Advance %' : 'Number of Days'}
                                                 </FormLabel>
                                                 <FormControl>
-                                                    <Input className="h-9" type="number" placeholder={form.watch('paymentTerms').toLowerCase().includes('partly') ? 'Enter advance %' : 'Enter number of days'} {...field} />
+                                                    <Input className="h-9" type="number" step="any" placeholder={form.watch('paymentTerms').toLowerCase().includes('partly') ? 'Enter advance %' : 'Enter number of days'} {...field} onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} />
                                                 </FormControl>
                                             </FormItem>
                                         )} />
@@ -1303,11 +1303,19 @@ const CreatePO = () => {
                                                                     <FormControl>
                                                                         <Input 
                                                                             type="number" 
+                                                                            step="any"
                                                                             className="h-9 w-20 text-center" 
                                                                             value={field.value === undefined || field.value === null ? '' : field.value} 
                                                                             onChange={(e) => {
                                                                                 const val = e.target.value;
-                                                                                field.onChange(val === '' ? '' : Number(val));
+                                                                                if (val === '') {
+                                                                                    field.onChange('');
+                                                                                } else if (val.endsWith('.') || (val.includes('.') && val.endsWith('0'))) {
+                                                                                    field.onChange(val);
+                                                                                } else {
+                                                                                    const num = Number(val);
+                                                                                    field.onChange(isNaN(num) ? val : num);
+                                                                                }
                                                                             }} 
                                                                         />
                                                                     </FormControl>
@@ -1338,11 +1346,19 @@ const CreatePO = () => {
                                                                     <FormControl>
                                                                         <Input 
                                                                              type="number" 
+                                                                             step="any"
                                                                              className="h-9 w-24 text-center" 
                                                                              value={field.value === undefined || field.value === null ? '' : field.value} 
                                                                              onChange={(e) => {
                                                                                  const val = e.target.value;
-                                                                                 field.onChange(val === '' ? '' : Number(val));
+                                                                                 if (val === '') {
+                                                                                     field.onChange('');
+                                                                                 } else if (val.endsWith('.') || (val.includes('.') && val.endsWith('0'))) {
+                                                                                     field.onChange(val);
+                                                                                 } else {
+                                                                                     const num = Number(val);
+                                                                                     field.onChange(isNaN(num) ? val : num);
+                                                                                 }
                                                                              }} 
                                                                          />
                                                                     </FormControl>
@@ -1355,11 +1371,19 @@ const CreatePO = () => {
                                                                     <FormControl>
                                                                         <Input 
                                                                              type="number" 
+                                                                             step="any"
                                                                              className="h-9 w-24 text-center" 
                                                                              value={field.value === undefined || field.value === null ? '' : field.value} 
                                                                              onChange={(e) => {
                                                                                  const val = e.target.value;
-                                                                                 field.onChange(val === '' ? '' : Number(val));
+                                                                                 if (val === '') {
+                                                                                     field.onChange('');
+                                                                                 } else if (val.endsWith('.') || (val.includes('.') && val.endsWith('0'))) {
+                                                                                     field.onChange(val);
+                                                                                 } else {
+                                                                                     const num = Number(val);
+                                                                                     field.onChange(isNaN(num) ? val : num);
+                                                                                 }
                                                                              }} 
                                                                          />
                                                                     </FormControl>
@@ -1372,11 +1396,19 @@ const CreatePO = () => {
                                                                     <FormControl>
                                                                         <Input 
                                                                              type="number" 
+                                                                             step="any"
                                                                              className="h-9 w-24 text-center" 
                                                                              value={field.value === undefined || field.value === null ? '' : field.value} 
                                                                              onChange={(e) => {
                                                                                  const val = e.target.value;
-                                                                                 field.onChange(val === '' ? '' : Number(val));
+                                                                                 if (val === '') {
+                                                                                     field.onChange('');
+                                                                                 } else if (val.endsWith('.') || (val.includes('.') && val.endsWith('0'))) {
+                                                                                     field.onChange(val);
+                                                                                 } else {
+                                                                                     const num = Number(val);
+                                                                                     field.onChange(isNaN(num) ? val : num);
+                                                                                 }
                                                                              }} 
                                                                          />
                                                                     </FormControl>
