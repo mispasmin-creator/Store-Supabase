@@ -854,8 +854,18 @@ const CreatePO = () => {
                     deliveryDays: values.deliveryDays || 0,
                     deliveryType: values.deliveryType || '',
                     firmNameMatch: (indent as any)?.firmNameMatch ?? '',
-                    advancePercent: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (values.numberOfDays || 0) : 0,
-                    advanceAmount: (values.paymentTerms.toLowerCase().includes('partly') && (values.paymentTerms.toLowerCase().includes('advance') || values.paymentTerms.toLowerCase().includes('pi'))) ? (itemAmount * (values.numberOfDays || 0)) / 100 : 0
+                    advancePercent: (() => {
+                        const pt = values.paymentTerms.toLowerCase();
+                        if (pt.includes('100%') || pt === 'advance') return 100;
+                        if (pt.includes('partly') && (pt.includes('advance') || pt.includes('pi'))) return values.numberOfDays || 0;
+                        return 0;
+                    })(),
+                    advanceAmount: (() => {
+                        const pt = values.paymentTerms.toLowerCase();
+                        if (pt.includes('100%') || pt === 'advance') return itemAmount;
+                        if (pt.includes('partly') && (pt.includes('advance') || pt.includes('pi'))) return (itemAmount * (values.numberOfDays || 0)) / 100;
+                        return 0;
+                    })()
                 };
             });
 
@@ -880,6 +890,7 @@ const CreatePO = () => {
             setIndentSheet(indents);
             setPoMasterSheet(poMaster);
         } catch (e) {
+            console.error('Error creating purchase order:', e);
             toast.error(`Failed to ${mode} purchase order`);
         }
     }
