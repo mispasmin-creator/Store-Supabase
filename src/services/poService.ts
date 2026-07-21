@@ -308,6 +308,31 @@ export async function insertPoRecords(poRecords: any[]) {
 }
 
 /**
+ * Update PO records in Supabase for a given PO number
+ * Deletes existing rows for the poNumber and inserts updated rows
+ * @param poNumber - The PO number to update
+ * @param poRecords - Array of updated PO records
+ */
+export async function updatePoMasterRecords(poNumber: string, poRecords: any[]) {
+    try {
+        const { error: deleteError } = await supabase
+            .from('po_master')
+            .delete()
+            .eq('po_number', poNumber);
+
+        if (deleteError) {
+            console.error('Error deleting old PO records for revision:', deleteError);
+            throw deleteError;
+        }
+
+        return await insertPoRecords(poRecords);
+    } catch (error) {
+        console.error('Error updating PO records:', error);
+        throw error;
+    }
+}
+
+/**
  * Update indent records to mark them as having PO created
  * Sets actual4 timestamp and delivery_date for indents that are included in the PO
  * @param indentNumbers - Array of indent numbers to update

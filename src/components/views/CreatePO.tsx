@@ -32,7 +32,7 @@ import POPdf, { type POPdfProps } from '../element/POPdf';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { PDFViewer } from '@react-pdf/renderer';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
-import { fetchIndents, fetchPoMaster, fetchMasterData, insertPoRecords, updateIndentsAfterPoCreation } from '@/services/poService';
+import { fetchIndents, fetchPoMaster, fetchMasterData, insertPoRecords, updatePoMasterRecords, updateIndentsAfterPoCreation } from '@/services/poService';
 
 function generatePoNumber(poNumbers: string[]): string {
     const prefix = 'STORE-PO-25-26-';
@@ -622,7 +622,7 @@ const CreatePO = () => {
             supplierName: values.supplierName,
             supplierAddress: values.supplierAddress,
             supplierGstin: values.gstin || '',
-            orderNumber: mode === 'create' ? values.poNumber : incrementPoRevision(values.poNumber, poMasterSheet),
+            orderNumber: values.poNumber,
             orderDate: formatDate(values.poDate),
             deliveryDate: formatDate(values.deliveryDate),
             paymentTerms: values.paymentTerms,
@@ -682,7 +682,7 @@ const CreatePO = () => {
 
     async function onSubmit(values: FormData) {
         try {
-            const poNumber = mode === 'create' ? values.poNumber : incrementPoRevision(values.poNumber, poMasterSheet);
+            const poNumber = values.poNumber;
             const totalPackaging = values.indents.reduce(
                 (sum, item) => sum + (item.packaging || 0),
                 0
@@ -876,7 +876,11 @@ const CreatePO = () => {
                 };
             });
 
-            await insertPoRecords(rows);
+            if (mode === 'revise') {
+                await updatePoMasterRecords(poNumber, rows);
+            } else {
+                await insertPoRecords(rows);
+            }
 
             // Update indents to mark PO as created (set actual4 and delivery_date)
             const indentIds = values.indents.map(v => v.id).filter(id => id > 0);
