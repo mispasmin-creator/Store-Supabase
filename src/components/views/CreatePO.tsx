@@ -160,21 +160,27 @@ interface MasterDetails {
 }
 
 
+const safeParseDate = (dateStr: any): Date | undefined => {
+    if (!dateStr) return undefined;
+    const parsed = parseCustomDate(dateStr);
+    return isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
 const schema = z.object({
     poNumber: z.string().nonempty(),
     poDate: z.coerce.date(),
     supplierName: z.string().nonempty(),
     supplierAddress: z.string().nonempty(),
     gstin: z.string().optional(),
-    companyEmail: z.union([z.string().email(), z.literal('')]).optional(),
+    companyEmail: z.string().optional(),
 
     ourEnqNo: z.string().optional(),
-    enquiryDate: z.coerce.date().optional(),
+    enquiryDate: z.coerce.date().optional().nullable(),
     description: z.string(),
     indents: z.array(
         z.object({
             id: z.number(), 
-            indentNumber: z.string().nonempty(),
+            indentNumber: z.string(),
             quotationNumber: z.string().optional(),
             productName: z.string().optional(),
             specifications: z.string().optional(),
@@ -189,10 +195,10 @@ const schema = z.object({
             serviceCharge: z.coerce.number().default(0).optional(),
         })
     ),
-    terms: z.array(z.string().nonempty()).max(10),
+    terms: z.array(z.string()).max(10),
     deliveryDate: z.coerce.date(),
     deliveryDays: z.coerce.number().optional(),
-    deliveryType: z.enum(['for', 'exfactory']).optional(),
+    deliveryType: z.enum(['for', 'exfactory']).optional().or(z.literal('')).nullable(),
     paymentTerms: z.string().nonempty(),
     numberOfDays: z.coerce.number().optional(),
 });
@@ -479,13 +485,14 @@ const CreatePO = () => {
                     const partyName = firstPoItem.partyName?.toLowerCase()?.trim();
                     return vendorName === partyName;
                 });
-                form.setValue('poDate', parseCustomDate(firstPoItem.timestamp));
+                const parsedPoDate = safeParseDate(firstPoItem.timestamp);
+                form.setValue('poDate', parsedPoDate || new Date());
                 form.setValue('supplierName', firstPoItem.partyName || '');
 
                 if (vendor) {
                     form.setValue('supplierAddress', vendor.address || '');
                     form.setValue('gstin', vendor.gstin || '');
-                    form.setValue('companyEmail', vendor.vendorEmail || '');
+                    form.setValue('companyEmail', vendor.vendorEmail || vendor.email || '');
                 } else {
                     const storedAddress = (firstPoItem as any)?.supplierAddress || '';
                     const storedGstin = (firstPoItem as any)?.supplierGstin || '';
@@ -497,8 +504,8 @@ const CreatePO = () => {
                 }
 
                 form.setValue('ourEnqNo', firstPoItem.enquiryNumber || '');
-                form.setValue('enquiryDate', parseCustomDate(firstPoItem.enquiryDate));
-                form.setValue('deliveryDate', parseCustomDate(firstPoItem.deliveryDate));
+                form.setValue('enquiryDate', safeParseDate(firstPoItem.enquiryDate));
+                form.setValue('deliveryDate', safeParseDate(firstPoItem.deliveryDate) || new Date());
                 form.setValue('deliveryDays', firstPoItem.deliveryDays || 0);
                 form.setValue('deliveryType', (firstPoItem.deliveryType === 'for' || firstPoItem.deliveryType === 'exfactory') ? firstPoItem.deliveryType : undefined);
                 form.setValue('paymentTerms', firstPoItem.paymentTerms as any || undefined);
@@ -895,7 +902,8 @@ const CreatePO = () => {
         }
     }
 
-    function onError() {
+    function onError(errors: any) {
+        console.error('Form validation errors:', errors);
         toast.error('Please fill all required fields');
     }
 
@@ -923,7 +931,19 @@ const CreatePO = () => {
                     </Tabs>
                 </div>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit, onError)} noValidate className="flex flex-col items-center">
+                    <form
+                        onSubmit={form.handleSubmit(onSubmit, onError)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                const target = e.target as HTMLElement;
+                                if (target.tagName === 'TEXTAREA') return;
+                                if (target.tagName === 'BUTTON' && (target as HTMLButtonElement).type === 'submit') return;
+                                e.preventDefault();
+                            }
+                        }}
+                        noValidate
+                        className="flex flex-col items-center"
+                    >
                         <div className="space-y-4 p-4 w-full bg-white shadow-md rounded-sm">
                             {/* Header Section */}
                             <div className="flex items-center justify-center gap-4 bg-blue-50 p-2 h-25 rounded">
