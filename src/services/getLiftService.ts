@@ -222,35 +222,48 @@ export const fetchVendorOptions = async (): Promise<string[]> => {
  */
 export async function insertStoreInRecord(storeInData: StoreInInsertData) {
     try {
-        // ✅ FIXED: Only map columns that actually exist in the store_in table schema
-        const mappedData = {
+        const toNumStr = (val: any): string | null => {
+            if (val === undefined || val === null || val === '') return null;
+            const str = String(val).replace(/[^0-9.-]/g, '').trim();
+            return str === '' || isNaN(Number(str)) ? null : str;
+        };
+
+        const sanitizeIndentNo = (str?: string): string => {
+            if (!str) return '';
+            return str.replace(/^SI-0+/i, 'SI-');
+        };
+
+        const rateVal = parseFloat(String(storeInData.rate || '').replace(/[^0-9.-]/g, '')) || 0;
+        const qtyVal = Number(storeInData.qty || 0) || 0;
+        const totalRateVal = rateVal * qtyVal;
+
+        const mappedData: Record<string, any> = {
             timestamp: storeInData.timestamp,
-            indent_no: storeInData.indentNo,
-            bill_no: storeInData.billNo,
-            vendor_name: storeInData.vendorName,
-            product_name: storeInData.productName,
-            qty: storeInData.qty?.toString(),
-            lead_time_to_lift_material: storeInData.leadTimeToLiftMaterial?.toString(),
-            discount_amount: storeInData.discountAmount?.toString(),
-            type_of_bill: storeInData.typeOfBill,
-            bill_amount: storeInData.billAmount?.toString(),
-            payment_type: storeInData.paymentType,
-            advance_amount_if_any: storeInData.advanceAmountIfAny?.toString(),
-            photo_of_bill: storeInData.photoOfBill,
-            transportation_include: storeInData.transportationInclude,
-            transporter_name: storeInData.transporterName,
-            amount: storeInData.amount?.toString(),
-            bill_status: storeInData.billStatus,
-            received_quantity: '0', // Initially 0, will be updated in ReceiveItem
-            quantity_as_per_bill: storeInData.quantityAsPerBill?.toString(),
-            po_number: storeInData.poNumber,
-            vehicle_no: storeInData.vehicleNo,
-            driver_name: storeInData.driverName,
-            driver_mobile_no: storeInData.driverMobileNo,
-            bill_remark: storeInData.billRemark,
-            firm_name_match: storeInData.firmNameMatch,
-            rate: storeInData.rate || '',
-            // Default empty values for optional fields that exist in schema
+            indent_no: sanitizeIndentNo(storeInData.indentNo),
+            bill_no: storeInData.billNo || '',
+            vendor_name: storeInData.vendorName || '',
+            product_name: storeInData.productName || '',
+            qty: qtyVal.toString(),
+            lead_time_to_lift_material: toNumStr(storeInData.leadTimeToLiftMaterial),
+            discount_amount: toNumStr(storeInData.discountAmount) || '0',
+            type_of_bill: storeInData.typeOfBill || '',
+            bill_amount: toNumStr(storeInData.billAmount) || '0',
+            payment_type: storeInData.paymentType || '',
+            advance_amount_if_any: toNumStr(storeInData.advanceAmountIfAny) || '0',
+            photo_of_bill: storeInData.photoOfBill || '',
+            transportation_include: storeInData.transportationInclude || '',
+            transporter_name: storeInData.transporterName || '',
+            amount: toNumStr(storeInData.amount) || '0',
+            bill_status: storeInData.billStatus || '',
+            received_quantity: '0',
+            quantity_as_per_bill: toNumStr(storeInData.quantityAsPerBill) || qtyVal.toString(),
+            po_number: storeInData.poNumber || '',
+            vehicle_no: storeInData.vehicleNo || '',
+            driver_name: storeInData.driverName || '',
+            driver_mobile_no: storeInData.driverMobileNo || '',
+            bill_remark: storeInData.billRemark || '',
+            firm_name_match: storeInData.firmNameMatch || '',
+            rate: toNumStr(storeInData.rate),
             planned6: null,
             actual6: null,
             time_delay6: '',
@@ -273,19 +286,25 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             actual11: null,
             bill_status_new: '',
             bill_image_status: '',
-            // Additional fields from schema
             indent_date: storeInData.indentNo ? new Date().toISOString() : null,
-            indent_qty: storeInData.quantity?.toString(),
+            indent_qty: toNumStr(storeInData.quantity),
             purchase_date: new Date().toISOString(),
             material_date: new Date().toISOString(),
-            party_name: storeInData.vendorName,
+            party_name: storeInData.vendorName || '',
             indented_for: storeInData.department || '',
             area: storeInData.areaOfUse || '',
             approved_party_name: storeInData.approvedVendorName || storeInData.vendorName || '',
-            total_rate: (Number(storeInData.rate) * Number(storeInData.qty)).toString(),
+            total_rate: totalRateVal > 0 ? totalRateVal.toString() : null,
             lifting_status: storeInData.liftingStatus || 'Active',
             not_bill_received_no: storeInData.notBillReceivedNo || '',
         };
+
+        // Clean out any undefined fields
+        Object.keys(mappedData).forEach(key => {
+            if (mappedData[key] === undefined) {
+                delete mappedData[key];
+            }
+        });
 
         console.log('📤 Inserting store-in record:', mappedData);
 
@@ -295,13 +314,40 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
             .select();
 
         if (error) {
-            console.error('insert error', {
-                code: error?.code, message: error?.message,
-                details: error?.details,
-                hint: error?.hint,
-            });
             console.error('❌ Supabase insert error:', error);
-            throw error;
+            // Retry with core clean fields if schema column issue occurs
+            const coreData: Record<string, any> = {
+                timestamp: mappedData.timestamp,
+                indent_no: mappedData.indent_no,
+                bill_no: mappedData.bill_no,
+                vendor_name: mappedData.vendor_name,
+                product_name: mappedData.product_name,
+                qty: mappedData.qty,
+                bill_amount: mappedData.bill_amount,
+                photo_of_bill: mappedData.photo_of_bill,
+                transportation_include: mappedData.transportation_include,
+                transporter_name: mappedData.transporter_name,
+                amount: mappedData.amount,
+                bill_status: mappedData.bill_status,
+                received_quantity: mappedData.received_quantity,
+                quantity_as_per_bill: mappedData.quantity_as_per_bill,
+                po_number: mappedData.po_number,
+                vehicle_no: mappedData.vehicle_no,
+                driver_name: mappedData.driver_name,
+                driver_mobile_no: mappedData.driver_mobile_no,
+                bill_remark: mappedData.bill_remark,
+                firm_name_match: mappedData.firm_name_match,
+                rate: mappedData.rate,
+                not_bill_received_no: mappedData.not_bill_received_no,
+            };
+
+            const { data: retryData, error: retryError } = await supabase
+                .from('store_in')
+                .insert([coreData])
+                .select();
+
+            if (retryError) throw retryError;
+            return retryData;
         }
 
         console.log('✅ Store-in record inserted:', data);
