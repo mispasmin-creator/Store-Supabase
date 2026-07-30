@@ -253,13 +253,10 @@ export default function PcReportTable() {
       } else if (hasValue(item.planned4) && !hasValue(item.actual4)) {
         currentStage = 'TALLY_ENTRY';
         plannedDate = item.planned4;
-      } else if (hasValue(item.planned5) && !hasValue(item.actual5)) {
-        currentStage = 'AGAIN_AUDIT';
-        plannedDate = item.planned5;
-      } else if (hasValue(item.actual5)) {
+      } else if (hasValue(item.actual4) || hasValue(item.actual5)) {
         currentStage = 'COMPLETED';
         isCompleted = true;
-        plannedDate = item.planned5 || item.planned4 || item.planned3 || item.planned2 || item.planned1;
+        plannedDate = item.actual4 || item.planned4 || item.planned3 || item.planned2 || item.planned1;
       } else {
         // If Audit was Done, we might be ready for Stage 4 even if 2 and 3 were never touched
         if (isAuditDone && hasValue(item.planned4) && !hasValue(item.actual4)) {
@@ -415,7 +412,7 @@ export default function PcReportTable() {
       COMPLETED: groupedAllData.filter(item => item.isCompleted).length
     };
 
-    ['AUDIT', 'RECTIFY', 'REAUDIT', 'TALLY_ENTRY', 'AGAIN_AUDIT'].forEach(stage => {
+    ['AUDIT', 'RECTIFY', 'REAUDIT', 'TALLY_ENTRY'].forEach(stage => {
       counts[stage] = groupedAllData.filter(item =>
         !item.isCompleted && item.currentStage === stage
       ).length;
@@ -834,6 +831,33 @@ export default function PcReportTable() {
       cell: ({ row }) => row.original.billAmtSummarized || row.original.billAmt
     },
     {
+      accessorKey: 'billImage',
+      header: 'Bill Image',
+      cell: ({ row }) => {
+        const image = row.original.billImage;
+        return (
+          <div className="flex flex-col items-center justify-center gap-1">
+            {image ? (
+              <a href={image} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                View
+              </a>
+            ) : (
+              <span className="text-gray-400">-</span>
+            )}
+            <AdminFileUpdater
+              tableName="tally_entry"
+              columnName="bill_image"
+              rowIdColumn="id"
+              rowIdValue={row.original.id}
+              bucketName="photo_of_bill"
+              currentFileUrl={image}
+              onUpdate={updateAll}
+            />
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: 'firmNameMatch',
       header: 'Firm Name'
     },
@@ -937,143 +961,6 @@ export default function PcReportTable() {
         ) : null;
       },
     },
-    {
-      accessorKey: 'status5',
-      header: 'Again Audit Status',
-      cell: ({ row }) => {
-        const status = row.original.status5;
-        return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-            {status}
-          </span>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'remarks5',
-      header: 'Again Audit Remarks',
-      cell: ({ row }) => {
-        const remarks = row.original.remarks5;
-        return remarks ? (
-          <div className="max-w-xs truncate" title={remarks}>
-            {remarks}
-          </div>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'remarks1',
-      header: 'Audit Remarks',
-      cell: ({ row }) => {
-        const remarks = row.original.remarks1;
-        return remarks ? (
-          <div className="max-w-xs truncate" title={remarks}>
-            {remarks}
-          </div>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'status2',
-      header: 'Rectify Status',
-      cell: ({ row }) => {
-        const status = row.original.status2;
-        return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-            {status}
-          </span>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'remarks2',
-      header: 'Rectify Remarks',
-      cell: ({ row }) => {
-        const remarks = row.original.remarks2;
-        return remarks ? (
-          <div className="max-w-xs truncate" title={remarks}>
-            {remarks}
-          </div>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'status3',
-      header: 'Reaudit Status',
-      cell: ({ row }) => {
-        const status = row.original.status3;
-        return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-            {status}
-          </span>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'remarks3',
-      header: 'Reaudit Remarks',
-      cell: ({ row }) => {
-        const remarks = row.original.remarks3;
-        return remarks ? (
-          <div className="max-w-xs truncate" title={remarks}>
-            {remarks}
-          </div>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'status4',
-      header: 'Tally Status',
-      cell: ({ row }) => {
-        const status = row.original.status4;
-        return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-            {status}
-          </span>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'remarks4',
-      header: 'Tally Remarks',
-      cell: ({ row }) => {
-        const remarks = row.original.remarks4;
-        return remarks ? (
-          <div className="max-w-xs truncate" title={remarks}>
-            {remarks}
-          </div>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'status5',
-      header: 'Again Audit Status',
-      cell: ({ row }) => {
-        const status = row.original.status5;
-        return status ? (
-          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${status === 'Done' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-            {status}
-          </span>
-        ) : null;
-      },
-    },
-    {
-      accessorKey: 'remarks5',
-      header: 'Again Audit Remarks',
-      cell: ({ row }) => {
-        const remarks = row.original.remarks5;
-        return remarks ? (
-          <div className="max-w-xs truncate" title={remarks}>
-            {remarks}
-          </div>
-        ) : null;
-      },
-    },
   ];
 
   // Stats data
@@ -1083,7 +970,7 @@ export default function PcReportTable() {
     { title: 'Rectify', value: stageCounts.RECTIFY, color: 'text-blue-600' },
     { title: 'Reaudit', value: stageCounts.REAUDIT, color: 'text-purple-600' },
     { title: 'Tally Entry', value: stageCounts.TALLY_ENTRY, color: 'text-cyan-600' },
-    { title: 'Again Audit', value: stageCounts.AGAIN_AUDIT, color: 'text-rose-600' },
+    { title: 'Completed', value: stageCounts.COMPLETED, color: 'text-green-600' },
   ];
 
   return (
@@ -1094,7 +981,7 @@ export default function PcReportTable() {
         </Heading>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4 mb-6">
           {statsData.map((stat, index) => (
             <div key={index} className="bg-white rounded-lg shadow-sm p-4 border">
               <p className="text-sm font-medium text-gray-500 mb-1">{stat.title}</p>
@@ -1105,7 +992,7 @@ export default function PcReportTable() {
 
         <Tabs defaultValue="all" className="w-full">
           {/* Tabs Navigation */}
-          <TabsList className="grid grid-cols-2 md:grid-cols-6 mb-6">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 mb-6">
             <TabsTrigger value="all" onClick={() => setActiveTab('ALL')}>
               All Pending
             </TabsTrigger>
@@ -1120,9 +1007,6 @@ export default function PcReportTable() {
             </TabsTrigger>
             <TabsTrigger value="tally" onClick={() => setActiveTab('TALLY_ENTRY')}>
               Tally Entry
-            </TabsTrigger>
-            <TabsTrigger value="again_audit" onClick={() => setActiveTab('AGAIN_AUDIT')}>
-              Again Audit
             </TabsTrigger>
             <TabsTrigger value="completed" onClick={() => setActiveTab('COMPLETED')}>
               Completed

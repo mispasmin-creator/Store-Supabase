@@ -1,4 +1,4 @@
-import { FileText, Building, DollarSign, CheckCircle, AlertCircle, ExternalLink, CheckSquare, XSquare, History, Download } from 'lucide-react';
+import { FileText, Building, DollarSign, CheckCircle, AlertCircle, ExternalLink, CheckSquare, XSquare, History, Download, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
@@ -145,6 +145,8 @@ export default function MakePayment() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [originalData, setOriginalData] = useState<PaymentsRecord[]>([]);
     const [activeTab, setActiveTab] = useState('pending');
+    const [iframeDialogOpen, setIframeDialogOpen] = useState(false);
+    const [selectedPaymentItem, setSelectedPaymentItem] = useState<DisplayPayment | null>(null);
 
     const [stats, setStats] = useState({
         total: 0,
@@ -720,7 +722,7 @@ export default function MakePayment() {
                             <Button
                                 variant="default"
                                 size="sm"
-                                onClick={() => window.open(item.paymentForm, '_blank')}
+                                onClick={() => { setSelectedPaymentItem(item); setIframeDialogOpen(true); }}
                                 className="bg-green-600 hover:bg-green-700 shadow-sm"
                             >
                                 <ExternalLink className="mr-2 h-3 w-3" />
@@ -1403,6 +1405,97 @@ export default function MakePayment() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* ── Make Payment Confirmation Dialog ── */}
+            {iframeDialogOpen && selectedPaymentItem && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
+                        {/* Dialog Header */}
+                        <div className="flex items-center justify-between px-5, py-4 border-b border-gray-200 bg-green-50">
+                            <div className="flex items-center gap-2">
+                                <DollarSign className="h-5 w-5 text-green-600" />
+                                <h2 className="text-base font-semibold text-gray-800">Confirm Payment</h2>
+                            </div>
+                            <button
+                                onClick={() => { setIframeDialogOpen(false); setSelectedPaymentItem(null); }}
+                                className="p-1.5 rounded-md text-gray-500 hover:text-gray-800 hover:bg-gray-200 transition-colors"
+                                aria-label="Close"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Payment Details */}
+                        <div className="px-6 py-4 space-y-3">
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                    <p className="text-gray-500 text-xs mb-0.5">Payment No.</p>
+                                    <p className="font-semibold text-gray-800">{selectedPaymentItem.uniqueNo || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 text-xs mb-0.5">Party Name</p>
+                                    <p className="font-semibold text-gray-800">{selectedPaymentItem.partyName || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 text-xs mb-0.5">PO Number</p>
+                                    <p className="font-medium text-purple-700">{selectedPaymentItem.poNumber || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 text-xs mb-0.5">Indent No.</p>
+                                    <p className="font-medium text-gray-700">{selectedPaymentItem.internalCode || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 text-xs mb-0.5">Product</p>
+                                    <p className="font-medium text-gray-700">{selectedPaymentItem.product || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 text-xs mb-0.5">Payment Terms</p>
+                                    <p className="font-medium text-gray-600 italic">{selectedPaymentItem.paymentTerms || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 text-xs mb-0.5">Pay Amount</p>
+                                    <p className="font-bold text-emerald-600 text-base">₹{selectedPaymentItem.payAmount?.toLocaleString('en-IN')}</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-500 text-xs mb-0.5">Outstanding</p>
+                                    <p className="font-bold text-red-600 text-base">₹{selectedPaymentItem.outstandingAmount?.toLocaleString('en-IN')}</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+                                Clicking <strong>"Mark as Paid"</strong> will mark this payment as <strong>Completed</strong> and move it to Payment History.
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
+                            <Button
+                                variant="outline"
+                                onClick={() => { setIframeDialogOpen(false); setSelectedPaymentItem(null); }}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                disabled={isSubmitting}
+                                onClick={async () => {
+                                    // Select only this row and submit
+                                    const rowIdx = pendingData.findIndex(p => p.rowIndex === selectedPaymentItem.rowIndex);
+                                    if (rowIdx === -1) { toast.error('Record not found'); return; }
+                                    setSelectedRows(new Set([rowIdx]));
+                                    setIframeDialogOpen(false);
+                                    setSelectedPaymentItem(null);
+                                    // Small delay so state settles before submit
+                                    setTimeout(() => handleSubmitSelected(), 50);
+                                }}
+                            >
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Mark as Paid
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
