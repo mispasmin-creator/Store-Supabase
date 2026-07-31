@@ -23,7 +23,7 @@ import { Input } from '../ui/input';
 import { ArrowDown, ArrowUp, ArrowUpDown, Package } from 'lucide-react';
 import { Skeleton } from '../ui/skeleton';
 import { ClipLoader } from 'react-spinners';
-import { ScrollArea } from '../ui/scroll-area';
+import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 interface DataTableProps<TData, TValue> {
@@ -198,6 +198,7 @@ export default function DataTable<TData, TValue>({
                             )}
                         </TableBody>
                     </Table>
+                    <ScrollBar orientation="horizontal" />
                 </ScrollArea>
             </div>
         </div>

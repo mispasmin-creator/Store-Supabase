@@ -714,30 +714,19 @@ export default function MakePayment() {
             header: 'Action',
             cell: ({ row }: { row: Row<DisplayPayment> }) => {
                 const item = row.original;
-                const hasPaymentForm = item.paymentForm?.trim() !== '';
+                const formUrl = `https://docs.google.com/forms/d/e/1FAIpQLScJJFvh6zchRosSzX0mU-u7-oeMaQW6iv1osE70hRDoE-uVrg/viewform?usp=pp_url&entry.1200639812=${encodeURIComponent(item.uniqueNo || '')}&entry.604194301=New+Store+Application+Payment&entry.1358288895=Yes&entry.1091308719=${encodeURIComponent(item.partyName || '')}&entry.1486176123=${encodeURIComponent(item.payAmount || '')}&entry.2102057582=Ok`;
 
                 return (
                     <div className="flex gap-2">
-                        {hasPaymentForm ? (
-                            <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => { setSelectedPaymentItem(item); setIframeDialogOpen(true); }}
-                                className="bg-green-600 hover:bg-green-700 shadow-sm"
-                            >
-                                <ExternalLink className="mr-2 h-3 w-3" />
-                                Make Payment
-                            </Button>
-                        ) : (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled
-                                className="text-gray-400"
-                            >
-                                No Form Link
-                            </Button>
-                        )}
+                        <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => window.open(formUrl, '_blank')}
+                            className="bg-green-600 hover:bg-green-700 shadow-sm"
+                        >
+                            <ExternalLink className="mr-2 h-3 w-3" />
+                            Make Payment
+                        </Button>
                     </div>
                 );
             },

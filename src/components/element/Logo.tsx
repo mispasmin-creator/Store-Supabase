@@ -1,13 +1,13 @@
 import { cn } from '@/lib/utils';
-import { Package } from 'lucide-react';
 
-export default ({ className, size }: { className?: string; size?: number }) => (
+export default ({ className, size = 40 }: { className?: string; size?: number }) => (
     <div
         className={cn(
-            'flex p-2 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-600 to-green-500 shadow-md',
+            'flex items-center justify-center overflow-hidden',
             className
         )}
+        style={{ width: size, height: size }}
     >
-        <Package className="text-background" size={size} />
+        <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
     </div>
 );

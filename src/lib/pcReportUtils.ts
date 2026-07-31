@@ -136,7 +136,7 @@ export const calculatePcReportCounts = (
             'Bill Not Received'
         ),
         {
-            stage: 'Process for Payment / Debit Note',
+            stage: 'Process for Payment',
             totalPending: (() => {
                 const receivedPos = new Set((storeInSheet || []).filter((s: any) => s.actual6 && s.actual6 !== '').map((s: any) => s.poNumber || s.po_number).filter(Boolean));
                 const paymentsByPo: Record<string, number> = {};
@@ -150,13 +150,13 @@ export const calculatePcReportCounts = (
                     const isReceived = receivedPos.has(poNum);
                     const paymentTerms = (r.paymentTerms || r.payment_terms || '').toString().trim().toLowerCase();
                     const isPI = paymentTerms.includes("partly pi") || paymentTerms.includes("partly advance");
-                    
+
                     const totalPo = Number(r.totalPoAmount || 0);
                     const totalPaid = paymentsByPo[poNum] || 0;
                     const outstanding = totalPo - totalPaid;
                     const status = String(r.status || '').toLowerCase();
                     const isPending = status === 'pending' || status === '';
-                    
+
                     if ((isReceived || isPI) && outstanding > 0 && isPending) {
                         const linkedStoreIn = (storeInSheet || []).find((s: any) => (s.poNumber || s.po_number) === poNum);
                         const billNo = linkedStoreIn?.billNo || 'NoBill';

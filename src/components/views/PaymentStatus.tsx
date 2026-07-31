@@ -37,6 +37,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { format } from 'date-fns';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 
 // ✅ UPDATED INTERFACE
@@ -108,16 +109,18 @@ export default function PIApprovals() {
     } = useSheets();
     const { user } = useAuth();
     const [pendingData, setPendingData] = useState<PIPendingData[]>([]);
+    const [completedData, setCompletedData] = useState<PIPendingData[]>([]);
+    const [activeTab, setActiveTab] = useState('pending');
     const [selectedItem, setSelectedItem] = useState<PIPendingData | null>(null);
     const [openDialog, setOpenDialog] = useState(false);
     const [uploadingFile, setUploadingFile] = useState(false);
-    const [filterTerm, setFilterTerm] = useState('Advance Terms');
+    const [filterTerm, setFilterTerm] = useState('All');
     const [startDate, setStartDate] = useState<Date | undefined>(undefined);
     const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
     // ✅ Memoized filtered data with Date range filtering
     const filteredData = useMemo(() => {
-        let data = pendingData;
+        let data = activeTab === 'pending' ? pendingData : completedData;
 
         // 1. Filter by Payment Terms
         if (filterTerm === 'Advance Terms') {
@@ -153,7 +156,7 @@ export default function PIApprovals() {
         }
 
         return data;
-    }, [pendingData, filterTerm, startDate, endDate]);
+    }, [pendingData, completedData, activeTab, filterTerm, startDate, endDate]);
 
     // ✅ Handle CSV Export
     const handleDownload = (data: PIPendingData[]) => {
@@ -214,13 +217,13 @@ export default function PIApprovals() {
     // ✅ Get unique payment terms for the filter
     const uniquePaymentTerms = useMemo(() => {
         const terms = new Set<string>();
-        pendingData.forEach(item => {
+        [...pendingData, ...completedData].forEach(item => {
             if (item.paymentTerms) {
                 terms.add(item.paymentTerms);
             }
         });
         return Array.from(terms).sort();
-    }, [pendingData]);
+    }, [pendingData, completedData]);
 
     const stats = useMemo(() => {
         const totalOutstanding = filteredData.reduce((sum, item) => sum + item.outstandingAmount, 0);
@@ -258,8 +261,7 @@ export default function PIApprovals() {
 
                     // Status filtering
                     const status = (record.status || record.indent_status || '').toString().trim().toLowerCase();
-                    const isPending = status === 'pending' || status === '' || status === undefined;
-                    if (!isPending) return false;
+                    if (status === 'rejected' || status === 'cancelled') return false;
 
                     // Outstanding amount calculation
                     const totalPo = Number(record.totalPoAmount || 0);
@@ -267,17 +269,24 @@ export default function PIApprovals() {
                     // Sum payments for this PO
                     const totalPaid = safePaymentsSheet
                         .filter((p: any) => (p.poNumber || p.po_number || p.po_no) === (record.poNumber || record.po_number || record.po_no))
+                        .filter((p: any) => {
+                            const status = String(p.status1 || p.status || '').toLowerCase();
+                            return status !== 'rejected' && status !== 'cancelled';
+                        })
                         .reduce((sum, p) => sum + Number(p.payAmount || p.pay_amount || 0), 0);
 
                     const outstanding = totalPo - totalPaid;
 
-
-                    return outstanding > 0;
+                    return true; // Keep all so they can be split into Pending/Completed tabs
                 })
                 .map((record: any) => {
                     const totalPo = Number(record.totalPoAmount || 0);
                     const totalPaid = safePaymentsSheet
                         .filter((p: any) => (p.poNumber || p.po_number || p.po_no) === (record.poNumber || record.po_number || record.po_no))
+                        .filter((p: any) => {
+                            const status = String(p.status1 || p.status || '').toLowerCase();
+                            return status !== 'rejected' && status !== 'cancelled';
+                        })
                         .reduce((sum, p) => sum + Number(p.payAmount || p.pay_amount || 0), 0);
 
                     const linkedStoreIn = safeStoreInSheet.find((s: any) =>
@@ -513,41 +522,17 @@ export default function PIApprovals() {
                 }
             });
 
-            // Final processing: Filter out items that are already "Processed"
-            // (meaning a payment record exists for this PO + Bill, OR it's in history)
+            // Final processing: Split items based on Outstanding Amount
             const finalProcessedList = Array.from(uniqueBillMap.values()).filter(item => {
-                const paymentRecords = Array.isArray(safePaymentsSheet) ? safePaymentsSheet : [];
-                const historyRecords = Array.isArray(paymentHistorySheet) ? paymentHistorySheet : [];
+                return item.outstandingAmount > 0;
+            });
 
-                // 1. Check if it exists in the payments table
-                const isProcessTable = paymentRecords.some(p => {
-                    const poMatch = (p.poNumber || p.po_number || p.po_no) === item.poNumber;
-                    const billMatch = item.billNo
-                        ? (p.remark || '').includes(`Bill: ${item.billNo}`) || (p as any).billNo === item.billNo || (p as any).bill_no === item.billNo
-                        : true;
-                    
-                    const statusVal = String(p.status1 || p.status || '').toLowerCase();
-                    // Processed if it's already scheduled or approved
-                    const isProcessedStatus = ['pending', 'approved', 'complete', 'completed', 'process'].includes(statusVal);
-                    // Also check for planned date as a sign of proceeding
-                    const hasPlannedDate = p.planned && p.planned.toString().trim() !== '';
-
-                    return poMatch && billMatch && (isProcessedStatus || hasPlannedDate);
-                });
-
-                // 2. Check if it exists in the payment history
-                const isInHistory = historyRecords.some(h => {
-                    const poMatch = (h.po_number || (h as any).po_number || (h as any).poNumber) === item.poNumber;
-                    const billMatch = item.billNo
-                        ? (h.bill_no || (h as any).billNo || (h as any).bill_no) === item.billNo
-                        : true;
-                    return poMatch && billMatch;
-                });
-
-                return !(isProcessTable || isInHistory);
+            const finalCompletedList = Array.from(uniqueBillMap.values()).filter(item => {
+                return item.outstandingAmount <= 0;
             });
 
             setPendingData(finalProcessedList);
+            setCompletedData(finalCompletedList);
         } catch (error) {
             console.error('❌ Error in HOD Approval logic:', error);
             setPendingData([]);
@@ -936,7 +921,7 @@ export default function PIApprovals() {
                             <Package2 size={28} className="text-white" />
                         </div>
                         <div>
-                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Process for Payment / Debit Note</h1>
+                            <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Process for Payment</h1>
                             <p className="text-gray-600">Approved GRN need to process payments for pending purchase orders</p>
                         </div>
                     </div>
@@ -997,26 +982,34 @@ export default function PIApprovals() {
                     <CardHeader className="">
                         <div className="flex items-center justify-between">
                             <div>
-                                <CardTitle className="text-xl font-bold text-gray-800">Pending Payments</CardTitle>
-                                <p className="text-gray-600 text-sm mt-1">Click "Process Payment" to process the payment for purchase order</p>
+                                <CardTitle className="text-xl font-bold text-gray-800">Process for Payment</CardTitle>
+                                <p className="text-gray-600 text-sm mt-1">Approved GRN need to process payments for pending purchase orders</p>
                             </div>
-                            {stats.total === 0 ? (
-                                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 border border-green-300">
-                                    <CheckCircle className="mr-1 h-3 w-3" />
-                                    All Paid
-                                </div>
-                            ) : (
-                                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 border border-purple-300">
-                                    <AlertCircle className="mr-1 h-3 w-3" />
-                                    {stats.total} Pending
-                                </div>
-                            )}
+                            <div className="flex flex-col items-end gap-2">
+                                {stats.total === 0 ? (
+                                    <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 border border-green-300">
+                                        <CheckCircle className="mr-1 h-3 w-3" />
+                                        All Paid
+                                    </div>
+                                ) : (
+                                    <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 border border-purple-300">
+                                        <AlertCircle className="mr-1 h-3 w-3" />
+                                        {stats.total} {activeTab === 'pending' ? 'Pending' : 'Completed'}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        {pendingData.length > 0 ? (
-                            <div className="space-y-4">
-                                {/* Date Range Filters Bar */}
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                            <TabsList className="mb-4 grid w-full max-w-md grid-cols-2">
+                                <TabsTrigger value="pending">Pending</TabsTrigger>
+                                <TabsTrigger value="completed">Completed</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value={activeTab}>
+                                {(activeTab === 'pending' ? pendingData : completedData).length > 0 ? (
+                                    <div className="space-y-4">
+                                        {/* Date Range Filters Bar */}
                                 <div className="flex flex-wrap items-center gap-3 bg-purple-50/50 p-3 rounded-lg border border-purple-100/50 mb-2">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="text-sm font-semibold text-slate-700">Filter by Date Range:</span>
@@ -1119,10 +1112,14 @@ export default function PIApprovals() {
                         ) : (
                             <div className="text-center py-12">
                                 <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                                <h3 className="text-lg font-semibold text-gray-700 mb-2">No Pending Payments</h3>
-                                <p className="text-gray-500">All payments have been processed or no POs with pending status.</p>
+                                <h3 className="text-lg font-semibold text-gray-700 mb-2">No Data Found</h3>
+                                <p className="text-gray-500">
+                                    {activeTab === 'pending' ? 'All payments have been processed or no pending items found.' : 'No completed items found.'}
+                                </p>
                             </div>
                         )}
+                            </TabsContent>
+                        </Tabs>
                     </CardContent>
                 </Card>
 

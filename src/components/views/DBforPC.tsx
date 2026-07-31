@@ -12,39 +12,39 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 
 // ── Stage icon + color config ──────────────────────────────
 const STAGE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string; border: string }> = {
-    'Store Issue':                        { icon: <ClipboardList size={18} />,  color: 'text-blue-600',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
-    'Department Indent Approval':         { icon: <CheckSquare size={18} />,    color: 'text-indigo-600',  bg: 'bg-indigo-50',  border: 'border-indigo-200'  },
-    'Vendor Rate Update':                 { icon: <UserCog size={18} />,        color: 'text-violet-600',  bg: 'bg-violet-50',  border: 'border-violet-200'  },
-    'Department Approval':                { icon: <Users size={18} />,          color: 'text-purple-600',  bg: 'bg-purple-50',  border: 'border-purple-200'  },
-    'Management Approval':                { icon: <ShieldCheck size={18} />,    color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200' },
-    'Pending PO':                         { icon: <Clock size={18} />,          color: 'text-amber-600',   bg: 'bg-amber-50',   border: 'border-amber-200'   },
-    'Lifting':                            { icon: <ArrowUpCircle size={18} />,  color: 'text-orange-600',  bg: 'bg-orange-50',  border: 'border-orange-200'  },
-    'Store Check':                        { icon: <CheckCircle2 size={18} />,   color: 'text-primary',     bg: 'bg-primary/5',  border: 'border-primary/30'  },
-    'HOD Check':                          { icon: <UserCheck size={18} />,      color: 'text-teal-600',    bg: 'bg-teal-50',    border: 'border-teal-200'    },
-    'Freight Payment':                    { icon: <Truck size={18} />,          color: 'text-cyan-600',    bg: 'bg-cyan-50',    border: 'border-cyan-200'    },
-    'Make Payment':                       { icon: <CreditCard size={18} />,     color: 'text-green-600',   bg: 'bg-green-50',   border: 'border-green-200'   },
-    'Reject For GRN':                     { icon: <FileX size={18} />,          color: 'text-red-600',     bg: 'bg-red-50',     border: 'border-red-200'     },
-    'Send Debit Note':                    { icon: <Send size={18} />,           color: 'text-rose-600',    bg: 'bg-rose-50',    border: 'border-rose-200'    },
-    'Audit Data':                         { icon: <BarChart2 size={18} />,      color: 'text-slate-600',   bg: 'bg-slate-50',   border: 'border-slate-200'   },
-    'Bill Not Received':                  { icon: <FileWarning size={18} />,    color: 'text-yellow-600',  bg: 'bg-yellow-50',  border: 'border-yellow-200'  },
-    'Process for Payment / Debit Note':   { icon: <RefreshCw size={18} />,      color: 'text-pink-600',    bg: 'bg-pink-50',    border: 'border-pink-200'    },
+    'Store Issue': { icon: <ClipboardList size={18} />, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
+    'Department Indent Approval': { icon: <CheckSquare size={18} />, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+    'Vendor Rate Update': { icon: <UserCog size={18} />, color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200' },
+    'Department Approval': { icon: <Users size={18} />, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
+    'Management Approval': { icon: <ShieldCheck size={18} />, color: 'text-fuchsia-600', bg: 'bg-fuchsia-50', border: 'border-fuchsia-200' },
+    'Pending PO': { icon: <Clock size={18} />, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
+    'Lifting': { icon: <ArrowUpCircle size={18} />, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
+    'Store Check': { icon: <CheckCircle2 size={18} />, color: 'text-primary', bg: 'bg-primary/5', border: 'border-primary/30' },
+    'HOD Check': { icon: <UserCheck size={18} />, color: 'text-teal-600', bg: 'bg-teal-50', border: 'border-teal-200' },
+    'Freight Payment': { icon: <Truck size={18} />, color: 'text-cyan-600', bg: 'bg-cyan-50', border: 'border-cyan-200' },
+    'Make Payment': { icon: <CreditCard size={18} />, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
+    'Reject For GRN': { icon: <FileX size={18} />, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
+    'Send Debit Note': { icon: <Send size={18} />, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
+    'Audit Data': { icon: <BarChart2 size={18} />, color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200' },
+    'Bill Not Received': { icon: <FileWarning size={18} />, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
+    'Process for Payment': { icon: <RefreshCw size={18} />, color: 'text-pink-600', bg: 'bg-pink-50', border: 'border-pink-200' },
 };
 
 // ── Firm config ────────────────────────────────────────────
 const FIRMS: { key: keyof PcReportSheet; label: string; hex: string; pill: string; card: string }[] = [
-    { key: 'pendingPmpl',        label: 'PMPL',        hex: '#3b82f6', pill: 'bg-blue-100 text-blue-700',   card: 'bg-blue-50 border-blue-200'   },
-    { key: 'pendingPurab',       label: 'PURAB',       hex: '#8b5cf6', pill: 'bg-violet-100 text-violet-700', card: 'bg-violet-50 border-violet-200' },
-    { key: 'pendingPmmpl',       label: 'PMMPL',       hex: '#f97316', pill: 'bg-orange-100 text-orange-700', card: 'bg-orange-50 border-orange-200' },
-    { key: 'pendingRefrasynth',  label: 'REFRASYNTH',  hex: '#14b8a6', pill: 'bg-teal-100 text-teal-700',   card: 'bg-teal-50 border-teal-200'   },
+    { key: 'pendingPmpl', label: 'PMPL', hex: '#3b82f6', pill: 'bg-blue-100 text-blue-700', card: 'bg-blue-50 border-blue-200' },
+    { key: 'pendingPurab', label: 'PURAB', hex: '#8b5cf6', pill: 'bg-violet-100 text-violet-700', card: 'bg-violet-50 border-violet-200' },
+    { key: 'pendingPmmpl', label: 'PMMPL', hex: '#f97316', pill: 'bg-orange-100 text-orange-700', card: 'bg-orange-50 border-orange-200' },
+    { key: 'pendingRefrasynth', label: 'REFRASYNTH', hex: '#14b8a6', pill: 'bg-teal-100 text-teal-700', card: 'bg-teal-50 border-teal-200' },
 ];
 
 // ── Single stage card ──────────────────────────────────────
 function StageCard({ stage }: { stage: PcReportSheet }) {
     const cfg = STAGE_CONFIG[stage.stage] ?? { icon: <Activity size={18} />, color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' };
-    const pending  = Number(stage.totalPending)  || 0;
+    const pending = Number(stage.totalPending) || 0;
     const complete = Number(stage.totalComplete) || 0;
-    const total    = pending + complete;
-    const pct      = total > 0 ? Math.round((complete / total) * 100) : 100;
+    const total = pending + complete;
+    const pct = total > 0 ? Math.round((complete / total) * 100) : 100;
     const allClear = pending === 0;
     const numColor = allClear ? 'text-green-600' : pending > 15 ? 'text-red-600' : pending > 7 ? 'text-orange-500' : 'text-amber-500';
 
@@ -108,12 +108,12 @@ export default function PcReportTable() {
     const { pcReportSheet, allLoading } = useSheets();
 
     const summary = useMemo(() => {
-        const totalPending  = pcReportSheet.reduce((s, r) => s + (Number(r.totalPending)  || 0), 0);
+        const totalPending = pcReportSheet.reduce((s, r) => s + (Number(r.totalPending) || 0), 0);
         const totalComplete = pcReportSheet.reduce((s, r) => s + (Number(r.totalComplete) || 0), 0);
-        const total         = totalPending + totalComplete;
-        const overallPct    = total > 0 ? Math.round((totalComplete / total) * 100) : 0;
-        const clearStages   = pcReportSheet.filter(r => Number(r.totalPending) === 0).length;
-        const worstStage    = [...pcReportSheet].sort((a, b) => Number(b.totalPending) - Number(a.totalPending))[0];
+        const total = totalPending + totalComplete;
+        const overallPct = total > 0 ? Math.round((totalComplete / total) * 100) : 0;
+        const clearStages = pcReportSheet.filter(r => Number(r.totalPending) === 0).length;
+        const worstStage = [...pcReportSheet].sort((a, b) => Number(b.totalPending) - Number(a.totalPending))[0];
 
         const firmTotals = FIRMS.map(f => ({
             ...f,
@@ -127,8 +127,8 @@ export default function PcReportTable() {
         [...pcReportSheet]
             .sort((a, b) => Number(b.totalPending) - Number(a.totalPending))
             .map(r => ({
-                name:     r.stage.length > 16 ? r.stage.slice(0, 15) + '…' : r.stage,
-                pending:  Number(r.totalPending)  || 0,
+                name: r.stage.length > 16 ? r.stage.slice(0, 15) + '…' : r.stage,
+                pending: Number(r.totalPending) || 0,
                 complete: Number(r.totalComplete) || 0,
             })),
         [pcReportSheet]
@@ -267,8 +267,8 @@ export default function PcReportTable() {
                                                 key={i}
                                                 fill={
                                                     entry.pending === 0 ? '#22c55e' :
-                                                    entry.pending > 15 ? '#ef4444' :
-                                                    entry.pending > 7  ? '#f97316' : '#f59e0b'
+                                                        entry.pending > 15 ? '#ef4444' :
+                                                            entry.pending > 7 ? '#f97316' : '#f59e0b'
                                                 }
                                             />
                                         ))}
@@ -326,10 +326,10 @@ export default function PcReportTable() {
                             </thead>
                             <tbody>
                                 {pcReportSheet.map((r, i) => {
-                                    const pending  = Number(r.totalPending)  || 0;
+                                    const pending = Number(r.totalPending) || 0;
                                     const complete = Number(r.totalComplete) || 0;
-                                    const total    = pending + complete;
-                                    const pct      = total > 0 ? Math.round((complete / total) * 100) : 100;
+                                    const total = pending + complete;
+                                    const pct = total > 0 ? Math.round((complete / total) * 100) : 100;
                                     const allClear = pending === 0;
                                     return (
                                         <tr key={i} className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${allClear ? 'opacity-60' : ''}`}>

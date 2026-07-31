@@ -419,7 +419,7 @@ const routes: RouteAttributes[] = [
     },
     {
         path: 'Payment-Status',
-        name: 'Process for Payment / Debit Note',
+        name: 'Process for Payment',
         icon: <RefreshCw size={20} />,
         element: <PaymentStatus />,
         notifications: (sheetsData: any[]) => {

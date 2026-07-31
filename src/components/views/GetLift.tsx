@@ -261,16 +261,8 @@ export default function GetPurchase() {
                 sheet.firmNameMatch === user?.firmNameMatch
         );
 
-        const completedIndents = filteredByFirm.filter((sheet) => {
-            return (
-                sheet.liftingStatus === 'Complete' &&
-                sheet.planned5 &&
-                sheet.planned5.toString().trim() !== ''
-            );
-        });
-
         const indentDataMap = new Map(
-            completedIndents.map((sheet) => [
+            filteredByFirm.map((sheet) => [
                 `${sheet.indentNumber?.toString() || ''}_${sheet.firmNameMatch || ''}`,
                 {
                     poNumber: sheet.poNumber || '',
@@ -299,7 +291,7 @@ export default function GetPurchase() {
                 .map((sheet) => {
                     const indentData = indentDataMap.get(`${sheet.indentNo || ''}_${sheet.firmNameMatch || ''}`)!;
 
-                    const indentRecord = completedIndents.find(
+                    const indentRecord = filteredByFirm.find(
                         (indent) => indent.indentNumber?.toString() === sheet.indentNo && indent.firmNameMatch === sheet.firmNameMatch
                     );
 

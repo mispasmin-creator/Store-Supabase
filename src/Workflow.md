@@ -175,8 +175,8 @@ This document describes the end-to-end logic of the Store FMS procurement system
 
 ---
 
-## 15. Process for Payment / Debit Note
-**Sidebar Name**: Process for Payment / Debit Note  
+## 15. Process for Payment
+**Sidebar Name**: Process for Payment  
 **View**: `PaymentStatus.tsx`  
 **Database Table**: `po_master`, `payments`, `store_in`
 
