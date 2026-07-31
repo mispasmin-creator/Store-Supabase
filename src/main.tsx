@@ -830,21 +830,20 @@ const routes: RouteAttributes[] = [
         element: <Administration />,
         notifications: () => 0,
     },
-    {
-        path: 'training-video',
-        name: 'Training Video',
-        icon: <VideoIcon size={20} />,
-        element: <TrainnigVideo />,
-        notifications: () => 0,
-    },
-    {
-        path: 'license',
-        name: 'License',
-        icon: <KeyRound size={20} />,
-        element: <Liecense />,
-        notifications: () => 0,
-
-    },
+    // {
+    //     path: 'training-video',
+    //     name: 'Training Video',
+    //     icon: <VideoIcon size={20} />,
+    //     element: <TrainnigVideo />,
+    //     notifications: () => 0,
+    // },
+    // {
+    //     path: 'license',
+    //     name: 'License',
+    //     icon: <KeyRound size={20} />,
+    //     element: <Liecense />,
+    //     notifications: () => 0,
+    // },
 
 ];
 
