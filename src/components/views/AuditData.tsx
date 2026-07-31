@@ -1162,7 +1162,7 @@ export default function PcReportTable() {
                                   </div>
                                   <div>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Bill Amount</p>
-                                    <p className="text-sm font-bold text-green-700">₹{Number(item.billAmt).toLocaleString()}</p>
+                                    <p className="text-sm font-bold text-green-700">₹{Number(item.billAmt).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</p>
                                   </div>
 
                                   {/* Quality Checks */}

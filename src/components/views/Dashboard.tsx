@@ -616,7 +616,7 @@ export default function Dashboard() {
                                 <CreditCard size={22} className="text-indigo-600" />
                             </div>
                             <p className="text-4xl font-black text-indigo-900 mt-2 text-ellipsis overflow-hidden">
-                                ₹{poTotal > 100000 ? (poTotal / 100000).toFixed(2) + 'L' : poTotal.toLocaleString()}
+                                ₹{poTotal > 100000 ? (poTotal / 100000).toFixed(2) + 'L' : poTotal.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                             </p>
                             <div className="text-indigo-600 flex justify-between mt-2 border-t border-indigo-200 pt-2">
                                 <p className="text-xs font-medium uppercase tracking-wider">Avg/PO</p>
@@ -770,7 +770,7 @@ export default function Dashboard() {
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-sm font-bold text-slate-900">
-                                                    ₹{vendor.quantity > 100000 ? (vendor.quantity / 100000).toFixed(1) + 'L' : vendor.quantity.toLocaleString()}
+                                                    ₹{vendor.quantity > 100000 ? (vendor.quantity / 100000).toFixed(1) + 'L' : vendor.quantity.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                                 </p>
                                                 <p className="text-[10px] text-slate-400 uppercase font-medium">Value</p>
                                             </div>
@@ -984,7 +984,7 @@ export default function Dashboard() {
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="month" axisLine={false} tickLine={false} />
                                     <YAxis axisLine={false} tickLine={false} tickFormatter={v => formatMoney(Number(v))} width={65} />
-                                    <Tooltip formatter={(v: any) => [`₹${Number(v).toLocaleString()}`, 'Procurement Cost']} />
+                                    <Tooltip formatter={(v: any) => [`₹${Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}`, 'Procurement Cost']} />
                                     <Bar dataKey="amount" fill="var(--color-primary)" radius={[4, 4, 0, 0]}>
                                         <LabelList
                                             dataKey="amount"
@@ -1155,5 +1155,5 @@ function formatMoney(amount: number): string {
     if (amount >= 10000000) return '₹' + (amount / 10000000).toFixed(1) + 'Cr';
     if (amount >= 100000) return '₹' + (amount / 100000).toFixed(1) + 'L';
     if (amount >= 1000) return '₹' + (amount / 1000).toFixed(0) + 'k';
-    return '₹' + amount.toLocaleString();
+    return '₹' + amount.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 });
 }

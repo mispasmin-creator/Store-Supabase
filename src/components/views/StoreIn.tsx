@@ -791,7 +791,7 @@ export default () => {
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="text-[10px] uppercase font-bold text-primary/70 tracking-wider">Bill Amount</span>
-                                                <span className="text-sm font-bold text-primary">₹{selectedIndent.billAmount?.toLocaleString('en-IN') || '0'}</span>
+                                                <span className="text-sm font-bold text-primary">₹{selectedIndent.billAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 }) || '0'}</span>
                                             </div>
                                         </div>
                                     </div>

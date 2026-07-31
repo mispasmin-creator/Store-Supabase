@@ -590,7 +590,7 @@ export default function GetPurchase() {
             header: 'Bill Amount',
             cell: ({ getValue }) => {
                 const v = Number(getValue()) || 0;
-                return <div className="font-semibold">₹{v.toLocaleString()}</div>;
+                return <div className="font-semibold">₹{v.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</div>;
             },
         },
         {
@@ -614,7 +614,7 @@ export default function GetPurchase() {
                         {r.vehicleNo && <div><span className="text-muted-foreground">Vehicle: </span>{r.vehicleNo}</div>}
                         {r.driverName && <div><span className="text-muted-foreground">Driver: </span>{r.driverName}</div>}
                         {r.driverMobileNo && <div><span className="text-muted-foreground">Mobile: </span>{r.driverMobileNo}</div>}
-                        {r.amount ? <div className="font-semibold text-orange-600">Freight: ₹{Number(r.amount).toLocaleString()}</div> : null}
+                        {r.amount ? <div className="font-semibold text-orange-600">Freight: ₹{Number(r.amount).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</div> : null}
                     </div>
                 );
             },
@@ -1334,7 +1334,7 @@ export default function GetPurchase() {
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-muted-foreground whitespace-nowrap">
-                                                            ₹ {rate.toLocaleString()}
+                                                            ₹ {rate.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                                         </td>
                                                         <td className="px-4 py-3 text-right text-muted-foreground">
                                                             {tax}%

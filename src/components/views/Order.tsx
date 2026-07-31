@@ -204,7 +204,7 @@ export default function POHistory() {
             accessorKey: 'totalAmount',
             header: 'Amount',
             cell: ({ row }) => {
-                return <div>&#8377;{(row.original.totalAmount || 0).toLocaleString('en-IN')}</div>;
+                return <div>&#8377;{(row.original.totalAmount || 0).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</div>;
             },
         },
         {

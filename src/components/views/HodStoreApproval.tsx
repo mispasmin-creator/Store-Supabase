@@ -355,7 +355,7 @@ export default () => {
                                             </div>
                                             <div className="space-y-1 text-right">
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Bill Amount</p>
-                                                <p className="text-sm font-black text-emerald-600">₹{selectedItem.billAmount.toLocaleString()}</p>
+                                                <p className="text-sm font-black text-emerald-600">₹{selectedItem.billAmount.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</p>
                                             </div>
                                         </div>
                                     </div>

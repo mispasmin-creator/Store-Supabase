@@ -108,7 +108,7 @@ export default () => {
             accessorKey: 'rate',
             header: 'Rate',
             cell: ({ row }) => {
-                return <>&#8377;{row.original.rate.toLocaleString()}</>;
+                return <>&#8377;{row.original.rate.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</>;
             },
         },
         {
@@ -129,14 +129,14 @@ export default () => {
             accessorKey: 'amount',
             header: 'Amount',
             cell: ({ row }) => {
-                return <>&#8377;{row.original.amount.toLocaleString()}</>;
+                return <>&#8377;{row.original.amount.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</>;
             },
         },
         {
             accessorKey: 'totalPoAmount',
             header: 'Total PO Amount',
             cell: ({ row }) => {
-                return <>&#8377;{row.original.totalPoAmount.toLocaleString()}</>;
+                return <>&#8377;{row.original.totalPoAmount.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</>;
             },
         },
         { accessorKey: 'preparedBy', header: 'Prepared By' },

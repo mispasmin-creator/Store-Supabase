@@ -694,7 +694,7 @@ export default () => {
                                                                         return 'text-primary';
                                                                     })()}
                                                                 `}>
-                                                                    &#8377;{(parseFloat(vendor[1]) || 0).toLocaleString('en-IN')}
+                                                                    &#8377;{(parseFloat(vendor[1]) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                                                 </p>
                                                                 <p className="text-[8px] text-muted-foreground uppercase font-bold tracking-tighter">Effective Rate</p>
                                                             </div>
@@ -769,7 +769,7 @@ export default () => {
                                                                     return 'text-primary';
                                                                 })()}
                                                             `}>
-                                                                &#8377;{(parseFloat(vendor[1]) || 0).toLocaleString()}
+                                                                &#8377;{(parseFloat(vendor[1]) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                                             </span>
                                                             <span className="text-[8px] bg-muted px-1.5 py-0.5 rounded font-black tracking-tighter uppercase">Rate</span>
                                                         </div>
@@ -883,7 +883,7 @@ export default () => {
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-sm font-black text-primary leading-none">
-                                                            &#8377;{total.toLocaleString('en-IN')}
+                                                            &#8377;{total.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                                         </p>
                                                         <p className="text-[8px] text-muted-foreground mt-1 font-bold">TOTAL VALUE</p>
                                                     </div>

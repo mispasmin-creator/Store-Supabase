@@ -264,10 +264,10 @@ export default function PIApprovals() {
                     if (status === 'rejected' || status === 'cancelled') return false;
 
                     // Outstanding amount calculation
-                    const totalPo = Number(record.totalPoAmount || 0);
+                    const totalPo = Math.round(Number(record.totalPoAmount || 0) * 100) / 100;
 
                     // Sum payments for this PO
-                    const totalPaid = safePaymentsSheet
+                    const rawTotalPaid = safePaymentsSheet
                         .filter((p: any) => (p.poNumber || p.po_number || p.po_no) === (record.poNumber || record.po_number || record.po_no))
                         .filter((p: any) => {
                             const status = String(p.status1 || p.status || '').toLowerCase();
@@ -275,19 +275,22 @@ export default function PIApprovals() {
                         })
                         .reduce((sum, p) => sum + Number(p.payAmount || p.pay_amount || 0), 0);
 
-                    const outstanding = totalPo - totalPaid;
+                    const totalPaid = Math.round(rawTotalPaid * 100) / 100;
+                    const outstanding = Math.round((totalPo - totalPaid) * 100) / 100;
 
                     return true; // Keep all so they can be split into Pending/Completed tabs
                 })
                 .map((record: any) => {
-                    const totalPo = Number(record.totalPoAmount || 0);
-                    const totalPaid = safePaymentsSheet
+                    const totalPo = Math.round(Number(record.totalPoAmount || 0) * 100) / 100;
+                    const rawTotalPaid = safePaymentsSheet
                         .filter((p: any) => (p.poNumber || p.po_number || p.po_no) === (record.poNumber || record.po_number || record.po_no))
                         .filter((p: any) => {
                             const status = String(p.status1 || p.status || '').toLowerCase();
                             return status !== 'rejected' && status !== 'cancelled';
                         })
                         .reduce((sum, p) => sum + Number(p.payAmount || p.pay_amount || 0), 0);
+                    
+                    const totalPaid = Math.round(rawTotalPaid * 100) / 100;
 
                     const linkedStoreIn = safeStoreInSheet.find((s: any) =>
                         (s.poNumber || s.po_number || '') === (record.poNumber || record.po_number || record.po_no || '')
@@ -313,7 +316,7 @@ export default function PIApprovals() {
                         numberOfDays: record.numberOfDays || record.number_of_days || 0,
                         firmNameMatch: record.firmNameMatch || '',
                         totalPaidAmount: totalPaid,
-                        outstandingAmount: totalPo - totalPaid,
+                        outstandingAmount: Math.round((totalPo - totalPaid) * 100) / 100,
                         status: record.status || 'Pending',
                         pdf: record.pdf || '',
                         file: '',
@@ -643,7 +646,7 @@ export default function PIApprovals() {
             header: () => <div className="text-right">Total PO Amount</div>,
             cell: ({ row }) => (
                 <div className="text-right font-bold text-slate-900">
-                    ₹{row.original.totalPoAmount?.toLocaleString('en-IN')}
+                    ₹{row.original.totalPoAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                 </div>
             ),
         },
@@ -652,7 +655,7 @@ export default function PIApprovals() {
             header: () => <div className="text-right">Bill Amount</div>,
             cell: ({ row }) => (
                 <div className="text-right font-semibold text-purple-700">
-                    ₹{row.original.billAmount?.toLocaleString('en-IN') || '0'}
+                    ₹{row.original.billAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 }) || '0'}
                 </div>
             ),
         },
@@ -661,7 +664,7 @@ export default function PIApprovals() {
             header: () => <div className="text-right">Total Paid</div>,
             cell: ({ row }) => (
                 <div className="text-right font-semibold text-emerald-600">
-                    ₹{row.original.totalPaidAmount?.toLocaleString('en-IN')}
+                    ₹{row.original.totalPaidAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                 </div>
             ),
         },
@@ -670,7 +673,7 @@ export default function PIApprovals() {
             header: () => <div className="text-right text-rose-600">Outstanding</div>,
             cell: ({ row }) => (
                 <div className="text-right font-bold text-rose-600">
-                    ₹{row.original.outstandingAmount?.toLocaleString('en-IN')}
+                    ₹{row.original.outstandingAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                 </div>
             ),
         },
@@ -752,7 +755,15 @@ export default function PIApprovals() {
             accessorKey: 'status',
             header: 'Status',
             cell: ({ row }) => {
-                const status = row.original.status?.toLowerCase() || '';
+                const outstanding = row.original.outstandingAmount || 0;
+                let statusStr = row.original.status || 'Pending';
+                
+                // Override status to completed if outstanding is 0
+                if (outstanding <= 0) {
+                    statusStr = 'Completed';
+                }
+
+                const status = statusStr.toLowerCase();
                 const isPending = status === 'pending';
                 const isComplete = status === 'complete' || status === 'completed';
 
@@ -765,7 +776,7 @@ export default function PIApprovals() {
                         }`}>
                         {isComplete && <CheckCircle className="mr-1 h-3 w-3" />}
                         {isPending && <AlertCircle className="mr-1 h-3 w-3" />}
-                        {row.original.status || 'Pending'}
+                        {statusStr}
                     </span>
                 );
             },
@@ -946,7 +957,7 @@ export default function PIApprovals() {
                                     <div>
                                         <p className="text-sm font-medium text-gray-600">Total PO Amount</p>
                                         <p className="text-2xl font-bold text-green-600 mt-1">
-                                            ₹{stats.totalAmount.toLocaleString('en-IN')}
+                                            ₹{stats.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                         </p>
                                     </div>
                                     <DollarSign className="h-10 w-10 text-green-500" />
@@ -1174,19 +1185,19 @@ export default function PIApprovals() {
                                                 <div className="space-y-1">
                                                     <p className="text-xs font-medium text-gray-600">Total PO Amount</p>
                                                     <p className="text-sm font-semibold text-green-600">
-                                                        ₹{selectedItem.totalPoAmount?.toLocaleString('en-IN')}
+                                                        ₹{selectedItem.totalPoAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                                     </p>
                                                 </div>
                                                 <div className="space-y-1">
                                                     <p className="text-xs font-medium text-gray-600">Total Paid</p>
                                                     <p className="text-sm font-semibold text-green-600">
-                                                        ₹{selectedItem.totalPaidAmount?.toLocaleString('en-IN')}
+                                                        ₹{selectedItem.totalPaidAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                                     </p>
                                                 </div>
                                                 <div className="space-y-1">
                                                     <p className="text-xs font-medium text-gray-600">Outstanding</p>
                                                     <p className="text-sm font-semibold text-red-600">
-                                                        ₹{selectedItem.outstandingAmount?.toLocaleString('en-IN')}
+                                                        ₹{selectedItem.outstandingAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                                     </p>
                                                 </div>
                                                 <div className="space-y-1">
@@ -1207,7 +1218,7 @@ export default function PIApprovals() {
                                         <div className="space-y-1.5 p-3 bg-purple-50 rounded-md border border-purple-100">
                                             <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider">Bill Amount</p>
                                             <p className="text-lg font-bold text-purple-900 flex items-center gap-1.5">
-                                                ₹{selectedItem.billAmount?.toLocaleString('en-IN') || '0'}
+                                                ₹{selectedItem.billAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 }) || '0'}
                                             </p>
                                         </div>
 
@@ -1220,7 +1231,7 @@ export default function PIApprovals() {
                                                     <FormLabel className="font-medium">
                                                         Amount to Pay <span className="text-red-500">*</span>
                                                         <span className="ml-2 text-xs text-gray-400 font-normal">
-                                                            (Max: ₹{selectedItem.outstandingAmount?.toLocaleString('en-IN') || '0'})
+                                                            (Max: ₹{selectedItem.outstandingAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 }) || '0'})
                                                         </span>
                                                     </FormLabel>
                                                     <FormControl>

@@ -792,7 +792,7 @@ export default function MakePayment() {
             accessorKey: 'totalPoAmount',
             header: 'Total PO Amount',
             cell: ({ row }) => (
-                <span className="font-bold text-purple-600">₹{row.original.totalPoAmount?.toLocaleString('en-IN')}</span>
+                <span className="font-bold text-purple-600">₹{row.original.totalPoAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</span>
             )
         },
         {
@@ -800,7 +800,7 @@ export default function MakePayment() {
             header: 'Pay Amount',
             cell: ({ row }) => (
                 <span className="font-bold text-emerald-600">
-                    ₹{row.original.payAmount?.toLocaleString('en-IN')}
+                    ₹{row.original.payAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                 </span>
             )
         },
@@ -809,7 +809,7 @@ export default function MakePayment() {
             header: 'Outstanding',
             cell: ({ row }) => (
                 <span className="font-semibold text-red-600">
-                    ₹{row.original.outstandingAmount?.toLocaleString('en-IN')}
+                    ₹{row.original.outstandingAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                 </span>
             )
         },
@@ -953,7 +953,7 @@ export default function MakePayment() {
             header: 'Amount',
             cell: ({ row }) => (
                 <span className="font-bold text-green-600">
-                    ₹{row.original.amountToBePaid?.toLocaleString('en-IN')}
+                    ₹{row.original.amountToBePaid?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                 </span>
             )
         },
@@ -1147,7 +1147,7 @@ export default function MakePayment() {
                                     <div>
                                         <p className="text-sm font-medium text-gray-600">Outstanding Amount</p>
                                         <p className="text-2xl font-bold text-red-600 mt-1">
-                                            ₹{stats.totalAmount.toLocaleString('en-IN')}
+                                            ₹{stats.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}
                                         </p>
                                     </div>
                                     <DollarSign className="h-10 w-10 text-red-500" />
@@ -1443,11 +1443,11 @@ export default function MakePayment() {
                                 </div>
                                 <div>
                                     <p className="text-gray-500 text-xs mb-0.5">Pay Amount</p>
-                                    <p className="font-bold text-emerald-600 text-base">₹{selectedPaymentItem.payAmount?.toLocaleString('en-IN')}</p>
+                                    <p className="font-bold text-emerald-600 text-base">₹{selectedPaymentItem.payAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</p>
                                 </div>
                                 <div>
                                     <p className="text-gray-500 text-xs mb-0.5">Outstanding</p>
-                                    <p className="font-bold text-red-600 text-base">₹{selectedPaymentItem.outstandingAmount?.toLocaleString('en-IN')}</p>
+                                    <p className="font-bold text-red-600 text-base">₹{selectedPaymentItem.outstandingAmount?.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}</p>
                                 </div>
                             </div>
 
