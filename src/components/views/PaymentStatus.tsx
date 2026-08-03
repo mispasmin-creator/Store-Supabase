@@ -98,6 +98,12 @@ interface POMasterRecord {
     pdf?: string;
 }
 
+// Paisa-level rounding differences (e.g. from GST math) leave residues under ₹1
+// that aren't real dues — treat those as fully paid.
+const OUTSTANDING_TOLERANCE = 1;
+const normalizeOutstanding = (value: number) =>
+    Math.abs(value) < OUTSTANDING_TOLERANCE ? 0 : Math.round(value * 100) / 100;
+
 export default function PIApprovals() {
     const {
         poMasterSheet,
@@ -316,7 +322,7 @@ export default function PIApprovals() {
                         numberOfDays: record.numberOfDays || record.number_of_days || 0,
                         firmNameMatch: record.firmNameMatch || '',
                         totalPaidAmount: totalPaid,
-                        outstandingAmount: Math.round((totalPo - totalPaid) * 100) / 100,
+                        outstandingAmount: normalizeOutstanding(totalPo - totalPaid),
                         status: record.status || 'Pending',
                         pdf: record.pdf || '',
                         file: '',
@@ -398,7 +404,7 @@ export default function PIApprovals() {
                         numberOfDays: Number(payment?.numberOfDays || payment?.number_of_days || 0),
                         firmNameMatch: payment?.firmNameMatch || payment?.firm_name || '',
                         totalPaidAmount: Number(payment?.totalPaidAmount || payment?.total_paid_amount || 0),
-                        outstandingAmount: Number(payment?.outstandingAmount || payment?.outstanding_amount || payment?.payAmount || payment?.pay_amount || 0),
+                        outstandingAmount: normalizeOutstanding(Number(payment?.outstandingAmount || payment?.outstanding_amount || payment?.payAmount || payment?.pay_amount || 0)),
                         status: payment?.status || 'Pending',
                         pdf: payment?.pdf || '',
                         file: payment?.file || '',
