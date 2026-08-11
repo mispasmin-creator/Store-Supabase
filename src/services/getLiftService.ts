@@ -137,7 +137,13 @@ export async function fetchIndentRecords() {
             areaOfUse: r.area_of_use || '',
             timestamp: r.timestamp || '',
             expectedDate: r.expected_req_date || '',
-            approvedQuantity: Number(r.approved_quantity) || 0,
+            // Priority: pending_po_qty > approved_quantity > quantity (matches poService.fetchIndents)
+            approvedQuantity: (() => {
+                const rawPending = Number(r.pending_po_qty) || 0;
+                const rawApproved = Number(r.approved_quantity) || 0;
+                const rawQuantity = Number(r.quantity) || 0;
+                return rawPending > 0 ? rawPending : (rawApproved > 0 ? rawApproved : rawQuantity);
+            })(),
             receivedQuantity: Number(r.received_quantity) || 0,
             uom: r.uom || '',
         }));
@@ -230,7 +236,7 @@ export async function insertStoreInRecord(storeInData: StoreInInsertData) {
 
         const sanitizeIndentNo = (str?: string): string => {
             if (!str) return '';
-            return str.replace(/^SI-0+/i, 'SI-');
+            return str.trim();
         };
 
         const rateVal = parseFloat(String(storeInData.rate || '').replace(/[^0-9.-]/g, '')) || 0;

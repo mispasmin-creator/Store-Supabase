@@ -17,7 +17,7 @@ import {
 } from '../ui/dialog';
 import { Truck, Building, FileText, IndianRupee } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Form, FormControl, FormField, FormItem, FormLabel } from '../ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
 import { PuffLoader as Loader } from 'react-spinners';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -701,10 +701,32 @@ export default () => {
 
     function onError(e: any) {
         console.log(e);
-        if (e.qty) {
-            toast.error(e.qty.message || 'Received quantity cannot exceed lifting quantity');
+
+        const fieldLabels: Record<string, string> = {
+            status: 'Receiving Status',
+            photoOfProduct: 'Photo of Product',
+            damageOrder: 'Physical Check',
+            quantityAsPerBill: 'Quantity As Per Bill',
+            priceAsPerPoCheck: 'Price as per PO',
+        };
+
+        const missing = Object.keys(fieldLabels).filter((key) => e[key]);
+
+        if (e.items) {
+            const itemErrors = Object.values(e.items as Record<string, any>)
+                .filter((itemErr) => itemErr?.receivedQty)
+                .map((itemErr) => itemErr.receivedQty.message || 'Received quantity is required');
+            if (itemErrors.length > 0) {
+                toast.error(itemErrors[0]);
+                return;
+            }
+        }
+
+        if (missing.length > 0) {
+            toast.error(`Please fill required field(s): ${missing.map((k) => fieldLabels[k]).join(', ')}`);
             return;
         }
+
         toast.error('Please fill all required fields');
     }
 
@@ -834,6 +856,7 @@ export default () => {
                                                                                 className="h-8 text-right"
                                                                             />
                                                                         </FormControl>
+                                                                    <FormMessage />
                                                                     </FormItem>
                                                                 )}
                                                             />
@@ -868,6 +891,7 @@ export default () => {
                                                         </SelectContent>
                                                     </Select>
                                                 </FormControl>
+                                                <FormMessage />
                                             </FormItem>
                                         )}
                                     />
@@ -901,6 +925,7 @@ export default () => {
                                                     }
                                                 />
                                             </FormControl>
+                                            <FormMessage />
                                         </FormItem>
                                     )}
                                 />
@@ -911,7 +936,7 @@ export default () => {
                                         name="damageOrder"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Physical Check</FormLabel>
+                                                <FormLabel>Physical Check <span className="text-destructive">*</span></FormLabel>
                                                 <FormControl>
                                                     <Select
                                                         onValueChange={field.onChange}
@@ -926,6 +951,7 @@ export default () => {
                                                         </SelectContent>
                                                     </Select>
                                                 </FormControl>
+                                                <FormMessage />
                                             </FormItem>
                                         )}
                                     />
@@ -935,7 +961,7 @@ export default () => {
                                         name="quantityAsPerBill"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Quantity As Per Bill</FormLabel>
+                                                <FormLabel>Quantity As Per Bill <span className="text-destructive">*</span></FormLabel>
                                                 <FormControl>
                                                     <Select
                                                         onValueChange={field.onChange}
@@ -950,6 +976,7 @@ export default () => {
                                                         </SelectContent>
                                                     </Select>
                                                 </FormControl>
+                                                <FormMessage />
                                             </FormItem>
                                         )}
                                     />
@@ -959,7 +986,7 @@ export default () => {
                                         name="priceAsPerPoCheck"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel className="font-semibold">Price as per PO?</FormLabel>
+                                                <FormLabel className="font-semibold">Price as per PO? <span className="text-destructive">*</span></FormLabel>
                                                 <FormControl>
                                                     <Select
                                                         onValueChange={field.onChange}
@@ -974,6 +1001,7 @@ export default () => {
                                                         </SelectContent>
                                                     </Select>
                                                 </FormControl>
+                                                <FormMessage />
                                             </FormItem>
                                         )}
                                     />
