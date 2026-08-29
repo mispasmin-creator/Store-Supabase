@@ -71,6 +71,8 @@ interface PIPendingData {
     billAmount?: number;
     rowIds: number[];
     liftNumber?: string;
+    advanceAmount?: number;
+    advancePercent?: number;
 }
 
 interface POMasterRecord {
@@ -1212,6 +1214,25 @@ export default function PIApprovals() {
                                                         {selectedItem.status || 'Pending'}
                                                     </div>
                                                 </div>
+                                                {/* Show Advance Amount only when payment term is Partly Advance/PI */}
+                                                {selectedItem.paymentTerms && (selectedItem.paymentTerms.toLowerCase().includes('partly') && (selectedItem.paymentTerms.toLowerCase().includes('advance') || selectedItem.paymentTerms.toLowerCase().includes('pi'))) && (
+                                                    <div className="space-y-1 col-span-2 md:col-span-3 mt-1 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                                        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Advance Amount (at PO Creation)</p>
+                                                        <div className="flex items-center gap-4 flex-wrap">
+                                                            <p className="text-base font-bold text-amber-900">
+                                                                ₹{(selectedItem.advanceAmount ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}
+                                                            </p>
+                                                            {(selectedItem.advancePercent ?? 0) > 0 && (
+                                                                <span className="text-xs text-amber-600 font-medium bg-amber-100 px-2 py-0.5 rounded-full">
+                                                                    {selectedItem.advancePercent}% of Subtotal
+                                                                </span>
+                                                            )}
+                                                            <span className="text-xs text-amber-600">
+                                                                Payment Terms: {selectedItem.paymentTerms}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </CardContent>
                                     </Card>

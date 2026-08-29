@@ -869,14 +869,15 @@ const CreatePO = () => {
                     })(),
                     advanceAmount: (() => {
                         const pt = values.paymentTerms.toLowerCase();
-                        // itemSubtotal = taxable amount before GST
                         const base = (v.rate || 0) * (v.quantity || 0);
                         const discounted = base - (base * (v.discount || 0)) / 100;
                         const pkg = v.packaging || 0;
                         const fwd = v.forwarding || 0;
                         const service = v.serviceCharge || 0;
                         const itemSubtotal = discounted + pkg + fwd + service;
-                        if (pt.includes('100%') || pt === 'advance') return parseFloat((itemSubtotal).toFixed(2));
+                        // 100% advance = Full Grand Total (GST sahit)
+                        if (pt.includes('100%') || pt === 'advance') return parseFloat((itemAmount).toFixed(2));
+                        // Partly Advance/PI = % of Subtotal (GST ke bina)
                         if (pt.includes('partly') && (pt.includes('advance') || pt.includes('pi'))) return parseFloat(((itemSubtotal * (values.numberOfDays || 0)) / 100).toFixed(2));
                         return 0;
                     })()
