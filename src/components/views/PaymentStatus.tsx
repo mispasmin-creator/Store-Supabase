@@ -489,6 +489,9 @@ export default function PIApprovals() {
                     if (item.product && !existingProducts.includes(item.product.trim())) {
                         existing.product = [...existingProducts, item.product.trim()].join(', ');
                     }
+
+                    // Sum advanceAmount across all items of same PO
+                    existing.advanceAmount = parseFloat(((existing.advanceAmount ?? 0) + (item.advanceAmount ?? 0)).toFixed(2));
                 }
             });
 
@@ -795,6 +798,26 @@ export default function PIApprovals() {
             cell: ({ row }) => (
                 <span className="text-sm">{row.original.paymentTerms || '-'}</span>
             ),
+        },
+        {
+            accessorKey: 'advanceAmount',
+            header: () => <div className="text-right">Advance Amt</div>,
+            cell: ({ row }) => {
+                const item = row.original;
+                const pt = (item.paymentTerms || '').toLowerCase();
+                const isAdvanceTerm = pt.includes('partly') && (pt.includes('advance') || pt.includes('pi'));
+                if (!isAdvanceTerm) return <span className="text-gray-400 text-sm text-right block">-</span>;
+                return (
+                    <div className="text-right">
+                        <span className="font-semibold text-amber-700 text-sm">
+                            ₹{(item.advanceAmount ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}
+                        </span>
+                        {(item.advancePercent ?? 0) > 0 && (
+                            <div className="text-[10px] text-amber-500 font-medium">{item.advancePercent}%</div>
+                        )}
+                    </div>
+                );
+            },
         },
         {
             accessorKey: 'deliveryDate',
@@ -1214,25 +1237,7 @@ export default function PIApprovals() {
                                                         {selectedItem.status || 'Pending'}
                                                     </div>
                                                 </div>
-                                                {/* Show Advance Amount only when payment term is Partly Advance/PI */}
-                                                {selectedItem.paymentTerms && (selectedItem.paymentTerms.toLowerCase().includes('partly') && (selectedItem.paymentTerms.toLowerCase().includes('advance') || selectedItem.paymentTerms.toLowerCase().includes('pi'))) && (
-                                                    <div className="space-y-1 col-span-2 md:col-span-3 mt-1 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                                                        <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Advance Amount (at PO Creation)</p>
-                                                        <div className="flex items-center gap-4 flex-wrap">
-                                                            <p className="text-base font-bold text-amber-900">
-                                                                ₹{(selectedItem.advanceAmount ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 })}
-                                                            </p>
-                                                            {(selectedItem.advancePercent ?? 0) > 0 && (
-                                                                <span className="text-xs text-amber-600 font-medium bg-amber-100 px-2 py-0.5 rounded-full">
-                                                                    {selectedItem.advancePercent}% of Subtotal
-                                                                </span>
-                                                            )}
-                                                            <span className="text-xs text-amber-600">
-                                                                Payment Terms: {selectedItem.paymentTerms}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                )}
+
                                             </div>
                                         </CardContent>
                                     </Card>

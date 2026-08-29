@@ -447,7 +447,7 @@ export default ({
                                 <View style={[styles.totalRow, { backgroundColor: '#fdf2f2', borderTop: '1 solid #374151' }]}>
                                     <Text style={[styles.totalLabel, { color: '#991b1b' }]}>Advance ({numberOfDays}%)</Text>
                                     <Text style={[styles.totalValue, { color: '#991b1b' }]}>
-                                        {((grandTotal * (numberOfDays || 0)) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        {((total * (numberOfDays || 0)) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </Text>
                                 </View>
                             )}
@@ -467,7 +467,7 @@ export default ({
                             <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#334155' }}>Payment Terms : </Text>
                             <Text style={{ fontSize: 9, color: '#475569', marginLeft: 4 }}>
                                 {(paymentTerms?.toLowerCase().includes('partly') && (paymentTerms?.toLowerCase().includes('advance') || paymentTerms?.toLowerCase().includes('pi')))
-                                    ? `Advance Payment (${numberOfDays}%) of ₹${((grandTotal * (numberOfDays || 0)) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will be made.`
+                                    ? `Advance Payment (${numberOfDays}%) of ₹${((total * (numberOfDays || 0)) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will be made.`
                                     : paymentTerms === 'After Delivery'
                                         ? `Payment will be made ${numberOfDays} days after delivery.`
                                         : paymentTerms || 'N/A'}

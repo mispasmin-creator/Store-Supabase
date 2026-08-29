@@ -108,6 +108,8 @@ export async function fetchPoMaster() {
             emailSendStatus: r.email_send_status || '',
             preparedBy: r.prepared_by || '',
             approvedBy: r.approved_by || '',
+            advanceAmount: Number(r.advance_amount) || 0,
+            advancePercent: Number(r.advance_percent) || 0,
         }));
     } catch (error) {
         console.error('Error fetching PO master:', error);
