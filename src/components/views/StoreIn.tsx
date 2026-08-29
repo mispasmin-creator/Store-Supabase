@@ -600,7 +600,7 @@ export default () => {
             indentNo: z.string(),
             productName: z.string(),
             qty: z.number(),
-            receivedQty: z.coerce.number().min(1, 'Received quantity is required'),
+            receivedQty: z.coerce.number().min(0.001, 'Received quantity is required'),
         })),
     });
 

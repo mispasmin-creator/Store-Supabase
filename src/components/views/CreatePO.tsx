@@ -869,8 +869,15 @@ const CreatePO = () => {
                     })(),
                     advanceAmount: (() => {
                         const pt = values.paymentTerms.toLowerCase();
-                        if (pt.includes('100%') || pt === 'advance') return itemAmount;
-                        if (pt.includes('partly') && (pt.includes('advance') || pt.includes('pi'))) return (itemAmount * (values.numberOfDays || 0)) / 100;
+                        // itemSubtotal = taxable amount before GST
+                        const base = (v.rate || 0) * (v.quantity || 0);
+                        const discounted = base - (base * (v.discount || 0)) / 100;
+                        const pkg = v.packaging || 0;
+                        const fwd = v.forwarding || 0;
+                        const service = v.serviceCharge || 0;
+                        const itemSubtotal = discounted + pkg + fwd + service;
+                        if (pt.includes('100%') || pt === 'advance') return parseFloat((itemSubtotal).toFixed(2));
+                        if (pt.includes('partly') && (pt.includes('advance') || pt.includes('pi'))) return parseFloat(((itemSubtotal * (values.numberOfDays || 0)) / 100).toFixed(2));
                         return 0;
                     })()
                 };
@@ -1167,18 +1174,9 @@ const CreatePO = () => {
                                                             const service = item.serviceCharge || 0;
                                                             return sum + discounted + pkg + fwd + service;
                                                         }, 0);
-                                                        const gst = indents.reduce((sum, item) => {
-                                                            const base = (item.rate || 0) * (item.quantity || 0);
-                                                            const discounted = base - (base * (item.discount || 0)) / 100;
-                                                            const pkg = item.packaging || 0;
-                                                            const fwd = item.forwarding || 0;
-                                                            const service = item.serviceCharge || 0;
-                                                            const taxable = discounted + pkg + fwd + service;
-                                                            return sum + (taxable * (item.gst || 0)) / 100;
-                                                        }, 0);
-                                                        const grandTotal = subtotal + gst;
                                                         const days = form.watch('numberOfDays') || 0;
-                                                        return ((grandTotal * days) / 100).toFixed(2);
+                                                        // Advance % on Subtotal (before GST)
+                                                        return ((subtotal * days) / 100).toFixed(2);
                                                     })()}
                                                 </div>
                                             </div>
