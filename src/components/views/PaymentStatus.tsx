@@ -561,56 +561,30 @@ export default function PIApprovals() {
                 const paymentRecords = Array.isArray(paymentsSheet) ? paymentsSheet : [];
                 const historyRecords = Array.isArray(paymentHistorySheet) ? paymentHistorySheet : [];
 
-                // 1. Check if it exists in the payments table (already processed for payment)
-                const isProcessTable = paymentRecords.some(p => {
-                    const poMatch = (p.poNumber || p.po_number) === item.poNumber;
-                    // Check for bill match in remark or direct match if available
-                    const billMatch = item.billNo
-                        ? (p.remark || '').includes(`Bill: ${item.billNo}`) || (p as any).billNo === item.billNo || (p as any).bill_no === item.billNo
-                        : true;
-                    // If it has a planned date or is pending/approved, it's processed
-                    const statusVal = String(p.status1 || p.status || '').toLowerCase();
-                    const isProcessedStatus = ['pending', 'approved', 'complete', 'completed', 'process'].includes(statusVal);
+                // Guard: if outstanding is 0 or less, show as paid (should not happen in pending tab, but safety check)
+                if ((item.outstandingAmount ?? 0) <= 0) {
+                    return (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-lg">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            Paid
+                        </span>
+                    );
+                }
 
-                    return poMatch && billMatch && isProcessedStatus;
-                });
-
-                // 2. Check if it exists in the payment history (already paid)
-                const isInHistory = historyRecords.some(h => {
-                    const poMatch = (h.po_number || (h as any).poNumber) === item.poNumber;
-                    const billMatch = item.billNo
-                        ? (h.bill_no || (h as any).billNo) === item.billNo
-                        : true;
-                    return poMatch && billMatch;
-                });
-
-                const isProcessed = isProcessTable || isInHistory;
-
+                // Outstanding > 0 means payment is still due — always show "Process Payment"
+                // Prior partial/advance payment entries in payments table do NOT mean fully processed
                 return (
                     <Button
                         variant="outline"
                         size="sm"
-                        disabled={isProcessed}
                         onClick={() => {
                             setSelectedItem(item);
                             setOpenDialog(true);
                         }}
-                        className={`border-purple-200 text-purple-700 shadow-sm transition-all ${isProcessed
-                            ? 'opacity-40 cursor-not-allowed grayscale'
-                            : 'hover:bg-purple-50 hover:text-purple-800'
-                            }`}
+                        className="border-purple-200 text-purple-700 shadow-sm hover:bg-purple-50 hover:text-purple-800 transition-all"
                     >
-                        {isProcessed ? (
-                            <>
-                                <CheckCircle className="mr-2 h-3.5 w-3.5" />
-                                Processed
-                            </>
-                        ) : (
-                            <>
-                                <FileText className="mr-2 h-3.5 w-3.5" />
-                                Process Payment
-                            </>
-                        )}
+                        <FileText className="mr-2 h-3.5 w-3.5" />
+                        Process Payment
                     </Button>
                 );
             },
@@ -848,6 +822,20 @@ export default function PIApprovals() {
                 </div>
             ),
         },
+    ];
+
+    // ✅ Completed tab columns — No "Process Payment" button, only read-only "Fully Paid" badge
+    const completedColumns: ColumnDef<PIPendingData>[] = [
+        {
+            header: 'Status',
+            cell: () => (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold rounded-lg">
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    Fully Paid
+                </span>
+            ),
+        },
+        ...pendingColumns.slice(1), // reuse all other columns except the Action column
     ];
 
     // ✅ UPDATED SCHEMA - Pay Amount, File, Remarks
@@ -1110,7 +1098,7 @@ export default function PIApprovals() {
 
                                 <DataTable
                                     data={filteredData}
-                                    columns={pendingColumns}
+                                    columns={activeTab === 'completed' ? completedColumns : pendingColumns}
                                     searchFields={['poNumber', 'partyName', 'product', 'internalCode', 'firmNameMatch']}
                                     dataLoading={poMasterLoading}
                                     className="border rounded-lg"
