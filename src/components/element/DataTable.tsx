@@ -40,13 +40,55 @@ interface DataTableProps<TData, TValue> {
     meta?: any;
 }
 
+function matchesValue(val: any, query: string, depth = 0): boolean {
+    if (val === null || val === undefined) return false;
+    if (depth > 3) return false;
+
+    if (typeof val === 'string' || typeof val === 'number') {
+        return String(val).toLowerCase().includes(query);
+    }
+    if (typeof val === 'boolean') {
+        return false;
+    }
+    if (Array.isArray(val)) {
+        return val.some((item) => matchesValue(item, query, depth + 1));
+    }
+    if (typeof val === 'object') {
+        return Object.entries(val).some(([k, v]) => {
+            // Avoid matching image URLs, file links, and database internal IDs
+            if (/image|url|photo|file|icon|^id$|^_id$/i.test(k)) return false;
+            return matchesValue(v, query, depth + 1);
+        });
+    }
+    return false;
+}
+
 function globalFilterFn<TData>(row: TData, columnIds: string[], filterValue: string) {
-    return columnIds.some((columnId) => {
-        const value = (row as any)[columnId];
-        return String(value ?? '')
-            .toLowerCase()
-            .includes(filterValue.toLowerCase());
-    });
+    const query = String(filterValue ?? '').trim().toLowerCase();
+    if (!query) return true;
+    if (!row || typeof row !== 'object') return false;
+
+    // 1. Check explicitly specified searchFields (and support arrays like products, numbers, etc.)
+    if (Array.isArray(columnIds) && columnIds.length > 0) {
+        const matched = columnIds.some((columnId) => {
+            const value = (row as any)[columnId];
+            return matchesValue(value, query);
+        });
+        if (matched) return true;
+    }
+
+    // 2. Also check other visible data properties on the row object (e.g. poNumber, po_number, liftNumber, etc.)
+    for (const [key, value] of Object.entries(row as any)) {
+        // Skip internal/heavy fields
+        if (/image|url|photo|file|icon|^id$|^_id$|timestamp|created|updated/i.test(key)) continue;
+        if (typeof value === 'function') continue;
+
+        if (matchesValue(value, query)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 export default function DataTable<TData, TValue>({

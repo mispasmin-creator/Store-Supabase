@@ -1018,7 +1018,7 @@ export default function PcReportTable() {
             <DataTable
               data={filteredData}
               columns={pendingColumns}
-              searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+              searchFields={['poNumber', 'indentNumber', 'productName', 'products', 'partyName', 'billNo', 'liftNumber', 'firmNameMatch']}
               dataLoading={dataLoading}
               className='h-[70dvh]'
             />
@@ -1028,7 +1028,7 @@ export default function PcReportTable() {
             <DataTable
               data={filteredData}
               columns={pendingColumns}
-              searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+              searchFields={['poNumber', 'indentNumber', 'productName', 'products', 'partyName', 'billNo', 'liftNumber', 'firmNameMatch']}
               dataLoading={dataLoading}
               className='h-[70dvh]'
             />
@@ -1038,7 +1038,7 @@ export default function PcReportTable() {
             <DataTable
               data={filteredData}
               columns={pendingColumns}
-              searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+              searchFields={['poNumber', 'indentNumber', 'productName', 'products', 'partyName', 'billNo', 'liftNumber', 'firmNameMatch']}
               dataLoading={dataLoading}
               className='h-[70dvh]'
             />
@@ -1048,7 +1048,7 @@ export default function PcReportTable() {
             <DataTable
               data={filteredData}
               columns={pendingColumns}
-              searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+              searchFields={['poNumber', 'indentNumber', 'productName', 'products', 'partyName', 'billNo', 'liftNumber', 'firmNameMatch']}
               dataLoading={dataLoading}
               className='h-[70dvh]'
             />
@@ -1058,7 +1058,7 @@ export default function PcReportTable() {
             <DataTable
               data={filteredData}
               columns={pendingColumns}
-              searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+              searchFields={['poNumber', 'indentNumber', 'productName', 'products', 'partyName', 'billNo', 'liftNumber', 'firmNameMatch']}
               dataLoading={dataLoading}
               className='h-[70dvh]'
             />
@@ -1069,7 +1069,7 @@ export default function PcReportTable() {
             <DataTable
               data={filteredData}
               columns={completedColumns}
-              searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+              searchFields={['poNumber', 'indentNumber', 'productName', 'products', 'partyName', 'billNo', 'liftNumber', 'firmNameMatch']}
               dataLoading={dataLoading}
               className='h-[70dvh]'
             />

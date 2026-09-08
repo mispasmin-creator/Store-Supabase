@@ -91,11 +91,13 @@ export default function TallyEntry() {
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             filtered = filtered.filter(item =>
-                item.indentNumber.toLowerCase().includes(term) ||
-                item.productName.toLowerCase().includes(term) ||
-                item.billNo.toLowerCase().includes(term) ||
+                (item.poNumber && item.poNumber.toLowerCase().includes(term)) ||
+                (item.liftNumber && item.liftNumber.toLowerCase().includes(term)) ||
+                (item.indentNumber && item.indentNumber.toLowerCase().includes(term)) ||
+                (item.productName && item.productName.toLowerCase().includes(term)) ||
+                (item.billNo && item.billNo.toLowerCase().includes(term)) ||
                 (item.partyName && item.partyName.toLowerCase().includes(term)) ||
-                item.firmNameMatch.toLowerCase().includes(term)
+                (item.firmNameMatch && item.firmNameMatch.toLowerCase().includes(term))
             );
         }
         return filtered;
@@ -109,11 +111,13 @@ export default function TallyEntry() {
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
             filtered = filtered.filter(item =>
-                item.indentNumber.toLowerCase().includes(term) ||
-                item.productName.toLowerCase().includes(term) ||
-                item.billNo.toLowerCase().includes(term) ||
+                (item.poNumber && item.poNumber.toLowerCase().includes(term)) ||
+                (item.liftNumber && item.liftNumber.toLowerCase().includes(term)) ||
+                (item.indentNumber && item.indentNumber.toLowerCase().includes(term)) ||
+                (item.productName && item.productName.toLowerCase().includes(term)) ||
+                (item.billNo && item.billNo.toLowerCase().includes(term)) ||
                 (item.partyName && item.partyName.toLowerCase().includes(term)) ||
-                item.firmNameMatch.toLowerCase().includes(term)
+                (item.firmNameMatch && item.firmNameMatch.toLowerCase().includes(term))
             );
         }
         return filtered;
@@ -460,7 +464,7 @@ export default function TallyEntry() {
                         <DataTable
                             data={filteredPendingData}
                             columns={pendingColumns}
-                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
+                            searchFields={['poNumber', 'liftNumber', 'indentNumber', 'productName', 'partyName', 'billNo', 'firmNameMatch']}
                             dataLoading={dataLoading}
                         />
                     </TabsContent>
@@ -468,7 +472,7 @@ export default function TallyEntry() {
                         <DataTable
                             data={filteredHistoryData}
                             columns={historyColumns}
-                            searchFields={['indentNumber', 'productName', 'partyName', 'billNo', 'status1', 'firmNameMatch']}
+                            searchFields={['poNumber', 'liftNumber', 'indentNumber', 'productName', 'partyName', 'billNo', 'status1', 'firmNameMatch']}
                             dataLoading={dataLoading}
                         />
                     </TabsContent>
