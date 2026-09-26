@@ -51,6 +51,7 @@ import type { PaymentsSheet } from '@/types/sheets';
 
 import { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
 
 interface SheetsState {
     updateReceivedSheet: () => void;
@@ -134,6 +135,9 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     const [paymentHistorySheet, setPaymentHistorySheet] = useState<PaymentHistory[]>([]);
     const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
 
+    // Row count of payment_history table (Make Payment page's History tab)
+    const [makePaymentHistoryCount, setMakePaymentHistoryCount] = useState(0);
+
     const pcReportSheet = useMemo(() => {
         return calculatePcReportCounts(
             indentSheet,
@@ -142,9 +146,10 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             fullkittingSheet,
             tallyEntrySheet,
             paymentsSheet,
-            poMasterSheet
+            poMasterSheet,
+            makePaymentHistoryCount
         );
-    }, [indentSheet, storeSheet, issueSheet, fullkittingSheet, tallyEntrySheet, paymentsSheet, poMasterSheet]);
+    }, [indentSheet, storeSheet, issueSheet, fullkittingSheet, tallyEntrySheet, paymentsSheet, poMasterSheet, makePaymentHistoryCount]);
 
     const sheets = storeSheet;
 
@@ -217,6 +222,21 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     actual1: r.actual1,
                     firmNameMatch: r.firm_name_match,
                     approvedQuantity: r.approved_quantity,
+                    receivedQuantity: Number(r.received_quantity) || 0,
+                    rawPendingPoQty: Number(r.pending_po_qty) || 0,
+                    poRequredDb: r.po_requred || '',
+                    noDay: r.no_day,
+                    vendorName1: r.vendor_name1,
+                    vendorName2: r.vendor_name2,
+                    vendorName3: r.vendor_name3,
+                    rate1: r.rate1,
+                    rate2: r.rate2,
+                    rate3: r.rate3,
+                    paymentTerm1: r.payment_term1,
+                    approvedRate: r.approved_rate,
+                    approvedPaymentTerm: r.approved_payment_term,
+                    expectedReqDate: r.expected_req_date,
+                    deliveryDate: r.delivery_date,
                     timestamp: r.timestamp,
                     planned2: r.planned2,
                     actual2: r.actual2,
@@ -346,6 +366,12 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     function updatePaymentHistorySheet() {
         setPaymentHistoryLoading(true);
+        supabase
+            .from('payment_history')
+            .select('id', { count: 'exact', head: true })
+            .then(({ count, error }) => {
+                if (!error) setMakePaymentHistoryCount(count || 0);
+            });
         fetchPaymentHistory()
             .then((res) => {
                 setPaymentHistorySheet(res as unknown as PaymentHistory[]);

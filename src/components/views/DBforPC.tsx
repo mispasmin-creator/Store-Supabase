@@ -7,7 +7,11 @@ import Heading from '../element/Heading';
 import type { PcReportSheet } from '@/types/sheets';
 import { useSheets } from '@/context/SheetsContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { FileDown, Printer } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { downloadRowsAsCsv, printRowsAsPdf } from '@/lib/pcReportExport';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from 'recharts';
 
 // ── Stage icon + color config ──────────────────────────────
@@ -39,13 +43,28 @@ const FIRMS: { key: keyof PcReportSheet; label: string; hex: string; pill: strin
 ];
 
 // ── Single stage card ──────────────────────────────────────
-function StageCard({ stage }: { stage: PcReportSheet }) {
+function StageCard({ stage, isAdmin, exportFirm }: { stage: PcReportSheet; isAdmin: boolean; exportFirm: string }) {
     const cfg = STAGE_CONFIG[stage.stage] ?? { icon: <Activity size={18} />, color: 'text-gray-600', bg: 'bg-gray-50', border: 'border-gray-200' };
     const pending = Number(stage.totalPending) || 0;
     const complete = Number(stage.totalComplete) || 0;
     const total = pending + complete;
     const pct = total > 0 ? Math.round((complete / total) * 100) : 100;
     const allClear = pending === 0;
+    // Admin-only export of the page's Pending tab rows (optionally for one firm)
+    const exportRows = () =>
+        (stage.pendingRows || []).filter(r => exportFirm === 'ALL' || String(r['__firm'] || '').toUpperCase() === exportFirm);
+    const handleCsv = () => {
+        const rows = exportRows();
+        if (rows.length === 0) return toast.error('No pending data to export');
+        downloadRowsAsCsv(stage.stage, rows);
+    };
+    const handlePdf = () => {
+        const rows = exportRows();
+        if (rows.length === 0) return toast.error('No pending data to export');
+        if (!printRowsAsPdf(stage.stage, rows, exportFirm === 'ALL' ? 'All firms.' : `Firm: ${exportFirm}.`)) {
+            toast.error('Popup blocked - allow popups to print PDF');
+        }
+    };
     const numColor = allClear ? 'text-green-600' : pending > 15 ? 'text-red-600' : pending > 7 ? 'text-orange-500' : 'text-amber-500';
 
     return (
@@ -99,6 +118,17 @@ function StageCard({ stage }: { stage: PcReportSheet }) {
                     <span className="text-[9px] text-muted-foreground italic">All firms clear</span>
                 )}
             </div>
+
+            {isAdmin && (
+                <div className="flex gap-1 pt-1 border-t">
+                    <button type="button" onClick={handlePdf} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-semibold rounded border px-1 py-1 hover:bg-muted">
+                        <Printer size={12} /> PDF
+                    </button>
+                    <button type="button" onClick={handleCsv} className="flex-1 flex items-center justify-center gap-1 text-[10px] font-semibold rounded border px-1 py-1 hover:bg-muted">
+                        <FileDown size={12} /> CSV
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
@@ -106,6 +136,9 @@ function StageCard({ stage }: { stage: PcReportSheet }) {
 // ── Main component ─────────────────────────────────────────
 export default function PcReportTable() {
     const { pcReportSheet, allLoading } = useSheets();
+    const { user } = useAuth();
+    const isAdmin = (user as any)?.administrate === true || (user as any)?.administrate === 'true';
+    const [exportFirm, setExportFirm] = useState('ALL');
 
     const summary = useMemo(() => {
         const totalPending = pcReportSheet.reduce((s, r) => s + (Number(r.totalPending) || 0), 0);
@@ -221,7 +254,18 @@ export default function PcReportTable() {
 
                 {/* ── Stage Cards ── */}
                 <div>
-                    <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Stage-wise Breakdown</h2>
+                    <div className="flex items-center justify-between mb-2 gap-2">
+                        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Stage-wise Breakdown</h2>
+                        {isAdmin && (
+                            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                Export firm:
+                                <select value={exportFirm} onChange={e => setExportFirm(e.target.value)} className="border rounded px-2 py-1 text-xs bg-background text-foreground">
+                                    <option value="ALL">All firms</option>
+                                    {FIRMS.map(f => <option key={f.label} value={f.label}>{f.label}</option>)}
+                                </select>
+                            </label>
+                        )}
+                    </div>
                     {allLoading ? (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                             {Array.from({ length: 10 }).map((_, i) => (
@@ -231,7 +275,7 @@ export default function PcReportTable() {
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                             {pcReportSheet.map((stage, i) => (
-                                <StageCard key={i} stage={stage} />
+                                <StageCard key={i} stage={stage} isAdmin={isAdmin} exportFirm={exportFirm} />
                             ))}
                         </div>
                     )}

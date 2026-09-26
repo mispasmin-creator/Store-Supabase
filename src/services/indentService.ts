@@ -60,10 +60,24 @@ export interface IndentRecord {
     po_qty?: number;
     received_quantity?: number;
     pending_qty?: number;
+    pending_po_qty?: number;
+    po_requred?: string;
     vendor1_rank?: string;
     vendor2_rank?: string;
     vendor3_rank?: string;
     approved_vendor_name?: string;
+    // Extra columns used by the PC Report export (mirror the pages' tables)
+    vendor_name1?: string;
+    vendor_name2?: string;
+    vendor_name3?: string;
+    rate1?: number;
+    rate2?: number;
+    rate3?: number;
+    payment_term1?: string;
+    approved_rate?: number;
+    approved_payment_term?: string;
+    expected_req_date?: string;
+    delivery_date?: string;
 }
 
 // ==================== FETCH FUNCTIONS ====================
@@ -132,6 +146,17 @@ export async function fetchIndentRecords(): Promise<IndentRecord[]> {
             vendor2_rank: r.vendor2_rank || '',
             vendor3_rank: r.vendor3_rank || '',
             approved_vendor_name: r.approved_vendor_name || '',
+            vendor_name1: r.vendor_name1 || '',
+            vendor_name2: r.vendor_name2 || '',
+            vendor_name3: r.vendor_name3 || '',
+            rate1: Number(r.rate1) || 0,
+            rate2: Number(r.rate2) || 0,
+            rate3: Number(r.rate3) || 0,
+            payment_term1: r.payment_term1 || '',
+            approved_rate: Number(r.approved_rate) || 0,
+            approved_payment_term: r.approved_payment_term || '',
+            expected_req_date: r.expected_req_date || '',
+            delivery_date: r.delivery_date || '',
         }));
     } catch (error) {
         console.error('Error fetching indent records:', error);

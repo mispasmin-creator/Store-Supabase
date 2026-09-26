@@ -574,6 +574,8 @@ export type PcReportSheet = {
     pendingPurab: string | number;
     pendingPmmpl: string | number;
     pendingRefrasynth: string | number;
+    /** Rows of the page's Pending tab (used by the admin CSV / PDF export) */
+    pendingRows?: Record<string, string | number>[];
 };
 
 
