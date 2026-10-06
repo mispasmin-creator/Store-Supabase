@@ -1,5 +1,6 @@
 import { FileText, Building, DollarSign, CheckCircle, AlertCircle, ExternalLink, CheckSquare, XSquare, History, Download, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { formatDateTime } from '@/lib/dateUtils';
 import { useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
@@ -909,6 +910,28 @@ export default function MakePayment() {
                     </div>
                 );
             }
+        },
+        {
+            header: 'Planned Date',
+            cell: ({ row }) => (
+                <span className="text-xs font-mono font-medium text-slate-700 whitespace-nowrap">
+                    {formatDateTime(row.original.planned)}
+                </span>
+            ),
+        },
+        {
+            header: 'Actual Date',
+            cell: ({ row }) => (
+                row.original.actual ? (
+                    <span className="text-xs font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                        {formatDateTime(row.original.actual)}
+                    </span>
+                ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                        Pending
+                    </span>
+                )
+            ),
         }
     ];
 

@@ -33,6 +33,8 @@ import { Pill } from '../ui/pill';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { fetchUsers, createUser, updateUser, deleteUser, type UserRecord } from '@/services/userService';
 import { fetchMasterOptions } from '@/services/masterService';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import TatPage from './TatPage';
 
 interface UsersTableData {
     id: number;
@@ -382,30 +384,43 @@ export default () => {
                 <div>
                     <Heading
                         heading="Administration"
-                        subtext="Manage permissions and user for the app"
+                        subtext="Manage permissions, users, and stage-wise TAT for the app"
                     >
                         <ShieldUser size={50} className="text-primary" />
                     </Heading>
 
-                    <DataTable
-                        data={tableData}
-                        columns={columns}
-                        searchFields={['name', 'username', 'permissions', 'firmNameMatch']}
-                        dataLoading={dataLoading}
-                        className="h-[calc(100dvh-180px)] overflow-hidden"
-                        extraActions={
-                            <Button
-                                className="h-full px-4"
-                                onClick={() => {
-                                    setOpenDialog(true);
-                                    setSelectedUser(null);
-                                }}
-                            >
-                                <UserPlus className="mr-2 h-4 w-4" />
-                                Add New User
-                            </Button>
-                        }
-                    />
+                    <Tabs defaultValue="users" className="w-full">
+                        <TabsList className="mb-4 grid w-full max-w-md grid-cols-2">
+                            <TabsTrigger value="users">User Management</TabsTrigger>
+                            <TabsTrigger value="tat">TAT Management</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="users">
+                            <DataTable
+                                data={tableData}
+                                columns={columns}
+                                searchFields={['name', 'username', 'permissions', 'firmNameMatch']}
+                                dataLoading={dataLoading}
+                                className="h-[calc(100dvh-240px)] overflow-hidden"
+                                extraActions={
+                                    <Button
+                                        className="h-full px-4"
+                                        onClick={() => {
+                                            setOpenDialog(true);
+                                            setSelectedUser(null);
+                                        }}
+                                    >
+                                        <UserPlus className="mr-2 h-4 w-4" />
+                                        Add New User
+                                    </Button>
+                                }
+                            />
+                        </TabsContent>
+
+                        <TabsContent value="tat">
+                            <TatPage />
+                        </TabsContent>
+                    </Tabs>
                 </div>
 
                 <DialogContent className="sm:max-w-3xl">

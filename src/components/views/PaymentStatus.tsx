@@ -1,5 +1,6 @@
 import { Package2, FileText, Building, DollarSign, Calendar as CalendarIcon, Upload, CheckCircle, AlertCircle, Download, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { formatDateTime } from '@/lib/dateUtils';
 import { useEffect, useState } from 'react';
 import type { ColumnDef, Row } from '@tanstack/react-table';
 import DataTable from '../element/DataTable';
@@ -820,6 +821,28 @@ export default function PIApprovals() {
                     <Building className="h-3.5 w-3.5 text-slate-400" />
                     {row.original.firmNameMatch || '-'}
                 </div>
+            ),
+        },
+        {
+            header: 'Planned Date',
+            cell: ({ row }) => (
+                <span className="text-xs font-mono font-medium text-slate-700 whitespace-nowrap">
+                    {formatDateTime(row.original.timestamp)}
+                </span>
+            ),
+        },
+        {
+            header: 'Actual Date',
+            cell: ({ row }) => (
+                row.original.status === 'Completed' || (row.original.outstandingAmount ?? 0) <= 0 ? (
+                    <span className="text-xs font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                        {formatDateTime(row.original.timestamp)}
+                    </span>
+                ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                        Pending
+                    </span>
+                )
             ),
         },
     ];

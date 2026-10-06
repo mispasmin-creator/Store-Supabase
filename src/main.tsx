@@ -51,6 +51,7 @@ import {
     Send,
     BarChart,
     FileWarning,
+    Timer,
 } from 'lucide-react';
 import type { UserPermissions } from './types/sheets';
 import Administration from './components/views/Administration';
@@ -79,6 +80,7 @@ import FullKiting from './components/views/FullKiting';
 import PendingPo from './components/views/PendingPo';
 import PaymentStatus from './components/views/PaymentStatus';
 import HodStoreApproval from './components/views/HodStoreApproval';
+import TatPage from './components/views/TatPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { loggedIn, loading } = useAuth();
@@ -822,6 +824,7 @@ const routes: RouteAttributes[] = [
             return data.reduce((sum: number, stage: any) => sum + (Number(stage.totalPending) || 0), 0);
         },
     },
+
     {
         path: 'administration',
         gateKey: 'administrate',
