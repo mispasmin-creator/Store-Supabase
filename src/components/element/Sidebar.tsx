@@ -124,7 +124,8 @@ export default ({ items }: SidebarProps) => {
                                             sheetData = indentSheet || [];
                                             break;
                                         case 'get-lift':
-                                            sheetData = [indentSheet || [], poMasterSheet || []];
+                                            // store-in rows are needed to subtract already-lifted qty, like the Lifting page does
+                                            sheetData = [indentSheet || [], poMasterSheet || [], storeInSheet || []];
                                             break;
                                         case 'Bill-Not-Received':
                                         case 'Quality-Check-In-Received-Item':

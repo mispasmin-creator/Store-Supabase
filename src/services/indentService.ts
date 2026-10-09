@@ -142,6 +142,9 @@ export async function fetchIndentRecords(): Promise<IndentRecord[]> {
             po_qty: Number(r.po_qty) || 0,
             received_quantity: Number(r.received_quantity) || 0,
             pending_qty: Number(r.pending_qty) || 0,
+            // read by SheetsContext (rawPendingPoQty / poRequredDb) for the Lifting and Pending PO counts
+            pending_po_qty: Number(r.pending_po_qty) || 0,
+            po_requred: r.po_requred || '',
             vendor1_rank: r.vendor1_rank || '',
             vendor2_rank: r.vendor2_rank || '',
             vendor3_rank: r.vendor3_rank || '',

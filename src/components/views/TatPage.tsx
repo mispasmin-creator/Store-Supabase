@@ -683,7 +683,7 @@ export default function TatPage() {
                   variant={statusFilter === s ? 'default' : 'outline'}
                   onClick={() => setStatusFilter(s)}
                 >
-                  {s === 'all' ? 'Sab' : s === 'pending' ? 'Pending' : 'Complete'}
+                  {s === 'all' ? 'ALL' : s === 'pending' ? 'Pending' : 'Complete'}
                 </Button>
               ))}
             </div>
@@ -697,7 +697,7 @@ export default function TatPage() {
                 <TableRow>
                   <TableHead>Indent / Ref</TableHead>
                   <TableHead>Party</TableHead>
-                  <TableHead>Asli planned</TableHead>
+                  <TableHead>Real planned</TableHead>
                   <TableHead>Planned (+{selectedExtra} din)</TableHead>
                   <TableHead>Actual</TableHead>
                   <TableHead>Delay</TableHead>

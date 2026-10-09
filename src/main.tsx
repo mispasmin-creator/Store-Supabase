@@ -320,19 +320,31 @@ const routes: RouteAttributes[] = [
         element: <GetLift />,
         notifications: (sheetsData: any[], user: any) => {
             const indentSheet = Array.isArray(sheetsData[0]) ? sheetsData[0] : sheetsData;
-            const poMasterSheet = Array.isArray(sheetsData[1]) ? sheetsData[1] : [];
+            const storeInSheet = Array.isArray(sheetsData[2]) ? sheetsData[2] : [];
+
+            // Same as the Lifting page: qty already lifted (store-in rows of that indent + firm) is subtracted
+            const liftedByIndent = new Map<string, number>();
+            storeInSheet.forEach((s: any) => {
+                const key = `${s.indentNo || s.indent_no || ''}|${s.firmNameMatch || s.firm_name_match || ''}`;
+                liftedByIndent.set(key, (liftedByIndent.get(key) || 0) + (Number(s.qty) || 0));
+            });
 
             // Unique PO numbers that satisfy the criteria
             const uniquePOs = new Set<string>();
 
             indentSheet.forEach((sheet: any) => {
-                const isFirmMatch = !user || (user.firmNameMatch || '').toLowerCase() === "all" || (sheet.firmNameMatch || sheet.firm_name_match) === user.firmNameMatch;
+                const firm = sheet.firmNameMatch || sheet.firm_name_match;
+                const isFirmMatch = !user || (user.firmNameMatch || '').toLowerCase() === "all" || firm === user.firmNameMatch;
                 const hasPlanned5 = sheet.planned5 && sheet.planned5.toString().trim() !== '';
                 const hasNoActual5 = !sheet.actual5 || sheet.actual5.toString().trim() === '';
                 const isPending = sheet.liftingStatus === 'Pending' || !sheet.liftingStatus;
 
-                // pendingLiftQty is calculated in SheetsContext as (approved_quantity - received_quantity)
-                const hasPendingQty = (sheet.pendingLiftQty || (Number(sheet.approvedQuantity) - Number(sheet.receivedQuantity))) > 0;
+                // approved qty priority: pending_po_qty > approved_quantity > quantity
+                const rawPending = Number(sheet.rawPendingPoQty) || 0;
+                const rawApproved = Number(sheet.approvedQuantity) || 0;
+                const approved = rawPending > 0 ? rawPending : rawApproved > 0 ? rawApproved : Number(sheet.quantity) || 0;
+                const received = (Number(sheet.receivedQuantity) || 0) + (liftedByIndent.get(`${sheet.indentNumber || ''}|${firm || ''}`) || 0);
+                const hasPendingQty = (approved || Number(sheet.quantity) || 0) - received > 0;
 
                 if (isFirmMatch && hasPlanned5 && hasNoActual5 && isPending && hasPendingQty) {
                     uniquePOs.add(sheet.poNumber || `NO_PO_${sheet.indentNumber}`);
