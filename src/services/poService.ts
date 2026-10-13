@@ -337,15 +337,17 @@ export async function updatePoMasterRecords(poNumber: string, poRecords: any[]) 
 /**
  * Update indent records to mark them as having PO created
  * Sets actual4 timestamp and delivery_date for indents that are included in the PO
- * @param indentNumbers - Array of indent numbers to update
+ * @param ids - Array of indent numbers to update
  * @param deliveryDate - The delivery date from the PO
+ * @param poNumber - The PO number
+ * @param plannedDate - Optional calculated planned date (e.g. for Credit terms)
  */
-export async function updateIndentsAfterPoCreation(ids: number[], deliveryDate?: string, poNumber?: string) {
+export async function updateIndentsAfterPoCreation(ids: number[], deliveryDate?: string, poNumber?: string, plannedDate?: string) {
     try {
         const now = new Date().toISOString();
         const updateData: any = { 
             actual4: now,
-            planned5: now 
+            planned5: plannedDate || now 
         };
         if (deliveryDate) {
             updateData.delivery_date = deliveryDate;

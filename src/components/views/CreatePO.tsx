@@ -890,12 +890,23 @@ const CreatePO = () => {
                 await insertPoRecords(rows);
             }
 
-            // Update indents to mark PO as created (set actual4 and delivery_date)
+            // Calculate planned date for Lifting (Stage 5)
+            // If payment term is Credit, add credit days (numberOfDays) to PO creation date (today)
+            let plannedDateForIndent: string | undefined = undefined;
+            const pt = (values.paymentTerms || '').toLowerCase();
+            const creditDays = Number(values.numberOfDays) || 0;
+            if (pt.includes('credit') && creditDays > 0) {
+                const targetDate = new Date();
+                targetDate.setDate(targetDate.getDate() + creditDays);
+                plannedDateForIndent = targetDate.toISOString();
+            }
+
+            // Update indents to mark PO as created (set actual4, delivery_date, and planned5)
             const indentIds = values.indents.map(v => v.id).filter(id => id > 0);
             // Use ISO string for database compatibility to avoid "out of range" error
             const databaseDeliveryDate = values.deliveryDate.toISOString();
             if (indentIds.length > 0) {
-                await updateIndentsAfterPoCreation(indentIds, databaseDeliveryDate, poNumber);
+                await updateIndentsAfterPoCreation(indentIds, databaseDeliveryDate, poNumber, plannedDateForIndent);
             }
 
             toast.success(`Successfully ${mode}d purchase order`);
@@ -1131,7 +1142,16 @@ const CreatePO = () => {
                                     <FormField control={form.control} name="paymentTerms" render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Payment Terms</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value || ""}>
+                                            <Select
+                                                onValueChange={(val) => {
+                                                    field.onChange(val);
+                                                    const lower = val.toLowerCase();
+                                                    if (!lower.includes('credit') && !lower.includes('delivery') && !lower.includes('partly')) {
+                                                        form.setValue('numberOfDays', undefined);
+                                                    }
+                                                }}
+                                                value={field.value || ""}
+                                            >
                                                 <FormControl>
                                                     <SelectTrigger size="sm" className="h-9">
                                                         <SelectValue placeholder="Select payment terms" />
@@ -1147,6 +1167,23 @@ const CreatePO = () => {
                                             </Select>
                                         </FormItem>
                                     )} />
+                                    {form.watch('paymentTerms')?.toLowerCase().includes('credit') && (
+                                        <FormField control={form.control} name="numberOfDays" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Credit Days</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        className="h-9"
+                                                        type="number"
+                                                        min={0}
+                                                        placeholder="Enter credit days (e.g. 1, 2)"
+                                                        value={field.value ?? ''}
+                                                        onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                                    />
+                                                </FormControl>
+                                            </FormItem>
+                                        )} />
+                                    )}
                                 </div>
 
                                 {form.watch('paymentTerms') && (form.watch('paymentTerms').toLowerCase().includes('delivery') || (form.watch('paymentTerms').toLowerCase().includes('partly') && (form.watch('paymentTerms').toLowerCase().includes('advance') || form.watch('paymentTerms').toLowerCase().includes('pi')))) && (

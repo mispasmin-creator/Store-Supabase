@@ -470,7 +470,9 @@ export default ({
                                     ? `Advance Payment (${numberOfDays}%) of ₹${((total * (numberOfDays || 0)) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will be made.`
                                     : paymentTerms === 'After Delivery'
                                         ? `Payment will be made ${numberOfDays} days after delivery.`
-                                        : paymentTerms || 'N/A'}
+                                        : (paymentTerms?.toLowerCase().includes('credit') && numberOfDays)
+                                            ? `Credit (${numberOfDays} Days)`
+                                            : paymentTerms || 'N/A'}
                             </Text>
                         </View>
                     )}
