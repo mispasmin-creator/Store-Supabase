@@ -347,7 +347,7 @@ export async function updateIndentsAfterPoCreation(ids: number[], deliveryDate?:
         const now = new Date().toISOString();
         const updateData: any = { 
             actual4: now,
-            planned5: plannedDate || now 
+            planned5: plannedDate || deliveryDate || now 
         };
         if (deliveryDate) {
             updateData.delivery_date = deliveryDate;

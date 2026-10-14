@@ -45,11 +45,8 @@ export default function IssueData() {
         setDataLoading(true);
         try {
             const records = await fetchIssueRecords();
-            // Filter by firm name
-            const filteredByFirm = records.filter(item => {
-                return user.firmNameMatch.toLowerCase() === "all" || item.firm_name_match === user.firmNameMatch;
-            });
-            setAllData(filteredByFirm);
+            // Show all records to all users without firm filtering
+            setAllData(records);
         } catch (error) {
             console.error('Failed to fetch issue records:', error);
             toast.error('Failed to load data');
@@ -60,7 +57,7 @@ export default function IssueData() {
 
     useEffect(() => {
         fetchData();
-    }, [user.firmNameMatch]);
+    }, []);
 
     const pendingData = useMemo(() => {
         return allData.filter(i => i.planned1 && !i.actual1);

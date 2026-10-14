@@ -237,22 +237,33 @@ export async function updateStoreInReceiving(
         remark: string;
         location: string;
         priceAsPerPoCheck: string;
+        transporterName?: string;
+        transporterCharges?: number;
     }
 ) {
     try {
+        const updatePayload: Record<string, any> = {
+            actual6: updateData.actual6,
+            receiving_status: updateData.receivingStatus,
+            received_quantity: updateData.receivedQuantity,
+            photo_of_product: updateData.photoOfProduct,
+            damage_order: updateData.damageOrder,
+            quantity_as_per_bill: updateData.quantityAsPerBill,
+            remark: updateData.remark,
+            location: updateData.location,
+            bill_received2: updateData.priceAsPerPoCheck, // ✅ Using existing spare column
+        };
+
+        if (updateData.transporterName !== undefined) {
+            updatePayload.transporter_name = updateData.transporterName;
+        }
+        if (updateData.transporterCharges !== undefined) {
+            updatePayload.amount = updateData.transporterCharges;
+        }
+
         const { error } = await supabase
             .from('store_in')
-            .update({
-                actual6: updateData.actual6,
-                receiving_status: updateData.receivingStatus,
-                received_quantity: updateData.receivedQuantity,
-                photo_of_product: updateData.photoOfProduct,
-                damage_order: updateData.damageOrder,
-                quantity_as_per_bill: updateData.quantityAsPerBill,
-                remark: updateData.remark,
-                location: updateData.location,
-                bill_received2: updateData.priceAsPerPoCheck, // ✅ Using existing spare column
-            })
+            .update(updatePayload)
             .eq('lift_number', liftNumber);
 
         if (error) throw error;

@@ -891,14 +891,21 @@ const CreatePO = () => {
             }
 
             // Calculate planned date for Lifting (Stage 5)
-            // If payment term is Credit, add credit days (numberOfDays) to PO creation date (today)
+            // If payment term is Credit, add credit days (numberOfDays) to Delivery Date
+            // If payment term is not Credit, use Delivery Date as planned date
             let plannedDateForIndent: string | undefined = undefined;
             const pt = (values.paymentTerms || '').toLowerCase();
             const creditDays = Number(values.numberOfDays) || 0;
+            const baseDate = values.deliveryDate && !isNaN(values.deliveryDate.getTime())
+                ? new Date(values.deliveryDate)
+                : new Date();
+
             if (pt.includes('credit') && creditDays > 0) {
-                const targetDate = new Date();
+                const targetDate = new Date(baseDate);
                 targetDate.setDate(targetDate.getDate() + creditDays);
                 plannedDateForIndent = targetDate.toISOString();
+            } else {
+                plannedDateForIndent = baseDate.toISOString();
             }
 
             // Update indents to mark PO as created (set actual4, delivery_date, and planned5)

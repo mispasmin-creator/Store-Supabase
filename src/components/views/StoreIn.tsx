@@ -595,6 +595,8 @@ export default () => {
         priceAsPerPoCheck: z.enum(['Yes', 'No']),
         remark: z.string().optional(),
         location: z.string().optional(),
+        transporterName: z.string().optional(),
+        transporterCharges: z.coerce.number().optional(),
         items: z.array(z.object({
             liftNumber: z.string(),
             indentNo: z.string(),
@@ -616,6 +618,8 @@ export default () => {
             priceAsPerPoCheck: undefined,
             remark: '',
             location: '',
+            transporterName: '',
+            transporterCharges: undefined,
             items: [],
         },
     });
@@ -646,6 +650,8 @@ export default () => {
                 priceAsPerPoCheck: undefined,
                 remark: '',
                 location: '',
+                transporterName: selectedIndent.transporterName || '',
+                transporterCharges: selectedIndent.amount ? Number(selectedIndent.amount) : undefined,
                 items: selectedIndent.originalItems.map(item => ({
                     liftNumber: item.liftNumber || '',
                     indentNo: item.indentNo || '',
@@ -684,6 +690,8 @@ export default () => {
                     priceAsPerPoCheck: values.priceAsPerPoCheck || '',
                     remark: values.remark || '',
                     location: values.location || '',
+                    transporterName: values.transporterName || '',
+                    transporterCharges: values.transporterCharges !== undefined ? Number(values.transporterCharges) : 0,
                 })
             );
 
@@ -905,6 +913,43 @@ export default () => {
                                                 <FormControl>
                                                     <Input {...field} placeholder="Enter storage location" />
                                                 </FormControl>
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="transporterName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Transporter Name (optional)</FormLabel>
+                                                <FormControl>
+                                                    <Input {...field} value={field.value || ''} placeholder="Enter transporter name" />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+
+                                    <FormField
+                                        control={form.control}
+                                        name="transporterCharges"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Transporter Charges (optional)</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        type="number"
+                                                        min={0}
+                                                        step="any"
+                                                        placeholder="Enter transporter charges"
+                                                        value={field.value ?? ''}
+                                                        onChange={(e) => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
                                             </FormItem>
                                         )}
                                     />

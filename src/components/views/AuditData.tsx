@@ -1110,7 +1110,7 @@ export default function PcReportTable() {
                   <div className="space-y-3">
                     {(selectedRow.originalItems || [selectedRow])
                       .filter((item, index, self) =>
-                        index === self.findIndex((t) => t.productName === item.productName)
+                        index === self.findIndex((t) => (t.id ? t.id === item.id : t.indentNumber === item.indentNumber && t.productName === item.productName))
                       )
                       .map((item, idx) => {
                         const isExpanded = expandedProducts.has(item.id);
@@ -1260,7 +1260,9 @@ export default function PcReportTable() {
                       <p className="text-lg font-black tracking-tight">
                         {(() => {
                           const items = selectedRow.originalItems || [selectedRow];
-                          const uniqueItems = Array.from(new Set(items.map(i => i.productName)));
+                          const uniqueItems = items.filter((item, index, self) =>
+                            index === self.findIndex((t) => (t.id ? t.id === item.id : t.indentNumber === item.indentNumber && t.productName === item.productName))
+                          );
                           return uniqueItems.length;
                         })()}
                       </p>
