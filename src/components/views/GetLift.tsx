@@ -49,6 +49,7 @@ interface GetPurchaseData {
     poNumber: string;
     poDate: string;
     deliveryDate: string;
+    paymentTerms?: string;
     product?: string;
     quantity?: number;
     pendingLiftQty?: number;
@@ -111,6 +112,37 @@ interface AuthUser {
     receiveItemAction?: boolean;
     administrate?: boolean;
 }
+
+const parseAnyDate = (val: any): Date | null => {
+    if (!val) return null;
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    const str = String(val).trim();
+    if (!str || str === '-' || str === 'Not Set') return null;
+
+    // 1. Matches DD-MM-YYYY or DD/MM/YYYY
+    const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmyMatch) {
+        const d = parseInt(dmyMatch[1], 10);
+        const m = parseInt(dmyMatch[2], 10) - 1;
+        const y = parseInt(dmyMatch[3], 10);
+        const dateObj = new Date(y, m, d);
+        if (!isNaN(dateObj.getTime())) return dateObj;
+    }
+
+    // 2. Matches YYYY-MM-DD or YYYY/MM/DD
+    const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (ymdMatch) {
+        const y = parseInt(ymdMatch[1], 10);
+        const m = parseInt(ymdMatch[2], 10) - 1;
+        const d = parseInt(ymdMatch[3], 10);
+        const dateObj = new Date(y, m, d);
+        if (!isNaN(dateObj.getTime())) return dateObj;
+    }
+
+    const dObj = new Date(str);
+    if (!isNaN(dObj.getTime())) return dObj;
+    return null;
+};
 
 export default function GetPurchase() {
     const { user } = useAuth() as { user: AuthUser };
@@ -203,18 +235,43 @@ export default function GetPurchase() {
         processedData.forEach((item) => {
             const key = item.poNumber || `NO_PO_${item.indentNumber}`;
             if (!groupedMap.has(key)) {
+                const poRecord = poMasterRecords.find((p: any) => p.poNumber && p.poNumber === item.poNumber);
+                const rawDeliveryDate = item.deliveryDate || poRecord?.deliveryDate || '';
+
+                let plannedDateVal = 'Not Set';
+                const parsedDelivery = parseAnyDate(rawDeliveryDate);
+                if (parsedDelivery) {
+                    const pt = (poRecord?.paymentTerms || '').toLowerCase();
+                    const creditDays = Number(poRecord?.numberOfDays) || 0;
+                    if (pt.includes('credit') && creditDays > 0) {
+                        const target = new Date(parsedDelivery);
+                        target.setDate(target.getDate() + creditDays);
+                        plannedDateVal = formatDate(target);
+                    } else {
+                        plannedDateVal = formatDate(parsedDelivery);
+                    }
+                } else if (item.planned5) {
+                    const parsedPlanned5 = parseAnyDate(item.planned5);
+                    plannedDateVal = parsedPlanned5 ? formatDate(parsedPlanned5) : formatDate(parseCustomDate(item.planned5));
+                }
+
+                const terms = poRecord?.paymentTerms || '';
+                const days = Number(poRecord?.numberOfDays) || 0;
+                const paymentTermsDisplay = terms
+                    ? (days > 0 && terms.toLowerCase().includes('credit') && !terms.includes('(') ? `${terms} (${days} Days)` : terms)
+                    : '-';
+
                 groupedMap.set(key, {
                     indentNo: item.indentNumber?.toString() || '',
                     firmNameMatch: item.firmNameMatch || '',
                     vendorName: item.approvedVendorName || '',
                     poNumber: item.poNumber || '',
                     poDate: item.actual4 ? formatDate(parseCustomDate(item.actual4)) : '',
-                    deliveryDate: item.deliveryDate
-                        ? formatDate(parseCustomDate(item.deliveryDate))
+                    deliveryDate: rawDeliveryDate
+                        ? formatDate(parseAnyDate(rawDeliveryDate) || parseCustomDate(rawDeliveryDate))
                         : '',
-                    plannedDate: item.planned5
-                        ? formatDate(parseCustomDate(item.planned5))
-                        : 'Not Set',
+                    plannedDate: plannedDateVal,
+                    paymentTerms: paymentTermsDisplay,
                     product: item.productName || '',
                     quantity: 0,
                     pendingLiftQty: 0,
@@ -251,7 +308,7 @@ export default function GetPurchase() {
         });
 
         setTableData(sortedData);
-    }, [indentRecords, storeInRecords, user?.firmNameMatch]);
+    }, [indentRecords, storeInRecords, poMasterRecords, user?.firmNameMatch]);
 
     // Process history data
     useEffect(() => {
@@ -404,6 +461,11 @@ export default function GetPurchase() {
             }
         },
         {
+            accessorKey: 'paymentTerms',
+            header: 'Payment Terms',
+            cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
+        },
+        {
             accessorKey: 'poDate',
             header: 'PO Date',
             cell: ({ getValue }) => <div>{(getValue() as string) || '-'}</div>,
@@ -419,7 +481,7 @@ export default function GetPurchase() {
             cell: ({ getValue }) => <div className="text-gray-900">{(getValue() as string) || '-'}</div>,
         },
         {
-            accessorKey: 'plannedDate', // ✅ ADD THIS COLUMN
+            accessorKey: 'plannedDate',
             header: 'Planned Date',
             cell: ({ getValue }) => {
                 const plannedDate = getValue() as string;
@@ -1222,7 +1284,7 @@ export default function GetPurchase() {
                         <DataTable
                             data={tableData}
                             columns={columns}
-                            searchFields={['indentNo', 'vendorName', 'poNumber', 'firmNameMatch']}
+                            searchFields={['indentNo', 'vendorName', 'poNumber', 'firmNameMatch', 'paymentTerms']}
                             dataLoading={loading}
                         />
                     </TabsContent>

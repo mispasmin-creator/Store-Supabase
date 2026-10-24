@@ -10,6 +10,40 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase, supabaseEnabled } from '@/lib/supabase';
 import { toast } from 'sonner';
 
+// Helper to format date strictly as DD-MM-YYYY (without hours/minutes)
+const formatDeliveryDate = (val: any): string => {
+    if (!val) return '-';
+    const str = String(val).trim();
+    if (!str || str === '-') return '-';
+
+    // 1. Matches DD-MM-YYYY or DD/MM/YYYY with any trailing time/text
+    const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmyMatch) {
+        const d = dmyMatch[1].padStart(2, '0');
+        const m = dmyMatch[2].padStart(2, '0');
+        const y = dmyMatch[3];
+        return `${d}-${m}-${y}`;
+    }
+
+    // 2. Matches YYYY-MM-DD or YYYY/MM/DD with any trailing time/text (ISO)
+    const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (ymdMatch) {
+        const y = ymdMatch[1];
+        const m = ymdMatch[2].padStart(2, '0');
+        const d = ymdMatch[3].padStart(2, '0');
+        return `${d}-${m}-${y}`;
+    }
+
+    // 3. Fallback date parse
+    const dObj = new Date(str);
+    if (!isNaN(dObj.getTime())) {
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        return `${pad(dObj.getDate())}-${pad(dObj.getMonth() + 1)}-${dObj.getFullYear()}`;
+    }
+
+    return str;
+};
+
 interface HistoryData {
     poNumber: string;
     poCopy: string;
@@ -17,6 +51,8 @@ interface HistoryData {
     preparedBy: string;
     approvedBy: string;
     totalAmount: number;
+    deliveryDate: string;
+    paymentTerms: string;
     status: 'Revised' | 'Not Received' | 'Received';
     timestamp: string;
 }
@@ -125,6 +161,8 @@ export default function POHistory() {
                         preparedBy: sheet.prepared_by || '',
                         totalAmount: Number(sheet.total_po_amount) || 0,
                         vendorName: sheet.party_name || '',
+                        deliveryDate: formatDeliveryDate(sheet.delivery_date || sheet.deliveryDate),
+                        paymentTerms: sheet.payment_terms || sheet.paymentTerms || '-',
                         status: status,
                         timestamp: sheet.timestamp || '',
                     };
@@ -190,6 +228,16 @@ export default function POHistory() {
             header: 'Vendor Name',
             cell: ({ getValue }) => <div>{getValue() as string || '-'}</div>
         },
+        {
+            accessorKey: 'deliveryDate',
+            header: 'Delivery Date',
+            cell: ({ getValue }) => <div>{getValue() as string || '-'}</div>
+        },
+        {
+            accessorKey: 'paymentTerms',
+            header: 'Payment Terms',
+            cell: ({ getValue }) => <div>{getValue() as string || '-'}</div>
+        },
         // { 
         //     accessorKey: 'preparedBy', 
         //     header: 'Prepared By',
@@ -231,7 +279,7 @@ export default function POHistory() {
             <DataTable
                 data={filteredData}
                 columns={historyColumns}
-                searchFields={['vendorName', 'poNumber', 'preparedBy', 'approvedBy']}
+                searchFields={['vendorName', 'poNumber', 'preparedBy', 'approvedBy', 'deliveryDate', 'paymentTerms']}
                 dataLoading={dataLoading}
                 className='h-[80dvh]'
                 extraActions={
