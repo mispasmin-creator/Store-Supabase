@@ -338,10 +338,10 @@ const routes: RouteAttributes[] = [
                 const hasNoActual5 = !sheet.actual5 || sheet.actual5.toString().trim() === '';
                 const isPending = sheet.liftingStatus === 'Pending' || !sheet.liftingStatus;
 
-                // approved qty priority: pending_po_qty > approved_quantity > quantity
-                const rawPending = Number(sheet.rawPendingPoQty) || 0;
+                // approved qty priority: po_qty > approved_quantity > quantity (same as GetLift page)
+                const rawPoQty = Number(sheet.rawPoQty) || 0;
                 const rawApproved = Number(sheet.approvedQuantity) || 0;
-                const approved = rawPending > 0 ? rawPending : rawApproved > 0 ? rawApproved : Number(sheet.quantity) || 0;
+                const approved = rawPoQty > 0 ? rawPoQty : rawApproved > 0 ? rawApproved : Number(sheet.quantity) || 0;
                 const received = (Number(sheet.receivedQuantity) || 0) + (liftedByIndent.get(`${sheet.indentNumber || ''}|${firm || ''}`) || 0);
                 const hasPendingQty = (approved || Number(sheet.quantity) || 0) - received > 0;
 

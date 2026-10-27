@@ -176,7 +176,7 @@ export default function TatPage() {
       const [indentData, storeInData, paymentsData, tallyData, poMasterData] = await Promise.all([
         fetchAll(
           'indent',
-          'id, indent_number, firm_name, approved_vendor_name, vendor_type, vendor1_rank, vendor2_rank, vendor3_rank, planned1, actual1, planned2, actual2, planned3, actual3, planned4, actual4, planned5, actual5, po_number, po_requred, lifting_status, approved_quantity, pending_po_qty, quantity, firm_name_match'
+          'id, indent_number, firm_name, approved_vendor_name, vendor_type, vendor1_rank, vendor2_rank, vendor3_rank, planned1, actual1, planned2, actual2, planned3, actual3, planned4, actual4, planned5, actual5, po_number, po_requred, lifting_status, approved_quantity, pending_po_qty, po_qty, quantity, firm_name_match'
         ),
         fetchAll(
           'store_in',
@@ -284,7 +284,7 @@ export default function TatPage() {
                 byPo.set(key, [...(byPo.get(key) || []), r]);
               });
             // Same math as the Lifting page: received = store-in qty for that indent + firm;
-            // approved = pending_po_qty, else approved_quantity, else quantity.
+            // approved = po_qty, else approved_quantity, else quantity.
             const receivedByIndent = new Map<string, number>();
             storeInData.forEach(s => {
               const key = `${s.indent_no}|${s.firm_name_match}`;
@@ -294,7 +294,7 @@ export default function TatPage() {
               const status = r.lifting_status;
               if (!(status === 'Pending' || status === '' || status === null || status === undefined)) return false;
               if (r.actual5) return false;
-              const approved = Number(r.pending_po_qty) > 0 ? Number(r.pending_po_qty) : Number(r.approved_quantity) > 0 ? Number(r.approved_quantity) : Number(r.quantity) || 0;
+              const approved = Number(r.po_qty) > 0 ? Number(r.po_qty) : Number(r.approved_quantity) > 0 ? Number(r.approved_quantity) : Number(r.quantity) || 0;
               const pendingQty = (approved || Number(r.quantity) || 0) - (receivedByIndent.get(`${r.indent_number}|${r.firm_name_match}`) || 0);
               return pendingQty > 0;
             };

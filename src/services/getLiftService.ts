@@ -137,12 +137,14 @@ export async function fetchIndentRecords() {
             areaOfUse: r.area_of_use || '',
             timestamp: r.timestamp || '',
             expectedDate: r.expected_req_date || '',
-            // Priority: pending_po_qty > approved_quantity > quantity (matches poService.fetchIndents)
+            // Priority: po_qty (qty actually ordered on the PO) > approved_quantity > quantity.
+            // Do NOT use pending_po_qty here: it is "indent qty not yet put on a PO"
+            // (quantity - po_master qty), so a partial PO would show only the unordered remainder.
             approvedQuantity: (() => {
-                const rawPending = Number(r.pending_po_qty) || 0;
+                const rawPoQty = Number(r.po_qty) || 0;
                 const rawApproved = Number(r.approved_quantity) || 0;
                 const rawQuantity = Number(r.quantity) || 0;
-                return rawPending > 0 ? rawPending : (rawApproved > 0 ? rawApproved : rawQuantity);
+                return rawPoQty > 0 ? rawPoQty : (rawApproved > 0 ? rawApproved : rawQuantity);
             })(),
             receivedQuantity: Number(r.received_quantity) || 0,
             uom: r.uom || '',

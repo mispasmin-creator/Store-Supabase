@@ -224,6 +224,7 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     approvedQuantity: r.approved_quantity,
                     receivedQuantity: Number(r.received_quantity) || 0,
                     rawPendingPoQty: Number(r.pending_po_qty) || 0,
+                    rawPoQty: Number(r.po_qty) || 0,
                     poRequredDb: r.po_requred || '',
                     noDay: r.no_day,
                     vendorName1: r.vendor_name1,
