@@ -38,7 +38,11 @@ export async function fetchIssueRecords(): Promise<IssueRecord[]> {
 
         if (error) throw error;
 
-        return (data || []).map((r: any) => ({
+        // issue_no is text, so the DB order puts IS-999 above IS-1000; sort by the numeric part instead
+        const issueNum = (r: any) => parseInt(String(r.issue_no || '').replace(/\D/g, ''), 10) || 0;
+        const sorted = [...(data || [])].sort((a: any, b: any) => issueNum(b) - issueNum(a));
+
+        return sorted.map((r: any) => ({
             issue_no: r.issue_no || '',
             issue_to: r.issue_to || '',
             uom: r.uom || '',
