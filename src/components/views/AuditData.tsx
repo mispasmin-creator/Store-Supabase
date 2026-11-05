@@ -197,7 +197,7 @@ interface FormValues {
 }
 
 export default function PcReportTable() {
-  const { tallyEntrySheet, updateAll, allLoading: dataLoading } = useSheets();
+  const { tallyEntrySheet, updateAll, updateTallyEntrySheet, allLoading: dataLoading } = useSheets();
   const [selectedRow, setSelectedRow] = useState<ProcessedTallyData | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const { user } = useAuth();
@@ -498,7 +498,7 @@ export default function PcReportTable() {
       toast.success(`Status updated for PO ${selectedRow.poNumber} (${itemsToUpdate.length} items)`);
 
       setOpenDialog(false);
-      updateAll();
+      updateTallyEntrySheet();
 
     } catch (err) {
       console.error('❌ Error in onSubmit:', err);

@@ -114,6 +114,7 @@ export default function PIApprovals() {
         storeInSheet,
         paymentHistorySheet,
         updateAll,
+        updatePaymentsSheet,
         allLoading: poMasterLoading
     } = useSheets();
     const { user } = useAuth();
@@ -952,7 +953,7 @@ export default function PIApprovals() {
 
             toast.success(`✅ Payment queued for: ${selectedItem.partyName}`);
             setOpenDialog(false);
-            setTimeout(() => updateAll(), 1000);
+            setTimeout(() => updatePaymentsSheet(), 1000);
         } catch (error) {
             toast.error(`Failed to process payment: ${(error as Error)?.message || 'Unknown error'}`);
             console.error('Payment error:', error);

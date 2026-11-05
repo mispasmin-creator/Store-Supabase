@@ -82,7 +82,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default () => {
     const { user } = useAuth();
-    const { updateAll } = useSheets();
+    const { updateStoreInSheet, updatePaymentsSheet, updateTallyEntrySheet } = useSheets();
     const [storeInRecords, setStoreInRecords] = useState<StoreInRecord[]>([]);
     const [dataLoading, setDataLoading] = useState(false);
     const [pendingData, setPendingData] = useState<HodPendingData[]>([]);
@@ -236,7 +236,10 @@ export default () => {
             toast.success(`HOD ${values.status} for ${selectedItem.liftNumber}`);
             setOpenDialog(false);
             fetchAllData();
-            updateAll(); // Refresh global sheets data to update Payment Status section
+            // Refresh only tables changed by this approval flow.
+            updateStoreInSheet();
+            updatePaymentsSheet();
+            updateTallyEntrySheet();
         } catch (error) {
             console.error('Error in onSubmit:', error);
             toast.error('Failed to update HOD approval');

@@ -153,29 +153,58 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
     const sheets = storeSheet;
 
-    function updateStoreInSheet() {
+    function applyStoreInRecords(res: StoreInRecord[]) {
+        const mapped = res.map((r: any) => ({
+            ...r,
+            // Ensure compatibility with naming conventions used in UI
+            vendorType: r.vendor_type || '',
+            billStatus: r.billStatus || '',
+        }));
+        setStoreInSheet(mapped as unknown as StoreInSheet[]);
+    }
+
+    function applyReceivedRecords(res: StoreInRecord[]) {
+        const mapped = res.filter(r => r.actual6 !== '').map((r) => ({
+            timestamp: r.timestamp,
+            indentNumber: r.indentNo,
+            poDate: r.poDate,
+            poNumber: r.poNumber,
+            vendor: r.vendorName,
+            receivedStatus: r.receivingStatus,
+            receivedQuantity: r.receivedQuantity,
+            uom: r.uom,
+            photoOfProduct: r.photoOfProduct,
+            billStatus: r.billStatus,
+            billNumber: r.billNo,
+            billAmount: r.billAmount,
+            photoOfBill: r.photoOfBill,
+            actual6: r.actual6,
+        }));
+        setReceivedSheet(mapped as unknown as ReceivedSheet[]);
+    }
+
+    async function refreshStoreInData(updateReceived = false) {
         setStoreInLoading(true);
-        fetchStoreInRecords()
-            .then((res) => {
-                // Map to StoreInSheet format
-                const mapped = res.map((r: any) => ({
-                    ...r,
-                    // Ensure compatibility with naming conventions used in UI
-                    vendorType: r.vendor_type || '', // Some old code might use this
-                    billStatus: r.billStatus || '',
-                }));
-                setStoreInSheet(mapped as unknown as StoreInSheet[]);
-                setStoreInLoading(false);
-            })
-            .catch((error) => {
-                console.error('Error fetching STORE IN from Supabase:', error);
-                setStoreInLoading(false);
-            });
+        if (updateReceived) setReceivedLoading(true);
+        try {
+            const res = await fetchStoreInRecords();
+            applyStoreInRecords(res);
+            if (updateReceived) applyReceivedRecords(res);
+        } catch (error) {
+            console.error('Error fetching STORE IN from Supabase:', error);
+        } finally {
+            setStoreInLoading(false);
+            if (updateReceived) setReceivedLoading(false);
+        }
+    }
+
+    function updateStoreInSheet() {
+        void refreshStoreInData();
     }
 
     function updateIssueSheet() {
         setIssueLoading(true);
-        fetchIssueRecords()
+        return fetchIssueRecords()
             .then((res) => {
                 const mapped = res.map(r => ({
                     issueNo: r.issue_no,
@@ -193,12 +222,20 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
                     firmNameMatch: r.firm_name_match,
                 }));
                 setIssueSheet(mapped as unknown as IssueSheet[]);
-                setIssueLoading(false);
             })
             .catch((error) => {
                 console.error('Error fetching ISSUE from Supabase:', error);
-                setIssueLoading(false);
-            });
+            })
+            .finally(() => setIssueLoading(false));
+    }
+
+    /*
+     * Kept as a separate public refresh for pages that only need RECEIVED.
+     * updateAll() uses refreshStoreInData(true) so STORE IN is fetched once
+     * and the same response populates both STORE IN and RECEIVED.
+     */
+    function updateReceivedSheet() {
+        void refreshStoreInData(true);
     }
 
     function updateIndentSheet() {
@@ -265,36 +302,6 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
             .catch((error) => {
                 console.error('Error fetching INDENT from Supabase:', error);
                 setIndentLoading(false);
-            });
-    }
-
-    function updateReceivedSheet() {
-        setReceivedLoading(true);
-        // Using StoreIn service for received items as they are related
-        fetchStoreInRecords()
-            .then((res) => {
-                const mapped = res.filter(r => r.actual6 !== '').map(r => ({
-                    timestamp: r.timestamp,
-                    indentNumber: r.indentNo,
-                    poDate: r.poDate,
-                    poNumber: r.poNumber,
-                    vendor: r.vendorName,
-                    receivedStatus: r.receivingStatus,
-                    receivedQuantity: r.receivedQuantity,
-                    uom: r.uom,
-                    photoOfProduct: r.photoOfProduct,
-                    billStatus: r.billStatus,
-                    billNumber: r.billNo,
-                    billAmount: r.billAmount,
-                    photoOfBill: r.photoOfBill,
-                    actual6: r.actual6,
-                }));
-                setReceivedSheet(mapped as unknown as ReceivedSheet[]);
-                setReceivedLoading(false);
-            })
-            .catch((error) => {
-                console.error('Error fetching RECEIVED from Supabase:', error);
-                setReceivedLoading(false);
             });
     }
 
@@ -386,12 +393,12 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
     function updateAll() {
         setAllLoading(true);
         updateMasterSheet();
-        updateReceivedSheet();
+        // Fetch store_in once per cycle; use the same response for both views.
+        void refreshStoreInData(true);
         updateIndentSheet();
         updatePoMasterSheet();
         updateInventorySheet();
 
-        updateStoreInSheet();
         updateIssueSheet();
         updateTallyEntrySheet();
         updatePcReportSheet();
@@ -410,15 +417,24 @@ export const SheetsProvider = ({ children }: { children: React.ReactNode }) => {
 
             // ✅ AUTO-REFRESH EVERY 30 SECONDS
             const intervalId = setInterval(() => {
+                if (document.visibilityState !== 'visible') return;
                 console.log('🔄 Auto-refreshing data...');
                 updateAll();
-            }, 30000); // 30,000 ms = 30 seconds
+            }, 120000); // 2 minutes
 
             return () => clearInterval(intervalId);
         } catch (e) {
             toast.error('Something went wrong while fetching data');
         } finally {
         }
+    }, []);
+
+    useEffect(() => {
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === 'visible') updateAll();
+        };
+        document.addEventListener('visibilitychange', refreshWhenVisible);
+        return () => document.removeEventListener('visibilitychange', refreshWhenVisible);
     }, []);
 
     function updateTallyEntrySheet() {
