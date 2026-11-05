@@ -326,10 +326,10 @@ export const calculatePcReportCounts = (
         indents.forEach(i => {
             const k = `${i.indentNumber?.toString() || ''}_${firmOf(i)}`;
             const received = (Number(i.receivedQuantity) || 0) + (storeInQty.get(k) || 0);
-            // Same priority as GetLift page: pending_po_qty > approved_quantity > quantity
-            const rawPending = Number(i.rawPendingPoQty) || 0;
+            // Same priority as GetLift page: po_qty > approved_quantity > quantity
+            const rawPoQty = Number(i.rawPoQty) || 0;
             const rawApproved = Number(i.approvedQuantity) || 0;
-            const baseQty = rawPending > 0 ? rawPending : (rawApproved > 0 ? rawApproved : (Number(i.quantity) || 0));
+            const baseQty = rawPoQty > 0 ? rawPoQty : (rawApproved > 0 ? rawApproved : (Number(i.quantity) || 0));
             const pendingQty = baseQty - received;
             const status = i.liftingStatus || i.lifting_status;
             const isPending = status === 'Pending' || !status;
