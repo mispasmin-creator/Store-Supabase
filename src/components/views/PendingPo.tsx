@@ -94,12 +94,15 @@ export default function ApprovedPOs() {
                         console.warn('Invalid timestamp format:', sheet.timestamp);
                     }
 
+                    // planned5 is set only after Management Approval (actual4); until then fall back
+                    // to when the previous stage was completed
+                    const rawPlanned = sheet.planned5 || sheet.actual3 || sheet.planned4 || sheet.planned3;
                     try {
-                        if (sheet.planned5) {
-                            formattedPlannedDate = formatDate(sheet.planned5);
+                        if (rawPlanned) {
+                            formattedPlannedDate = formatDate(rawPlanned);
                         }
                     } catch (error) {
-                        console.warn('Invalid planned date format:', sheet.planned5);
+                        console.warn('Invalid planned date format:', rawPlanned);
                     }
 
                     let rawExpected = sheet.expected_req_date || sheet.delivery_date || null;
